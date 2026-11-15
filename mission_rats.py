@@ -130,89 +130,9 @@ MOB_PROFILES = {
 }
 
 
-DEFAULT_MISSION_TEXTS = {
-    "title": "Контракт I: Крысиный Погреб",
-    "npc_innkeeper": {
-        "name": "Трактирщик Гуго",
-        "greeting_lines": [
-            "Трактирщик Гуго протирает стойку: «Наконец-то! В моём погребе завелись крысы размером с волка! Возьми старое оружие со стойки в чулане справа и спускайся!»",
-            "Гуго понижает голос: «Ниже деревянного погреба — каменный подвал. Там бродят фигуры в плащах: клянусь, под каждым плащом сидят ДВЕ крысы друг на друге и творят кровавую магию!»",
-            "Гуго хмурится: «Когда эти твари поднимают лапы и начинают светиться — беги с места, иначе под ногами рванёт пентаграмма! И не лезь к их Королю без хорошей брони и прокачки!»"
-        ]
-    },
-    "rat_chats": [
-        [
-            "— Эй, там внизу! Не шатайся, я из-за тебя чуть из капюшона не выпал!",
-            "— Сам не ёрзай! У меня лапы затекли тебя на плечах таскать по этим камням!",
-            "— Терпи! Зато когда я чертил пентаграмму, прошлый приключенец даже пикнуть не успел!",
-            "— Главное, не чихни, когда будем проходить мимо бочек с перцем."
-        ],
-        [
-            "— Ты выучил ритуал кровавой звезды?",
-            "— Выучил! Сначала концентрируемся, а потом бах — и под ногами у двуногого вспыхивает печать!",
-            "— Король велел не жалеть магии, если кто-то сунется в подвал!",
-            "— Шагай левой, не сбивай шаг, а то плащ распахнётся!"
-        ],
-        [
-            "— Слышал указ? После полуночи связываем хвосты в единый узел!",
-            "— Опять?! Я в прошлый раз еле репейник из своей шерсти вычесал!",
-            "— Цыц! Кто не в узле — тот пойдёт на корм Королю!"
-        ],
-        [
-            "— Чур, когда захватим таверну, сырная кладовка — моя вотчина!",
-            "— Сначала надо поджарить того наёмника на пентаграмме.",
-            "— Ха! Посмотрим, как он будет прыгать по углям в пещерах Короля!"
-        ]
-    ],
-    "rat_solo": [
-        "Тс-с, нижний, держи равновесие! Кажется, двуногий где-то рядом...",
-        "Люди думают, под плащом колдун, а нас тут двое! Хи-хи-пик!",
-        "Хвост к хвосту, кровь к звезде... Пентаграмма сожжёт чужака!",
-        "Ох и тяжело же таскать напарника на плечах по этой сырости...",
-        "Если услышу звон железа или треск огнива — сразу чертим печать!"
-    ],
-    "boss_lines": [
-        "МЫ — КОРОЛЬ! КРОВЬ ЗАКИПИТ ПОД ТВОИМИ НОГАМИ!",
-        "ТВОЯ ПЛОТЬ НАПОИТ НАШИ ПЕНТАГРАММЫ, ДВУНОГИЙ!",
-        "ГРЫЗИТЕ ЕГО СУХОЖИЛИЯ! ЖГИТЕ ЕГО ЗВЕЗДОЙ КРОВИ!"
-    ],
-    "boss_defeat": "Огромный Крысиный Король распадается у подножия алтаря! Таверна спасена, но куда ведут эти глубокие туннели дальше?.."
-}
-
-
-TAVERN_PROP_THOUGHTS = {
-    "tavern_table": "Дубовый трактирный стол. На столешнице осталась недопитая кружка пенного эля и следы от ножей.",
-    "bar_counter": "Массивная барная стойка Гуго, натёртая воском и пролитым портвейном.",
-    "wine_cask": "Огромная господарская бочка выдержанного вина на дубовых козлах. Если я её разобью, Гуго меня самого крысам скормит.",
-    "bed": "Тёплая хозяйская кровать с соломенным тюфяком. Поспать бы сейчас, а не лезть в сырой погреб...",
-    "fireplace": "В каменном камине уютно потрескивают берёзовые поленья, согревая главный зал таверны.",
-    "shelf_bottles": "Полки, заставленные пыльными бутылками коллекционного эля, настойками и пустыми склянками.",
-    "chair_bench": "Крепкая деревянная скамья. Видала не одну пьяную драку местных лесорубов.",
-    "coat_rack": "Деревянная вешалка у дверей. Чья-то дорожная шляпа и промокший под дождём плащ.",
-    "cauldron": "В чугунном котле булькает густая луковая похлёбка со свиными рёбрышками. Пахнет божественно!",
-    "woven_rug": "Старый потёртый ковёр с бахромой. Пахнет табаком, собачьей шерстью и пролитым элем.",
-    "crate_stack": "Сколоченные деревянные ящики с мукой, солониной и трактирным инвентарём.",
-    "grandfather_clock": "Старинные напольные часы. Маятник мерно качается, хотя стрелки давно застряли без пяти полночь.",
-    "mounted_boar": "Чучело головы матёрого лесного вепря. Смотрит на посетителей с немым укором.",
-    "notice_board": "Доска объявлений: «Разыскивается Крысиный Король», «Куплю самоцветы без вопросов — Шнырь».",
-    "lute_stand": "Треснувшая лютня заезжего барда. Похоже, прошлый концерт закончился дракой на табуретках.",
-    "wash_basin": "Дубовая бадья с ледяной колодезной водой и чистым рушником на краю.",
-    "meat_rack": "Подвешенные на крючьях копчёные свиные окорока и связки ядрёного чеснока.",
-    "firewood_pile": "Аккуратная поленница сухих берёзовых дров. Хватит на всю зиму.",
-    "armor_stand": "Помятый турнирный доспех прадеда Гуго. В забрале паук свил себе уютное гнездо."
-}
-
-
 def get_mission_texts(loc_dict):
-    merged = dict(DEFAULT_MISSION_TEXTS)
-    custom = loc_dict.get("mission_1", {})
-    if custom:
-        merged.update(custom)
-        merged["npc_innkeeper"] = DEFAULT_MISSION_TEXTS["npc_innkeeper"]
-        merged["rat_chats"] = DEFAULT_MISSION_TEXTS["rat_chats"]
-        merged["rat_solo"] = DEFAULT_MISSION_TEXTS["rat_solo"]
-    return merged
-
+    """Возвращает словарь текстов Кампании I напрямую из locales/ru/rat_mission.json."""
+    return loc_dict.get("mission_1", {})
 
 def attach_mob_dialogues(mob, loc_dict):
     m1 = get_mission_texts(loc_dict)
@@ -433,58 +353,30 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
 
 
 def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
-    """Handles mission-specific interactables (NPC Hugo, Merchant Fence, 10 Tavern Props, Barrels, Blood Altar)."""
-    from menu_and_profile import format_copper_Trigger, save_profile
+    """Обрабатывает уникальные объекты Кампании I (Трактирщик Гуго, декор таверны, бочки, кровавый алтарь)."""
     m1 = get_mission_texts(game.loc)
+    prop_thoughts_db = game.loc.get("prop_thoughts", {})
 
-    if obj.kind in ("npc_innkeeper", "npc_merchant"):
-        # Сначала проверяем, есть ли в инвентаре самоцветы на продажу!
-        gems_sold = 0
-        total_cp_earned = 0
-        for idx in range(game.player.max_possible_slots):
-            itm = game.player.inventory[idx]
-            if itm and itm.type == "gem":
-                gems_sold += 1
-                total_cp_earned += itm.copper_value
-                game.player.remove_item_everywhere(itm)
-
-        if gems_sold > 0:
-            game.player.gold += total_cp_earned
-            game.profile["bank_copper"] = game.profile.get("bank_copper", 0) + total_cp_earned
-            save_profile(game.profile)
-            val_str = format_copper_Trigger(total_cp_earned)
-            game.sfx.play("coin")
-            speaker = "Трактирщик Гуго" if obj.kind == "npc_innkeeper" else "Скупщик Шнырь"
-            line = f"{speaker} прячет камни ({gems_sold} шт.) за пазуху: «Чистая работа! Отправил в твоё хранилище {val_str}!»"
-            obj.speech_text = line
-            obj.speech_timer = 5.5
-            game.set_thought(line)
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str} В БАНК!", (255, 225, 80), big=True)
+    if obj.kind == "npc_innkeeper":
+        npc_cfg = m1.get("npc_innkeeper", {})
+        speaker = npc_cfg.get("name", "Трактирщик Гуго")
+        if game.try_sell_gems_to_npc(obj, speaker_name=speaker):
             return True
 
-        if obj.kind == "npc_innkeeper":
-            lines = m1.get("npc_innkeeper", {}).get("greeting_lines", [
-                "Трактирщик Гуго: «Спустись в погреб и разберись с этими крысами!»"
-            ])
-            line = lines[obj.talk_index % len(lines)]
-        else:
-            m_lines = [
-                "Скупщик Шнырь поправляет пенсне: «Пс-с! Тащи сюда любые драгоценные камни. Переправлю выручку прямиком в твой тайник!»",
-                "Скупщик Шнырь шепчет: «Монеты сразу сыплются тебе в кошель, а вот рубины с алмазами занимают карманы. Сдавай их мне, пока крысы не загрызли!»",
-                "Скупщик Шнырь хихикает: «У тебя пока ни одного самоцвета в сумке. Пошарь по сундукам и карманам культистов!»"
-            ]
-            line = m_lines[obj.talk_index % len(m_lines)]
-
+        lines = npc_cfg.get("greeting_lines", ["..."])
+        line = lines[obj.talk_index % len(lines)] if lines else "..."
         obj.talk_index += 1
         obj.speech_text = line
         obj.speech_timer = 5.5
         game.sfx.play("mob_talk")
-        game.set_thought(line)
+        game.set_thought(line, important=True)
         return True
 
-    if obj.kind in TAVERN_PROP_THOUGHTS:
+    if obj.kind in prop_thoughts_db:
         game.sfx.play("step")
-        game.set_thought(TAVERN_PROP_THOUGHTS[obj.kind])
+        # Осмотр мебели — ФОНОВАЯ мысль (срабатывает с шансом 75% и не чаще раза в 6 секунд!)
+        if game.can_trigger_background_thought(chance=0.75):
+            game.set_thought(game.pick_text(prop_thoughts_db[obj.kind], f"prop_{obj.kind}"), important=False, chance=1.0)
         return True
 
     if obj.kind == "barrel":
@@ -499,17 +391,19 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
             weap_id = random.choice(["rusty_dagger", "wooden_club"])
             itm = game.make_item(weap_id)
             game.objects.append(InteractableCls(obj.x, obj.y, "loot", itm))
-            game.set_thought(f"Разбил винную бочку с грохотом! На пол выпало: {itm.name}.")
+            game.trigger_event_thought("barrel_weapon", item=itm.name)
             game.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {itm.name}", itm.rarity_color)
         elif roll < 0.52:
-            pot = game.make_item("potion_hp")
+            pot_id = random.choice(["potion_hp", "potion_hp_weak", "herbal_salve"])
+            pot = game.make_item(pot_id if pot_id in game.loc.get("items", {}) else "potion_hp")
             game.objects.append(InteractableCls(obj.x, obj.y, "loot", pot))
-            game.set_thought("В обломках старой бочки блеснула склянка с целебным отваром!")
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, "Выпало: Отвар", (120, 245, 140))
+            game.trigger_event_thought("barrel_potion", item=pot.name)
+            game.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {pot.name}", (120, 245, 140))
         elif roll < 0.76:
             loot_itm = game.roll_currency_or_gem_drop(allow_gem=True)
             game.objects.append(InteractableCls(obj.x, obj.y, "loot", loot_itm))
-            game.set_thought(f"Среди клепок разбитой бочки что-то блеснуло: {loot_itm.name}!")
+            game.sfx.play("coin_drop")
+            game.trigger_event_thought("barrel_treasure", item=loot_itm.name)
             game.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {loot_itm.name}", loot_itm.rarity_color)
         else:
             ambush_rat = EnemyCls(obj.x, obj.y, kind="rat", state="combat")
@@ -518,14 +412,15 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
             ambush_rat.alert_bang_timer = 0.38
             game.mobs.append(ambush_rat)
             game.sfx.play("alert")
-            game.set_thought("Из разбитой бочки с визгом выскочила погребная крыса!")
+            # Крыса из бочки — ВАЖНОЕ событие (100% срабатывание)!
+            game.trigger_event_thought("barrel_rat_ambush")
             game.add_popup(obj.x + 0.5, obj.y + 0.5, "ЗАСАДА!", (255, 95, 95))
         return True
 
     if obj.kind == "ritual_altar":
         if any(getattr(m, "is_boss", False) for m in game.mobs):
             game.sfx.play("hurt")
-            game.set_thought("Кровавый алтарь окутан багровым барьером, пока жив Крысиный Король!")
+            game.trigger_event_thought("altar_locked")
             return True
         obj.used = True
         game.sfx.play("magic")
@@ -534,7 +429,7 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
         game.player.mp = float(game.player.max_mp)
         drop = game.roll_item_by_rarity(allowed_types=["equipment"])
         game.objects.append(InteractableCls(obj.x, obj.y, "loot", drop))
-        game.set_thought("Разрушил печать кровавого алтаря! Жизненные силы полностью восстановились, а на камни упал трофей.")
+        game.trigger_event_thought("altar_heal", item=drop.name)
         game.add_popup(obj.x + 0.5, obj.y + 0.5, "ПОЛНОЕ ИСЦЕЛЕНИЕ!", (120, 245, 155))
         return True
 

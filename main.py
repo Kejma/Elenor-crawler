@@ -25,10 +25,16 @@ from menu_and_profile import (
 from fx_lab import FXManager
 
 
+class _SafeFormatDict(dict):
+    """Позволяет безопасно форматировать строки из JSON, даже если пользователь не указал {переменную} или опечатался."""
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
 def load_modular_locales():
     base_dir = os.path.dirname(__file__)
     ru_dir = os.path.join(base_dir, "locales", "ru")
-    merged = {}
+    merged = {"items": dict(CURRENCY_AND_GEMS_DB)}
     if os.path.isdir(ru_dir):
         for fname in sorted(os.listdir(ru_dir)):
             if fname.endswith(".json"):
@@ -36,12 +42,13 @@ def load_modular_locales():
                 with open(fpath, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if fname == "items.json" and "items" not in data:
-                        merged["items"] = data
+                        merged["items"].update(data)
                     else:
-                        merged.update(data)
-    if "items" not in merged:
-        merged["items"] = {}
-    merged["items"].update(CURRENCY_AND_GEMS_DB)
+                        for k, v in data.items():
+                            if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
+                                merged[k].update(v)
+                            else:
+                                merged[k] = v
     if "perks" in merged:
         if "pyro_ignite" in merged["perks"]:
             merged["perks"]["pyro_ignite"]["mp_cost"] = 8
@@ -78,7 +85,93 @@ class GameController:
         self.in_main_menu = True
         self.main_menu = MainMenuController(self)
         self.main_menu.sync_audio_and_display()
+        self._last_picked_line = {}
+        self.bg_thought_cd = 0.0
+        self.important_thought_lock = 0.0
+        self.important_thought_queue = []
+        self.low_hp_thought_cd = 0.0
+        self.seen_entities = set()
+        self._prev_tile_id = 0
+        self._was_near_fire = False
+        self._was_in_fog_kind = None
+        self._dark_walk_timer = 0.0
+        self.journal_open = False
+        self.journal_scroll = 0
+        self.journal_logs = []
+        self.journal_filters = {"combat": True, "event": True, "speech": True}
         self.reset_run()
+
+    def add_log(self, cat, text, color=None):
+        """Добавляет запись в Журнал похода (хранит последние 100 записей)."""
+        if not text:
+            return
+        default_cols = {
+            "combat": (235, 165, 155),
+            "event":  (240, 215, 125),
+            "speech": (185, 225, 250),
+        }
+        self.journal_logs.append({
+            "cat": cat,
+            "text": str(text),
+            "color": color or default_cols.get(cat, (220, 220, 220))
+        })
+        if len(self.journal_logs) > 100:
+            self.journal_logs = self.journal_logs[-100:]
+
+    def get_thought_freq_params(self):
+        """Возвращает (множитель_шанса, базовый_кулдаун_сек) из ползунка 'Частота мыслей' в Настройках."""
+        mode = self.profile.get("thought_freq_mode", 2)
+        if mode == 0:
+            return 0.0, 999.0   # Только важные
+        if mode == 1:
+            return 0.5, 10.0    # Редко
+        if mode == 3:
+            return 1.75, 3.5    # Часто
+        return 1.0, 6.0         # Обычная (по умолчанию: не чаще раза в 6 секунд)
+
+    def pick_text(self, pool, key_id="default", **kwargs):
+        if isinstance(pool, list):
+            if not pool:
+                raw = ""
+            elif len(pool) == 1:
+                raw = str(pool[0])
+            else:
+                last = self._last_picked_line.get(key_id)
+                candidates = [s for s in pool if s != last] or pool
+                raw = str(random.choice(candidates))
+                self._last_picked_line[key_id] = raw
+        else:
+            raw = str(pool)
+        if kwargs:
+            return raw.format_map(_SafeFormatDict(kwargs))
+        return raw
+
+    def can_trigger_background_thought(self, chance=0.25):
+        mult, _ = self.get_thought_freq_params()
+        if mult <= 0.0:
+            return False
+        if self.bg_thought_cd > 0.0 or self.important_thought_lock > 0.0 or self.important_thought_queue:
+            return False
+        return random.random() <= min(1.0, chance * mult)
+
+    def get_event_text(self, event_key, **kwargs):
+        ev_db = self.loc.get("events", {})
+        pool = ev_db.get(event_key, "")
+        return self.pick_text(pool, f"ev_{event_key}", **kwargs)
+
+    def trigger_event_thought(self, event_key, force_important=None, **kwargs):
+        rules_db = self.loc.get("event_rules", {})
+        rule = rules_db.get(event_key, {})
+        is_imp = force_important if force_important is not None else bool(rule.get("important", False))
+        chance = 1.0 if is_imp else float(rule.get("chance", 0.25))
+
+        if not is_imp and not self.can_trigger_background_thought(chance=chance):
+            return False
+
+        text = self.get_event_text(event_key, **kwargs)
+        if not text:
+            return False
+        return self.set_thought(text, important=is_imp, chance=1.0)
 
     def _load_balance_table(self):
         b_path = os.path.join(os.path.dirname(__file__), "locales", "ru", "balance_table.json")
@@ -230,7 +323,7 @@ class GameController:
         perks_db = self.loc.get("perks", {})
         owned_ids = list(self.player.active_perks.keys()) + list(self.player.passive_perks.keys())
         if not owned_ids:
-            self.set_thought("У меня пока нет ни одной способности, которую можно стереть!")
+            self.trigger_event_thought("oblivion_empty")
             self.sfx.play("hurt")
             return
         choices = []
@@ -326,14 +419,14 @@ class GameController:
         torch = self.player.get_active_torch()
         if torch is None:
             self.sfx.play("hurt")
-            self.set_thought(self.loc["events"]["torch_no_item"])
+            self.trigger_event_thought("torch_no_item")
             return
 
         # Turning OFF is instant and silent!
         if self.player.torch_on:
             self.player.torch_on = False
             self.sfx.play("step")
-            self.set_thought(self.loc["events"]["torch_off"])
+            self.trigger_event_thought("torch_off")
             return
 
         # Lighting the torch: 0.25s for Pyromaniac, 1.15s for trembling Nyctophobe, 0.70s default!
@@ -348,6 +441,10 @@ class GameController:
 
     def reset_run(self):
         self.inv_open = False
+        self.journal_open = False
+        self.journal_scroll = 0
+        self.journal_logs = []
+        self.important_thought_queue = []
         self.drag_item = None
         self.drag_source = None
         self.levelup_choices = None
@@ -373,11 +470,13 @@ class GameController:
         self.last_tick_char = 0
         self.ambient_timer = random.uniform(90.0, 140.0)
 
-        # Show character archetype, starting traits & spawn thought right in the Thought Box!
+        # Стартовая мысль при появлении в мире — всегда ВАЖНАЯ!
         q_info = f" ({self.player.quirk_desc})" if getattr(self.player, "quirk_desc", "") else ""
-        spawn_line = random.choice(self.player.thoughts["spawn"])
+        spawn_line = self.pick_text(self.player.thoughts["spawn"], "player_spawn")
         intro_text = f"{self.player.full_name}{q_info} {spawn_line}"
-        self.set_thought(intro_text)
+        self.bg_thought_cd = 0.0
+        self.important_thought_lock = 0.0
+        self.set_thought(intro_text, important=True)
         self.sfx.play("ui")
 
     def check_hypochondriac_panic(self):
@@ -385,7 +484,6 @@ class GameController:
         if p.hp <= 0 or getattr(p, "quirk", "none") != "hypochondriac":
             return
         if p.hp < p.max_hp * 0.5:
-            # Ищем любую хилку сначала на поясе, потом в открытых карманах
             candidates = list(p.hotbar) + [p.inventory[i] for i in range(p.unlocked_slots)]
             for itm in candidates:
                 if itm and getattr(itm, "heal_hp", 0) > 0 and p.cooldowns.get(itm.id, 0.0) <= 0.0:
@@ -395,7 +493,7 @@ class GameController:
                     p.remove_item_everywhere(itm)
                     self.sfx.play("heal")
                     self.add_popup(p.x, p.y, f"+{heal_val} (ПАНИКА!)", (110, 255, 145), "heart", big=True)
-                    self.set_thought(f"Ипохондрия! Здоровье ниже половины — руки сами выпили «{itm.name}» (+{heal_val} ХП)!")
+                    self.trigger_event_thought("hypochondriac_panic", item=itm.name, val=heal_val)
                     break
 
     def descend_to_next_floor(self):
@@ -414,6 +512,11 @@ class GameController:
         self.visual_fx = []
         self.mobs = []
         self.objects = []
+        self.seen_entities = set()
+        self._prev_tile_id = self.dungeon.grid[int(self.player.y)][int(self.player.x)]
+        self._was_near_fire = True
+        self._was_in_fog_kind = None
+        self._dark_walk_timer = 0.0
         if hasattr(self, "fx") and self.fx:
             self.fx.clear_floor_decals()
             self.fx.rebuild_wall_grid(self.dungeon)
@@ -421,10 +524,8 @@ class GameController:
         self.cam_x = self.player.x * TILE_W - VIEW_W * 0.5
         self.cam_y = self.player.y * TILE_H - VIEW_H * 0.5
 
-        # Delegate floor population to our modular campaign file (`mission_rats.py`)!
         populate_mission_floor(self, floor_num, Enemy, Interactable)
 
-        # Make tables, bar counter & heavy furniture block movement, but NOT light!
         solid_kinds = {
             "tavern_table", "bar_counter", "wine_cask", "bed",
             "fireplace", "shelf_bottles", "cauldron", "crate_stack",
@@ -434,13 +535,59 @@ class GameController:
             (obj.x, obj.y) for obj in self.objects if obj.kind in solid_kinds
         }
 
-    def set_thought(self, text):
+    def _apply_thought_immediately(self, text, is_important):
+        _, base_cd = self.get_thought_freq_params()
+        if is_important:
+            self.important_thought_lock = 4.0
+            self.bg_thought_cd = max(6.0, base_cd)
+            self.add_log("speech", text, (255, 225, 125))
+        else:
+            self.bg_thought_cd = base_cd
+            self.add_log("speech", text, (175, 220, 250))
+
         if text != self.target_thought:
             self.target_thought = text
             self.shown_chars = 0.0
             self.last_tick_char = 0
 
+    def set_thought(self, text, important=False, chance=1.0):
+        """
+        Управляет мыслями и репликами с поддержкой очереди Важных событий:
+        - Если `important=True` и предыдущая важная мысль ещё держится свои 4 секунды — новая встаёт в очередь и запустится строго после неё!
+        - Если `important=False` — подчиняется настройке частоты мыслей и не перебивает важные.
+        """
+        if not text:
+            return False
+
+        if not important:
+            mult, _ = self.get_thought_freq_params()
+            if mult <= 0.0 or self.bg_thought_cd > 0.0 or self.important_thought_lock > 0.0 or self.important_thought_queue:
+                return False
+            if chance < 1.0 and random.random() > min(1.0, chance * mult):
+                return False
+            self._apply_thought_immediately(text, is_important=False)
+            return True
+
+        # Если сейчас уже идёт показ важной записи (таймер 4.0 с не истёк) — ставим новую важную запись в очередь!
+        if self.important_thought_lock > 0.0 and self.target_thought:
+            if text != self.target_thought and text not in self.important_thought_queue:
+                self.important_thought_queue.append(text)
+            return True
+
+        self._apply_thought_immediately(text, is_important=True)
+        return True
+
     def update_typewriter(self, dt):
+        self.bg_thought_cd = max(0.0, self.bg_thought_cd - dt)
+        self.low_hp_thought_cd = max(0.0, self.low_hp_thought_cd - dt)
+
+        if self.important_thought_lock > 0.0:
+            self.important_thought_lock = max(0.0, self.important_thought_lock - dt)
+            # Как только прошли обязательные 4 секунды прошлой важной мысли — запускаем следующую из очереди!
+            if self.important_thought_lock <= 0.0 and self.important_thought_queue:
+                next_imp_text = self.important_thought_queue.pop(0)
+                self._apply_thought_immediately(next_imp_text, is_important=True)
+
         if self.shown_chars < len(self.target_thought):
             t_mode = self.profile.get("typewriter_mode", 1)
             if t_mode == 2:
@@ -453,6 +600,73 @@ class GameController:
                 self.last_tick_char = cur_idx
                 self.sfx.play("type_tick")
 
+    def update_world_reactions(self, dt, moved=False):
+        """Отслеживает то, что видит и ощущает герой (враги в свете, лужи, туман, темнота, огонь)."""
+        px, py = self.player.x, self.player.y
+        vis_tiles = getattr(self, "current_visible_tiles", set())
+
+        # 1. Зрительные реакции на врагов и объекты, попавшие в освещённую зону (1 раз на объект!)
+        light_reach = (self.player.torch_light_radius if self.player.has_lit_torch else self.player.dark_vision_radius) / TILE_W + 0.8
+        for m in self.mobs:
+            m_id = id(m)
+            if m_id in self.seen_entities:
+                continue
+            if (int(m.x), int(m.y)) in vis_tiles and math.hypot(m.x - px, m.y - py) <= light_reach:
+                self.seen_entities.add(m_id)
+                if getattr(m, "is_boss", False):
+                    # Первая встреча с Боссом — ВАЖНАЯ реплика (100% перебивает всё)!
+                    self.trigger_event_thought("spot_boss", force_important=True)
+                    return
+                elif m.kind == "rat_cultist":
+                    if self.trigger_event_thought("spot_cultist"):
+                        return
+                elif m.state == "sleeping":
+                    if self.trigger_event_thought("spot_sleeping_mob"):
+                        return
+                elif m.state == "chatting":
+                    if self.trigger_event_thought("spot_chatting_mobs"):
+                        return
+
+        for obj in self.objects:
+            if obj.used or obj.kind != "chest":
+                continue
+            o_id = id(obj)
+            if o_id not in self.seen_entities and (obj.x, obj.y) in vis_tiles and math.hypot((obj.x + 0.5) - px, (obj.y + 0.5) - py) <= light_reach:
+                self.seen_entities.add(o_id)
+                if self.trigger_event_thought("spot_chest"):
+                    return
+
+        # 2. Реакции на среду при движении (шаг в холодную лужу, вход в туман/яд, костёр, темнота)
+        cur_tile = self.dungeon.grid[int(py)][int(px)]
+        if cur_tile == 2 and self._prev_tile_id != 2:
+            self.trigger_event_thought("step_water")
+        self._prev_tile_id = cur_tile
+
+        if hasattr(self, "fx") and self.fx:
+            in_fog_kind = None
+            for cld in self.fx.active_clouds:
+                if math.hypot(px - cld["wx"], py - cld["wy"]) <= cld["radius"] * 0.85:
+                    in_fog_kind = cld.get("kind", "mist")
+                    break
+            if in_fog_kind and in_fog_kind != self._was_in_fog_kind:
+                self.trigger_event_thought("enter_poison_fog" if in_fog_kind == "poison" else "enter_mist")
+            self._was_in_fog_kind = in_fog_kind
+
+        near_fire = any(math.hypot(px - (br["x"] + 0.5), py - (br["y"] + 0.5)) <= 2.5 for br in self.dungeon.braziers)
+        if not near_fire:
+            near_fire = any(o.kind in ("campfire", "fireplace") and math.hypot(px - (o.x + 0.5), py - (o.y + 0.5)) <= 2.5 for o in self.objects)
+        if near_fire and not self._was_near_fire:
+            self.trigger_event_thought("warm_by_fire")
+        self._was_near_fire = near_fire
+
+        if moved and not self.player.has_lit_torch and self.player.illumination < 0.22:
+            self._dark_walk_timer += dt
+            if self._dark_walk_timer >= 9.0:
+                self._dark_walk_timer = 0.0
+                self.trigger_event_thought("walk_in_dark")
+        else:
+            self._dark_walk_timer = 0.0
+
     def add_popup(self, wx, wy, text, color, icon=None, big=False):
         self.popups.append(FloatingPopup(wx, wy, text, color, icon, big=big))
 
@@ -463,7 +677,7 @@ class GameController:
         tx, ty = int(self.player.x), int(self.player.y)
         self.objects.append(Interactable(tx, ty, "loot", item))
         self.sfx.play("step")
-        self.set_thought(self.loc["events"]["drop_item"].format(item=item.name))
+        self.trigger_event_thought("drop_item", item=item.name)
         self.add_popup(self.player.x, self.player.y, f"Выброшено: {item.name}", (185, 175, 165))
 
     def on_player_hit(self, raw_dmg, is_magic=False):
@@ -473,9 +687,10 @@ class GameController:
         if random.random() < self.player.dodge_chance:
             self.player.record_build_action("cunning", 0.25)
             self.add_popup(self.player.x, self.player.y, "УВОРОТ", (140, 230, 255))
+            self.add_log("combat", "Уклонение от вражеской атаки!", (140, 230, 255))
+            self.trigger_event_thought("combat_dodge")
             return
 
-        # Если на герое активно Воспламенение Пиро — бьющий вблизи враг поджигается!
         if getattr(self.player, "ignite_timer", 0.0) > 0.0 and not is_magic:
             for m in self.mobs:
                 if math.hypot(m.x - self.player.x, m.y - self.player.y) <= 1.95:
@@ -485,15 +700,17 @@ class GameController:
         dmg = max(1, int(math.floor(raw_dmg - defense)))
         self.player.hp = max(0.0, self.player.hp - dmg)
         self.sfx.play("hurt")
+        self.add_log("combat", f"Получен урон: -{dmg} ХП ({'магия' if is_magic else 'физ. удар'}).", (255, 110, 110))
         col = (205, 110, 255) if is_magic else (255, 85, 85)
         self.add_popup(self.player.x, self.player.y, f"-{dmg}", col)
 
         if self.player.hp <= 0:
-            self.set_thought(self.loc["events"]["death"])
+            self.trigger_event_thought("death", force_important=True)
         else:
             self.check_hypochondriac_panic()
-            if self.player.hp <= 7:
-                self.set_thought(self.loc["events"]["low_hp"])
+            if self.player.hp <= 7 and self.low_hp_thought_cd <= 0.0:
+                self.low_hp_thought_cd = 14.0
+                self.trigger_event_thought("low_hp", force_important=True)
 
     def get_precision_hover_target(self, target_wx, target_wy):
         px, py = self.player.x, self.player.y
@@ -541,10 +758,8 @@ class GameController:
                 self._perform_melee_attack(target_wx, target_wy)
 
     def _try_precise_interaction(self, ref_wx, ref_wy, max_cursor_dist):
-        ev = self.loc["events"]
         px, py = self.player.x, self.player.y
 
-        # ПРИОРИТЕТ 1: Если под курсором лежит лут (особенно в открытом дверном проёме!) — сначала подбираем лут!
         nearby_loot = [
             obj for obj in self.objects
             if not obj.used and obj.kind == "loot"
@@ -567,16 +782,14 @@ class GameController:
             if door.locked:
                 self.sfx.play("hurt")
                 self.emit_noise(dx + 0.5, dy + 0.5, 4.5)
-                self.set_thought(ev["door_locked"])
+                self.trigger_event_thought("door_locked")
                 self.add_popup(dx + 0.5, dy + 0.5, "ЗАПЕРТО", (255, 120, 100))
             else:
                 if door.is_open:
-                    # Не даём захлопнуть дверь прямо на себе или на мобе!
                     if (int(px) == dx and int(py) == dy) or any(int(m.x) == dx and int(m.y) == dy for m in self.mobs):
                         self.sfx.play("step")
                         self.add_popup(dx + 0.5, dy + 0.5, "Проём занят!", (255, 195, 95))
                         return True
-                    # Если герой стоит рядом, но краем хитбокса (rad=0.28) задевает тайл двери — мягко отодвигаем:
                     if abs(px - (dx + 0.5)) < 0.80 and abs(py - (dy + 0.5)) < 0.80:
                         if abs(px - (dx + 0.5)) >= abs(py - (dy + 0.5)):
                             self.player.x = (dx + 1.30) if px > (dx + 0.5) else (dx - 0.30)
@@ -588,7 +801,7 @@ class GameController:
                 self.sfx.play("door")
                 self.emit_noise(dx + 0.5, dy + 0.5, 3.8)
                 if door.is_open:
-                    self.set_thought(ev["door_open"])
+                    self.trigger_event_thought("door_open")
             return True
 
         for (lx, ly), lev in self.dungeon.levers.items():
@@ -601,14 +814,14 @@ class GameController:
                 self.dungeon.invalidate_light_cache()
                 self.sfx.play("door")
                 self.emit_noise(cx, cy, 7.0)
-                self.set_thought(ev["lever_pull"])
+                self.trigger_event_thought("lever_pull")
                 self.add_popup(cx, cy, "ОТКРЫТО!", (130, 245, 160))
                 return True
 
         cand_objs = [
             obj for obj in self.objects
             if not obj.used and obj.kind != "trap"
-            and math.hypot(px - (obj.x + 0.5), py - (obj.y + 0.5)) <= (2.65 if obj.kind == "npc_innkeeper" else 1.85)
+            and math.hypot(px - (obj.x + 0.5), py - (obj.y + 0.5)) <= (2.65 if obj.kind in ("npc_innkeeper", "npc_merchant") else 1.85)
             and math.hypot(ref_wx - (obj.x + 0.5), ref_wy - (obj.y + 0.5)) <= max_cursor_dist
         ]
         if not cand_objs:
@@ -617,34 +830,35 @@ class GameController:
         cand_objs.sort(key=lambda o: math.hypot(ref_wx - (o.x + 0.5), ref_wy - (o.y + 0.5)))
         obj = cand_objs[0]
 
-        # 1. Check Mission-Specific Objects first (`npc_innkeeper`, `barrel`, `ritual_altar`)!
+        if obj.kind == "npc_merchant":
+            self.interact_with_merchant(obj)
+            return True
+
         if handle_mission_object_interaction(self, obj, Enemy, Interactable):
             return True
 
-        # 2. Universal Engine Objects
         if obj.kind == "stairs":
             danger_nearby = any(m.state == "combat" and math.hypot(m.x - px, m.y - py) <= 3.2 for m in self.mobs)
             if danger_nearby:
                 self.sfx.play("hurt")
-                self.set_thought(ev["stairs_combat"])
+                self.trigger_event_thought("stairs_combat")
                 self.add_popup(obj.x + 0.5, obj.y + 0.5, "В БОЮ!", (255, 95, 95))
                 return True
             self.descend_to_next_floor()
             return True
 
         if obj.kind == "campfire":
-            # Campfires no longer heal or refuel torches, but give a torch if the player has none!
             if not self.player_owns_any_torch():
                 new_torch = self.make_item("pitch_torch")
                 if not self.player.try_auto_equip_if_slot_empty(new_torch):
                     if not self.player.add_item_to_inventory(new_torch):
                         self.objects.append(Interactable(obj.x, obj.y, "loot", new_torch))
                 self.sfx.play("torch")
-                self.set_thought("Выдернул из костра смоляную головню. Чтобы зажечь её, нужно нажать [F].")
+                self.trigger_event_thought("campfire_take_torch")
                 self.add_popup(obj.x + 0.5, obj.y + 0.5, "+Смоляной факел", (255, 200, 80))
             else:
                 self.sfx.play("step")
-                self.set_thought("Костёр жарко трещит, но факел у меня уже есть.")
+                self.trigger_event_thought("campfire_has_torch")
             return True
 
         if obj.kind == "loot":
@@ -654,7 +868,7 @@ class GameController:
         if obj.kind == "bookshelf":
             self.sfx.play("magic")
             self.emit_noise(obj.x + 0.5, obj.y + 0.5, 3.5)
-            self.set_thought(ev["bookshelf_read"])
+            self.trigger_event_thought("bookshelf_read")
             if self.player.gain_xp(15):
                 self.trigger_levelup_shine()
             scroll = self.roll_item_by_rarity(allowed_types=["consumable_spell"])
@@ -670,7 +884,7 @@ class GameController:
                 self.objects.append(Interactable(obj.x, obj.y, "loot", pot))
             self.sfx.play("heal")
             self.emit_noise(obj.x + 0.5, obj.y + 0.5, 4.0)
-            self.set_thought(ev["alchemy_use"])
+            self.trigger_event_thought("alchemy_use")
             self.add_popup(obj.x + 0.5, obj.y + 0.5, "+4 Макс.ХП / Зелье", (120, 245, 155))
 
         elif obj.kind == "rack":
@@ -678,29 +892,32 @@ class GameController:
             self.objects.append(Interactable(obj.x, obj.y, "loot", gear))
             self.sfx.play("ui")
             self.emit_noise(obj.x + 0.5, obj.y + 0.5, 4.5)
-            self.set_thought(ev["rack_loot"])
+            self.trigger_event_thought("rack_loot", item=gear.name)
             self.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {gear.name}", gear.rarity_color)
 
         elif obj.kind == "chest":
+            # Успех взлома/выбивания — ФОНОВАЯ мысль (игрок и так видит выпавший лут!),
+            # а ПРОВАЛ (`chest_fail`) — ВАЖНАЯ (объясняет, почему сундук пропал и ранил героя)!
             if random.randint(1, 20) + self.player.cunning >= 11:
                 treasure = self.roll_currency_or_gem_drop(allow_gem=True, force_gem=(random.random() < 0.55))
                 self.objects.append(Interactable(obj.x, obj.y, "loot", treasure))
-                self.sfx.play("coin")
+                self.sfx.play("coin_drop")
                 self.emit_noise(obj.x + 0.5, obj.y + 0.5, 4.0)
-                self.set_thought(ev["chest_pick_ok"])
+                self.trigger_event_thought("chest_pick_ok", item=treasure.name)
                 self.add_popup(obj.x + 0.5, obj.y + 0.5, f"В сундуке: {treasure.name}", treasure.rarity_color)
             elif self.player.body >= 3:
                 coin_drop = self.roll_currency_or_gem_drop(allow_gem=False)
                 self.objects.append(Interactable(obj.x, obj.y, "loot", coin_drop))
                 self.sfx.play("crit")
                 self.emit_noise(obj.x + 0.5, obj.y + 0.5, 8.5)
-                self.set_thought(ev["chest_smash"])
+                self.trigger_event_thought("chest_smash", item=coin_drop.name)
                 self.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {coin_drop.name}", coin_drop.rarity_color)
             else:
                 self.player.hp = max(1.0, self.player.hp - 2)
                 self.sfx.play("hurt")
                 self.emit_noise(obj.x + 0.5, obj.y + 0.5, 6.0)
-                self.set_thought(ev["chest_fail"])
+                self.trigger_event_thought("chest_fail", force_important=True)
+                self.add_popup(obj.x + 0.5, obj.y + 0.5, "СЛОМАНО (-2 ХП)", (255, 95, 95))
 
         elif obj.kind == "idol":
             if self.player.mind >= 3:
@@ -708,15 +925,57 @@ class GameController:
                 self.player.mp = min(float(self.player.max_mp), self.player.mp + 10)
                 self.player.trait_vision_mod += 10
                 self.sfx.play("magic")
-                self.set_thought(ev["idol_smart"])
+                self.trigger_event_thought("idol_smart")
                 self.add_popup(obj.x + 0.5, obj.y + 0.5, "+12 ХП / +Обзор", (110, 245, 190))
             else:
                 self.sfx.play("step")
-                self.set_thought(ev["idol_dumb"])
+                self.trigger_event_thought("idol_dumb")
         return True
 
+    def try_sell_gems_to_npc(self, obj, speaker_name="Скупщик Шнырь"):
+        """Универсальная механика продажи всех самоцветов из инвентаря любому торговцу/NPC."""
+        gems_sold = 0
+        total_cp_earned = 0
+        for idx in range(self.player.max_possible_slots):
+            itm = self.player.inventory[idx]
+            if itm and itm.type == "gem":
+                gems_sold += 1
+                total_cp_earned += itm.copper_value
+                self.player.remove_item_everywhere(itm)
+
+        if gems_sold <= 0:
+            return False
+
+        self.player.gold += total_cp_earned
+        self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + total_cp_earned
+        save_profile(self.profile)
+        val_str = format_copper_Trigger(total_cp_earned)
+        self.sfx.play("coin_pickup")
+        self.add_log("event", f"Продано самоцветов: {gems_sold} шт. Выручка +{val_str} отправлена в казну!")
+        line = self.get_event_text("npc_sell_gems", speaker=speaker_name, count=gems_sold, val=val_str)
+        obj.speech_text = line
+        obj.speech_timer = 5.5
+        self.set_thought(line, important=True)
+        self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str} В БАНК!", (255, 225, 80), big=True)
+        return True
+
+    def interact_with_merchant(self, obj):
+        """Универсальный диалог и скупка камней у подземельного Скупщика на любом этаже и в любой кампании."""
+        speaker = self.loc.get("events", {}).get("npc_merchant_name", "Скупщик Шнырь")
+        if isinstance(speaker, list):
+            speaker = speaker[0]
+        if self.try_sell_gems_to_npc(obj, speaker_name=speaker):
+            return
+        lines = self.loc.get("events", {}).get("npc_merchant_greeting", ["Тащи сюда любые самоцветы!"])
+        line = lines[obj.talk_index % len(lines)] if isinstance(lines, list) and lines else str(lines)
+        obj.talk_index += 1
+        obj.speech_text = line
+        obj.speech_timer = 5.5
+        self.sfx.play("mob_talk")
+        self.set_thought(line, important=True)
+
     def _pickup_loot_object(self, obj):
-        ev = self.loc["events"]
+        self.add_log("event", f"Подобрано: {obj.item.name}.")
         if obj.item.type == "currency_coin":
             obj.used = True
             cp_gain = obj.item.copper_value
@@ -725,8 +984,7 @@ class GameController:
             save_profile(self.profile)
             val_str = format_copper_Trigger(cp_gain)
             self.sfx.play("coin_pickup")
-            self.set_thought(f"Подобрал {obj.item.name.lower()}: +{val_str}.")
-            # Любой номинал монет при подборе всегда пишется благородным золотистым цветом!
+            self.trigger_event_thought("pickup_coin", item=obj.item.name.lower(), val=val_str)
             self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str}", (255, 215, 75))
             return True
         if obj.item.type == "bag" and obj.item.slots > self.player.unlocked_slots:
@@ -738,19 +996,24 @@ class GameController:
             obj.used = True
             self._flush_overflow_drops(obj.x, obj.y)
             self.sfx.play("ui")
-            self.set_thought(f"Сразу надел: {obj.item.name}!")
+            self.trigger_event_thought("auto_equip", item=obj.item.name)
             self.add_popup(obj.x + 0.5, obj.y + 0.5, f"Надето: {obj.item.name}", obj.item.rarity_color)
         elif self.player.add_item_to_inventory(obj.item):
             obj.used = True
             self.sfx.play("coin_pickup" if obj.item.type == "gem" else "ui")
+            used_cnt = sum(1 for i in range(self.player.unlocked_slots) if self.player.inventory[i] is not None)
             if obj.item.type == "gem":
-                self.set_thought(f"Убрал в карман: {obj.item.name} ({format_copper_Trigger(obj.item.copper_value)}).")
+                val_str = format_copper_Trigger(obj.item.copper_value)
+                self.trigger_event_thought("pickup_gem", item=obj.item.name, val=val_str)
+            elif used_cnt >= self.player.unlocked_slots:
+                self.trigger_event_thought("bag_almost_full")
             else:
-                self.set_thought(ev["pickup"].format(item=obj.item.name))
+                self.trigger_event_thought("pickup", item=obj.item.name)
             self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{obj.item.name}", obj.item.rarity_color)
             self.check_hypochondriac_panic()
         else:
-            self.set_thought(ev["bag_full"])
+            # Переполненная сумка — ВАЖНАЯ реплика!
+            self.trigger_event_thought("bag_full", force_important=True)
             self.sfx.play("hurt")
         return True
 
@@ -883,10 +1146,12 @@ class GameController:
                 self.player.record_build_action("cunning", 0.22)
                 self.sfx.play("crit")
                 self.fx.trigger_shake(2.0, 0.14)
+                self.add_log("combat", f"Критический удар по врагу ({m.kind}): -{final_dmg} ХП!", (255, 230, 95))
                 self.add_popup(m.x, m.y, f"-{final_dmg}", (255, 230, 75), big=True)
             else:
                 self.player.record_build_action("body", 0.15)
                 self.sfx.play("hit")
+                self.add_log("combat", f"Удар по врагу ({m.kind}): -{final_dmg} ХП.")
                 self.add_popup(m.x, m.y, f"-{final_dmg}", (255, 245, 230))
 
             self._check_mob_death(m)
@@ -919,11 +1184,13 @@ class GameController:
             if getattr(item, "heal_hp", 0) > 0:
                 heal_val = self.player.get_heal_amount(item)
                 self.player.hp = min(float(self.player.max_hp), self.player.hp + heal_val)
+                self.add_log("event", f"Использовано «{item.name}»: восстановлено +{heal_val} ХП.", (120, 245, 145))
                 self.add_popup(self.player.x, self.player.y, f"+{heal_val}", (110, 245, 130), "heart")
                 self.sfx.play("heal")
                 self.player.remove_item_everywhere(item)
             elif item.id == "potion_mp":
                 self.player.mp = min(float(self.player.max_mp), self.player.mp + item.power)
+                self.add_log("event", f"Использовано «{item.name}»: восстановлено +{item.power} МП.", (110, 205, 255))
                 self.add_popup(self.player.x, self.player.y, f"+{item.power}", (95, 195, 255), "mana")
                 self.sfx.play("magic")
                 self.player.remove_item_everywhere(item)
@@ -982,7 +1249,7 @@ class GameController:
                 self._flush_overflow_drops(int(self.player.x), int(self.player.y))
                 self.sfx.play("ui")
             else:
-                self.set_thought(ev["bag_full"])
+                self.trigger_event_thought("bag_full", force_important=True)
                 self.sfx.play("hurt")
 
         elif item.type == "bag":
@@ -990,7 +1257,7 @@ class GameController:
                 self.player.unlocked_slots = item.slots
                 self.player.bag_name = f"{item.name} ({item.slots} яч.)"
                 self.player.remove_item_everywhere(item)
-                self.set_thought(ev["bag_upgrade"])
+                self.trigger_event_thought("bag_upgrade", item=item.name)
                 self.sfx.play("heal")
 
     def _flush_overflow_drops(self, drop_tx, drop_ty):
@@ -1307,6 +1574,7 @@ class GameController:
     def _check_mob_death(self, m):
         if m.hp <= 0 and m in self.mobs:
             self.mobs.remove(m)
+            self.add_log("combat", f"Враг повержен: {m.kind} (+{m.xp_value} опыта).", (135, 245, 160))
             self.fx.add_blood_splatter(m.x, m.y, count=10, is_kill=True)
             drop_tx, drop_ty = int(m.x), int(m.y)
             if getattr(m, "is_boss", False):
@@ -1346,12 +1614,15 @@ class GameController:
                     self.profile["rat_king_defeated"] = True
                     save_profile(self.profile)
                     self.add_popup(m.x, m.y - 1.25, "ОТКРЫТ КРЫСОЛЮД!", (125, 255, 155), big=True)
-                defeat_msg = get_mission_texts(self.loc).get("boss_defeat", "Крысиный Король повержен!")
-                self.set_thought(defeat_msg)
+                defeat_pool = get_mission_texts(self.loc).get("boss_defeat", ["Крысиный Король повержен!"])
+                # Победа над боссом — ВАЖНАЯ реплика!
+                self.set_thought(self.pick_text(defeat_pool, "boss_defeat"), important=True)
                 self.add_popup(m.x, m.y - 0.8, "БОСС ПОВЕРЖЕН!", (255, 215, 65))
                 self.objects.append(Interactable(int(m.x), int(m.y), "stairs"))
             else:
-                self.set_thought(random.choice(self.player.thoughts["kill"]))
+                # Реплика при убийстве обычного моба — ФОНОВАЯ (шанс 22%, не чаще раза в 6 сек)!
+                if self.can_trigger_background_thought(chance=0.22):
+                    self.set_thought(self.pick_text(self.player.thoughts["kill"], "player_kill"), important=False, chance=1.0)
 
             if self.player.gain_xp(m.xp_value):
                 self.trigger_levelup_shine()
@@ -1363,7 +1634,7 @@ class GameController:
 
     def trigger_levelup_shine(self):
         self.sfx.play("levelup")
-        self.set_thought(self.loc["events"]["level_up"])
+        self.trigger_event_thought("level_up")
         self.add_popup(self.player.x, self.player.y - 0.65, "НОВЫЙ УРОВЕНЬ!", (255, 230, 85))
         self.player.levelup_delay_timer = 0.55
         self.player.shine_timer = 0.95
@@ -1436,6 +1707,17 @@ def main():
                     game.reset_run()
                 elif event.key in (pygame.K_i, pygame.K_TAB):
                     game.inv_open = not game.inv_open
+                    if not game.inv_open:
+                        game.journal_open = False
+                    game.drag_item = None
+                    game.drag_source = None
+                    game.sfx.play("ui")
+                elif event.key == pygame.K_j:
+                    if not game.inv_open:
+                        game.inv_open = True
+                        game.journal_open = True
+                    else:
+                        game.journal_open = not game.journal_open
                     game.drag_item = None
                     game.drag_source = None
                     game.sfx.play("ui")
@@ -1493,20 +1775,34 @@ def main():
                                 break
                         if game.inv_open:
                             clicked_ui = True
-                            for s_key, s_rect in game.renderer.equip_slot_rects.items():
-                                if s_key != "bag" and s_rect.collidepoint(mouse_pos):
-                                    itm = game.player.equipment.get(s_key)
-                                    if itm:
-                                        game.drag_item = itm
-                                        game.drag_source = ("equip", s_key)
-                                    break
-                            for i, sr in enumerate(game.renderer.inv_slot_rects):
-                                if i < game.player.unlocked_slots and sr.collidepoint(mouse_pos):
-                                    itm = game.player.inventory[i]
-                                    if itm:
-                                        game.drag_item = itm
-                                        game.drag_source = ("pocket", i)
-                                    break
+                            if game.renderer.journal_btn_rect.collidepoint(mouse_pos):
+                                game.journal_open = not game.journal_open
+                                game.journal_scroll = 0
+                                game.drag_item = None
+                                game.drag_source = None
+                                game.sfx.play("ui")
+                            elif game.journal_open:
+                                for f_key, f_rect in game.renderer.journal_filter_rects.items():
+                                    if f_rect.collidepoint(mouse_pos):
+                                        game.journal_filters[f_key] = not game.journal_filters.get(f_key, True)
+                                        game.journal_scroll = 0
+                                        game.sfx.play("ui")
+                                        break
+                            else:
+                                for s_key, s_rect in game.renderer.equip_slot_rects.items():
+                                    if s_key != "bag" and s_rect.collidepoint(mouse_pos):
+                                        itm = game.player.equipment.get(s_key)
+                                        if itm:
+                                            game.drag_item = itm
+                                            game.drag_source = ("equip", s_key)
+                                        break
+                                for i, sr in enumerate(game.renderer.inv_slot_rects):
+                                    if i < game.player.unlocked_slots and sr.collidepoint(mouse_pos):
+                                        itm = game.player.inventory[i]
+                                        if itm:
+                                            game.drag_item = itm
+                                            game.drag_source = ("pocket", i)
+                                        break
                         if not clicked_ui and mouse_pos[1] < VIEW_H * SCALE:
                             game.try_interact_or_melee(world_mx, world_my, via_mouse=True)
 
@@ -1574,6 +1870,10 @@ def main():
                                         break
                     game.drag_item = None
                     game.drag_source = None
+
+            elif event.type == pygame.MOUSEWHEEL:
+                if game.inv_open and game.journal_open:
+                    game.journal_scroll = max(0, game.journal_scroll + event.y * 3)
 
         # --- REALTIME UPDATE ---
         game.update_typewriter(dt)
@@ -1671,6 +1971,8 @@ def main():
                     for ck in list(game.player.cooldowns.keys()):
                         game.player.cooldowns[ck] = max(0.0, game.player.cooldowns[ck] - dt * 0.30)
 
+            game.update_world_reactions(dt, moved=moved)
+
             for obj in game.objects:
                 if not obj.used and obj.kind == "trap":
                     if math.hypot(game.player.x - (obj.x + 0.5), game.player.y - (obj.y + 0.5)) <= 0.55:
@@ -1680,17 +1982,20 @@ def main():
                             game.sfx.play("ui")
                             if game.player.gain_xp(8):
                                 game.trigger_levelup_shine()
-                            game.set_thought(game.loc["events"]["trap_disarm"])
+                            # Успех обезвреживания — ФОНОВАЯ мысль (шанс 30%, не чаще раза в 6 сек)
+                            game.trigger_event_thought("trap_disarm")
                             game.add_popup(obj.x + 0.5, obj.y + 0.5, "ОБЕЗВРЕЖЕНО (+8 XP)", (130, 240, 175))
                         else:
                             game.on_player_hit(random.randint(5, 8), is_magic=False)
                             game.emit_noise(obj.x + 0.5, obj.y + 0.5, 6.0)
-                            game.set_thought(game.loc["events"]["trap_hit"])
+                            # Провал на ловушке — ВАЖНАЯ мысль (100% объясняет, откуда прилетел урон!)
+                            game.trigger_event_thought("trap_hit", force_important=True)
 
             game.ambient_timer -= dt
             if game.ambient_timer <= 0.0:
-                game.ambient_timer = random.uniform(90.0, 140.0)
-                game.set_thought(random.choice(game.player.thoughts["ambient"]))
+                game.ambient_timer = random.uniform(45.0, 75.0)
+                if game.can_trigger_background_thought(chance=0.55):
+                    game.set_thought(game.pick_text(game.player.thoughts["ambient"], "player_ambient"), important=False, chance=1.0)
 
             for m in list(game.mobs):
                 m.update_ai(dt, game.player, game.dungeon, game.mobs, game.projectiles, game.sfx, game.add_popup, game.on_player_hit)
@@ -1750,7 +2055,7 @@ def main():
         evt_code = game.player.update_timers(dt)
         if evt_code == "torch_burned_out":
             game.sfx.play("hurt")
-            game.set_thought(game.loc["events"]["torch_burned_out"])
+            game.trigger_event_thought("torch_burned_out", force_important=True)
 
         game.fx.update(dt, game.player, game.dungeon, game.mobs, game.add_popup)
         sh_x, sh_y = game.fx.shake_offset
@@ -2014,6 +2319,10 @@ def main():
         ui_bundle["_world_hover_item"] = world_hover_item
         ui_bundle["_visual_fx"] = game.visual_fx
         ui_bundle["_fx_mgr"] = game.fx
+        ui_bundle["_journal_open"] = game.journal_open
+        ui_bundle["_journal_logs"] = game.journal_logs
+        ui_bundle["_journal_filters"] = game.journal_filters
+        ui_bundle["_journal_scroll"] = game.journal_scroll
 
         hover_target = game.get_precision_hover_target(world_mx, target_wy=world_my)
         shown_str = game.target_thought[:int(game.shown_chars)]

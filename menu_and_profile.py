@@ -11,8 +11,16 @@ from config import (
 from studio_core import quantize_normal_surface, flip_normal_pair_x, LiveLightPreview
 
 
+def get_profile_dir():
+    # Храним сейвы в системной папке пользователя (%APPDATA%/RatCellar), отдельно от кода игры!
+    appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
+    save_dir = os.path.join(appdata, "RatCellar")
+    os.makedirs(save_dir, exist_ok=True)
+    return save_dir
+
+
 def get_profile_path():
-    return os.path.join(os.path.dirname(__file__), "save_profile.json")
+    return os.path.join(get_profile_dir(), "save_profile.json")
 
 
 DEFAULT_PROFILE = {
@@ -24,13 +32,25 @@ DEFAULT_PROFILE = {
     "outfit_idx": 0,
     "volume": 0.85,
     "typewriter_mode": 1,
+    "thought_freq_mode": 2,
     "fullscreen": False,
 }
 
 
 def load_profile():
     path = get_profile_path()
+    legacy_path = os.path.join(os.path.dirname(__file__), "save_profile.json")
     prof = dict(DEFAULT_PROFILE)
+
+    # Если в папке игры остался старый сейв — аккуратно переносим его в AppData
+    if not os.path.isfile(path) and os.path.isfile(legacy_path):
+        try:
+            with open(legacy_path, "r", encoding="utf-8") as f:
+                prof.update(json.load(f))
+            save_profile(prof)
+        except Exception:
+            pass
+
     if os.path.isfile(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -48,6 +68,21 @@ def save_profile(prof):
             json.dump(prof, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def reset_profile_progress(prof):
+    # Сбрасывает весь игровой прогресс (золото, открытых персонажей), сохраняя базовые настройки звука и экрана
+    vol = prof.get("volume", 0.85)
+    tw = prof.get("typewriter_mode", 1)
+    tf = prof.get("thought_freq_mode", 2)
+    fs = prof.get("fullscreen", False)
+    prof.clear()
+    prof.update(DEFAULT_PROFILE)
+    prof["volume"] = vol
+    prof["typewriter_mode"] = tw
+    prof["thought_freq_mode"] = tf
+    prof["fullscreen"] = fs
+    save_profile(prof)
 
 
 def format_copper_Trigger(total_cp, compact=False):
@@ -519,6 +554,7 @@ class MainMenuController:
         self.anim_frame = 0
         self.meltdown_timer = 0.0
         self.meltdown_active = False
+        self.confirm_reset_timer = 0.0
 
         self.nav_rects = [pygame.Rect(42, 180 + i * 74, 224, 56) for i in range(4)]
         self.btn_rects = {}
@@ -638,6 +674,11 @@ class MainMenuController:
             prof["typewriter_mode"] = (prof.get("typewriter_mode", 1) + 1) % 3
             save_profile(prof)
 
+        elif b_key in ("freq_prev", "freq_next"):
+            step = -1 if b_key.endswith("prev") else 1
+            prof["thought_freq_mode"] = (prof.get("thought_freq_mode", 2) + step) % 4
+            save_profile(prof)
+
         elif b_key == "fullscreen_toggle":
             prof["fullscreen"] = not prof.get("fullscreen", False)
             save_profile(prof)
@@ -646,6 +687,16 @@ class MainMenuController:
                 pygame.display.set_mode((SCREEN_W, SCREEN_H), flags, vsync=1)
             except Exception:
                 pygame.display.set_mode((SCREEN_W, SCREEN_H), flags)
+
+        elif b_key == "reset_progress":
+            if self.confirm_reset_timer <= 0.0:
+                self.confirm_reset_timer = 4.0
+                self.game.sfx.play("alert")
+            else:
+                self.confirm_reset_timer = 0.0
+                reset_profile_progress(prof)
+                self.game.reset_run()
+                self.game.sfx.play("crit")
 
         elif b_key == "cancel_meltdown":
             self.meltdown_active = False
@@ -658,6 +709,7 @@ class MainMenuController:
     def update(self, dt):
         target_x = self.active_tab * 840.0
         self.scroll_x += (target_x - self.scroll_x) * min(1.0, 12.0 * dt)
+        self.confirm_reset_timer = max(0.0, self.confirm_reset_timer - dt)
 
         self.anim_timer += dt
         fps = 7.0 if self.preview_walk else 2.2
@@ -918,26 +970,51 @@ class MainMenuController:
     def _render_settings_tab(self, screen, p_rect, mouse_pos, prof):
         r = self.game.renderer
         hdr = r.font_title.render("НАСТРОЙКИ ИГРЫ", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(hdr, (p_rect.centerx - hdr.get_width() // 2, p_rect.y + 40))
+        screen.blit(hdr, (p_rect.centerx - hdr.get_width() // 2, p_rect.y + 32))
 
-        box = pygame.Rect(p_rect.x + 110, p_rect.y + 100, p_rect.width - 220, 420)
+        box = pygame.Rect(p_rect.x + 95, p_rect.y + 78, p_rect.width - 190, 560)
         r.draw_pixel_frame(screen, box, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
 
         # 1. Громкость синтезатора звука
         vol_pct = int(round(prof.get("volume", 0.85) * 100))
-        self._draw_selector_row(screen, box.x + 60, box.y + 45, box.width - 120, "ГРОМКОСТЬ ЗВУКОВ:", f"{vol_pct}%", "vol_down", "vol_up", mouse_pos)
+        self._draw_selector_row(screen, box.x + 60, box.y + 28, box.width - 120, "ГРОМКОСТЬ ЗВУКОВ:", f"{vol_pct}%", "vol_down", "vol_up", mouse_pos)
 
         # 2. Скорость печатной машинки мыслей
         modes = ["Обычная (Атмосферно)", "Быстрая (x2)", "Мгновенно"]
         m_idx = prof.get("typewriter_mode", 1) % 3
-        self._draw_selector_row(screen, box.x + 60, box.y + 145, box.width - 120, "СКОРОСТЬ ТЕКСТА МЫСЛЕЙ:", modes[m_idx], "speed_cycle", "speed_cycle", mouse_pos)
+        self._draw_selector_row(screen, box.x + 60, box.y + 112, box.width - 120, "СКОРОСТЬ ТЕКСТА МЫСЛЕЙ:", modes[m_idx], "speed_cycle", "speed_cycle", mouse_pos)
 
-        # 3. Полный экран / В окне
+        # 3. Частота фоновых мыслей героя
+        freq_modes = [
+            "Только сюжетные и важные",
+            "Редко (x0.5, КД 10 сек)",
+            "Обычная (x1.0, КД 6 сек)",
+            "Часто (x1.75, КД 3.5 сек)"
+        ]
+        f_idx = prof.get("thought_freq_mode", 2) % 4
+        self._draw_selector_row(screen, box.x + 60, box.y + 196, box.width - 120, "ЧАСТОТА МЫСЛЕЙ ГЕРОЯ:", freq_modes[f_idx], "freq_prev", "freq_next", mouse_pos)
+
+        # 4. Полный экран / В окне
         fs_str = "Полный экран" if prof.get("fullscreen", False) else "В окне (1152x858)"
-        self._draw_selector_row(screen, box.x + 60, box.y + 245, box.width - 120, "РЕЖИМ ОТОБРАЖЕНИЯ:", fs_str, "fullscreen_toggle", "fullscreen_toggle", mouse_pos)
+        self._draw_selector_row(screen, box.x + 60, box.y + 280, box.width - 120, "РЕЖИМ ОТОБРАЖЕНИЯ:", fs_str, "fullscreen_toggle", "fullscreen_toggle", mouse_pos)
 
+        # 5. Кнопка сброса всего прогресса (с двухэтапным подтверждением)
+        pygame.draw.line(screen, UI_BORDER_WOOD, (box.x + 40, box.y + 365), (box.right - 40, box.y + 365), 1)
+        rst_btn = pygame.Rect(box.x + 60, box.y + 385, box.width - 120, 50)
+        self.btn_rects["reset_progress"] = rst_btn
+        hov_r = rst_btn.collidepoint(mouse_pos)
+        if self.confirm_reset_timer > 0.0:
+            r.draw_pixel_frame(screen, rst_btn, (135, 28, 34) if hov_r else (105, 20, 26), (255, 110, 110), True, 1.0)
+            r_txt = r.font_ui.render("ТОЧНО СБРОСИТЬ ПРОГРЕСС? (КЛИКНИ ЕЩЁ РАЗ)", True, (255, 235, 210))
+        else:
+            r.draw_pixel_frame(screen, rst_btn, (68, 26, 32) if hov_r else (46, 20, 26), (175, 75, 75), hov_r, 1.0)
+            r_txt = r.font_ui.render("СБРОСИТЬ ВЕСЬ ПРОГРЕСС (ЗОЛОТО И ОТКРЫТИЯ)", True, (240, 165, 165))
+        screen.blit(r_txt, (rst_btn.centerx - r_txt.get_width() // 2, rst_btn.centery - r_txt.get_height() // 2))
+
+        save_hint = r.font_small.render(f"Папка сохранений: {get_profile_dir()}", True, UI_TEXT_DIM)
+        screen.blit(save_hint, (box.centerx - save_hint.get_width() // 2, box.bottom - 58))
         hint = r.font_small.render("Во время игры клавиша [ESC] возвращает в это Главное Меню.", True, UI_TEXT_DIM)
-        screen.blit(hint, (box.centerx - hint.get_width() // 2, box.bottom - 42))
+        screen.blit(hint, (box.centerx - hint.get_width() // 2, box.bottom - 32))
 
     def _render_exit_tab(self, screen, p_rect, mouse_pos):
         r = self.game.renderer

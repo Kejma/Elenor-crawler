@@ -1612,6 +1612,8 @@ class Renderer:
         self.stat_plus_rects = {}
         self.perk_card_rects = []
         self.modal_rect = pygame.Rect(0, 0, 0, 0)
+        self.journal_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self.journal_filter_rects = {}
 
     def get_hero_pair(self, player):
         from menu_and_profile import build_custom_hero_sprite
@@ -3177,6 +3179,21 @@ class Renderer:
         self.modal_rect = pygame.Rect(wx, wy, win_w, win_h)
 
         self.draw_pixel_frame(screen, self.modal_rect, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
+        journal_open = ui_texts.get("_journal_open", False)
+
+        # Кнопка переключения между Куклой Героя и Журналом в правом верхнем углу окна инвентаря
+        self.journal_btn_rect = pygame.Rect(wx + win_w - 224, wy + 10, 204, 32)
+        j_hov = self.journal_btn_rect.collidepoint(hover_pos)
+        j_bg = (58, 46, 40) if (j_hov or journal_open) else UI_SLOT_BG
+        self.draw_pixel_frame(screen, self.journal_btn_rect, j_bg, UI_BORDER_GOLD, j_hov or journal_open, 1.0)
+        j_lbl_txt = "НАЗАД К ГЕРОЮ" if journal_open else "ЖУРНАЛ ЗАПИСЕЙ [J]"
+        j_lbl = self.font_small.render(j_lbl_txt, True, (255, 230, 110) if journal_open else UI_TEXT_MAIN)
+        screen.blit(j_lbl, (self.journal_btn_rect.centerx - j_lbl.get_width() // 2, self.journal_btn_rect.centery - j_lbl.get_height() // 2))
+
+        if journal_open:
+            self._render_journal_view(screen, wx, wy, win_w, win_h, ui_texts, hover_pos)
+            return
+
         title = self.font_title.render(f"{ui_texts['inv_title']} — {player.full_name} ({ui_texts['lvl']} {player.level})", True, UI_BORDER_HIGHLIGHT)
         screen.blit(title, (wx + 24, wy + 16))
 
@@ -3314,6 +3331,95 @@ class Renderer:
             self.draw_item_icon(screen, drag_item.icon, hover_pos[0] - 16, hover_pos[1] - 16, 32)
         elif hovered_item:
             self._render_item_tooltip(screen, player, hovered_item, ui_texts, hover_pos, compare=hovered_from_inventory)
+
+    def _render_journal_view(self, screen, wx, wy, win_w, win_h, ui_texts, hover_pos):
+        title = self.font_title.render("ЖУРНАЛ ПОХОДА (ПОСЛЕДНИЕ 100 ЗАПИСЕЙ)", True, UI_BORDER_HIGHLIGHT)
+        screen.blit(title, (wx + 24, wy + 16))
+
+        filters = ui_texts.get("_journal_filters", {"combat": True, "event": True, "speech": True})
+        logs = ui_texts.get("_journal_logs", [])
+        scroll = int(ui_texts.get("_journal_scroll", 0))
+
+        # Панель из 3 чекбоксов фильтрации
+        filter_defs = [
+            ("combat", "Боевые логи", (245, 135, 125)),
+            ("event",  "События",     (245, 215, 110)),
+            ("speech", "Реплики",     (135, 215, 255)),
+        ]
+        self.journal_filter_rects = {}
+        fx_cur = wx + 24
+        fy_cur = wy + 50
+        for f_key, f_name, f_col in filter_defs:
+            f_rect = pygame.Rect(fx_cur, fy_cur, 195, 32)
+            self.journal_filter_rects[f_key] = f_rect
+            is_on = filters.get(f_key, True)
+            hov = f_rect.collidepoint(hover_pos)
+            bg = (36, 48, 40) if is_on else (28, 22, 30)
+            if hov:
+                bg = (48, 64, 52) if is_on else (40, 30, 42)
+            pygame.draw.rect(screen, bg, f_rect, border_radius=4)
+            pygame.draw.rect(screen, f_col if is_on else UI_BORDER_WOOD, f_rect, 1, border_radius=4)
+            mark = "[✓]" if is_on else "[ ]"
+            txt_s = self.font_small.render(f"{mark} {f_name}", True, f_col if is_on else UI_TEXT_DIM)
+            screen.blit(txt_s, (f_rect.x + 12, f_rect.y + 8))
+            fx_cur += 208
+
+        filtered_logs = [entry for entry in logs if filters.get(entry["cat"], True)]
+        cnt_s = self.font_small.render(f"Записей: {len(filtered_logs)} / {len(logs)}", True, UI_TEXT_DIM)
+        screen.blit(cnt_s, (wx + win_w - cnt_s.get_width() - 28, fy_cur + 8))
+
+        # Основное поле списка записей
+        box_rect = pygame.Rect(wx + 20, wy + 90, win_w - 40, win_h - 130)
+        self.draw_pixel_frame(screen, box_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
+
+        tag_map = {
+            "combat": ("[БОЙ]",     (245, 130, 120)),
+            "event":  ("[СОБЫТИЕ]", (245, 215, 105)),
+            "speech": ("[РЕПЛИКА]", (130, 215, 255)),
+        }
+
+        # Разбиваем отфильтрованные записи на строки с переносом
+        rendered_rows = []
+        max_text_w = box_rect.width - 145
+        for entry in filtered_logs:
+            cat = entry["cat"]
+            tag_str, tag_col = tag_map.get(cat, ("[ЛОГ]", UI_TEXT_DIM))
+            col = entry.get("color") or tag_col
+            wrapped = self.wrap_text(entry["text"], self.font_small, max_text_w)
+            for idx_w, ln in enumerate(wrapped):
+                rendered_rows.append((tag_str if idx_w == 0 else "", tag_col, ln, col))
+
+        line_h = 20
+        vis_rows = (box_rect.height - 20) // line_h
+        max_scroll = max(0, len(rendered_rows) - vis_rows)
+        scroll = max(0, min(max_scroll, scroll))
+
+        start_idx = max(0, len(rendered_rows) - vis_rows - scroll)
+        end_idx = len(rendered_rows) - scroll
+        visible_slice = rendered_rows[start_idx:end_idx]
+
+        row_y = box_rect.y + 12
+        for tag_str, tag_col, ln_txt, ln_col in visible_slice:
+            if tag_str:
+                t_s = self.font_small.render(tag_str, True, tag_col)
+                screen.blit(t_s, (box_rect.x + 14, row_y))
+            l_s = self.font_small.render(ln_txt, True, ln_col)
+            screen.blit(l_s, (box_rect.x + 110, row_y))
+            row_y += line_h
+
+        # Ползунок прокрутки справа
+        if max_scroll > 0:
+            track_x = box_rect.right - 14
+            track_y = box_rect.y + 10
+            track_h = box_rect.height - 20
+            pygame.draw.rect(screen, (14, 12, 18), (track_x, track_y, 6, track_h))
+            thumb_h = max(24, int(track_h * (vis_rows / max(1, len(rendered_rows)))))
+            scroll_ratio = 1.0 - (scroll / max(1, max_scroll))
+            thumb_y = track_y + int((track_h - thumb_h) * scroll_ratio)
+            pygame.draw.rect(screen, UI_BORDER_GOLD, (track_x, thumb_y, 6, thumb_h), border_radius=2)
+
+        hint_s = self.font_small.render("Колесо мыши — Прокрутка журнала | Галочки сверху — Фильтр категорий | [J] — Закрыть журнал", True, UI_TEXT_DIM)
+        screen.blit(hint_s, (wx + (win_w - hint_s.get_width()) // 2, wy + win_h - 26))
 
     def _build_item_stat_lines(self, player, item, ui_texts, comp_item=None):
         from menu_and_profile import format_copper_Trigger

@@ -47,7 +47,8 @@ class Item:
         self.rarity = data.get("rarity", "common")
         self.rarity_color = RARITY_COLORS.get(self.rarity, (215, 215, 220))
         self.icon = data["icon"]
-        self.desc = data["desc"]
+        raw_desc = data.get("desc", "")
+        self.desc = random.choice(raw_desc) if isinstance(raw_desc, list) and raw_desc else str(raw_desc)
         self.copper_value = int(data.get("copper_value", 0))
 
         self.is_torch = data.get("is_torch", False)
