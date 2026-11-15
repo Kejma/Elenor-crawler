@@ -23,6 +23,21 @@ def get_profile_path():
     return os.path.join(get_profile_dir(), "save_profile.json")
 
 
+WINDOW_MODES_LIST = [
+    ("windowed",   "В окне"),
+    ("borderless", "Без рамки (Оконный)"),
+    ("fullscreen", "Полный экран"),
+]
+
+RESOLUTIONS_LIST = [
+    (1920, 1080, "1920 x 1080 (Full HD — Родное x1)"),
+    (3840, 2160, "3840 x 2160 (4K UHD — Целочисленное x2)"),
+    (2560, 1440, "2560 x 1440 (2K QHD 16:9)"),
+    (1600, 900,  "1600 x 900 (HD+ 16:9)"),
+    (1366, 768,  "1366 x 768 (Ноутбук 16:9)"),
+    (1280, 720,  "1280 x 720 (HD 16:9)"),
+]
+
 DEFAULT_PROFILE = {
     "bank_copper": 0,
     "rat_king_defeated": False,
@@ -33,6 +48,8 @@ DEFAULT_PROFILE = {
     "volume": 0.85,
     "typewriter_mode": 1,
     "thought_freq_mode": 2,
+    "window_mode": "windowed",
+    "resolution_idx": 0,
     "fullscreen": False,
 }
 
@@ -42,7 +59,6 @@ def load_profile():
     legacy_path = os.path.join(os.path.dirname(__file__), "save_profile.json")
     prof = dict(DEFAULT_PROFILE)
 
-    # Если в папке игры остался старый сейв — аккуратно переносим его в AppData
     if not os.path.isfile(path) and os.path.isfile(legacy_path):
         try:
             with open(legacy_path, "r", encoding="utf-8") as f:
@@ -68,6 +84,75 @@ def save_profile(prof):
             json.dump(prof, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def reset_profile_progress(prof):
+    keep_keys = ("volume", "typewriter_mode", "thought_freq_mode", "window_mode", "resolution_idx", "fullscreen")
+    saved_settings = {k: prof.get(k, DEFAULT_PROFILE[k]) for k in keep_keys}
+    prof.clear()
+    prof.update(DEFAULT_PROFILE)
+    prof.update(saved_settings)
+    save_profile(prof)
+
+
+def apply_display_mode(prof, game=None):
+    """
+    Применяет выбранное разрешение и режим (В окне / Без рамки / Полный экран)
+    с принудительным Nearest-Neighbor масштабированием без размытия пикселей!
+    """
+    os.environ["SDL_RENDER_SCALE_QUALITY"] = "0"
+    os.environ["SDL_VIDEO_CENTERED"] = "1"
+
+    w_mode = prof.get("window_mode", "windowed")
+    r_idx = int(prof.get("resolution_idx", 0)) % len(RESOLUTIONS_LIST)
+    target_w, target_h, _ = RESOLUTIONS_LIST[r_idx]
+
+    flags = 0
+    if w_mode == "borderless":
+        flags = pygame.NOFRAME
+    elif w_mode == "fullscreen":
+        flags = pygame.FULLSCREEN
+
+    try:
+        disp_surf = pygame.display.set_mode((target_w, target_h), flags, vsync=1)
+    except Exception:
+        try:
+            disp_surf = pygame.display.set_mode((target_w, target_h), flags)
+        except Exception:
+            disp_surf = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+
+    real_w, real_h = disp_surf.get_size()
+    # Считаем вписывание 1152x858 в реальное окно с сохранением пропорций (чёткие пиксели без мыла!)
+    scale_factor = min(real_w / float(SCREEN_W), real_h / float(SCREEN_H))
+    scaled_w = max(1, int(round(SCREEN_W * scale_factor)))
+    scaled_h = max(1, int(round(SCREEN_H * scale_factor)))
+    off_x = (real_w - scaled_w) // 2
+    off_y = (real_h - scaled_h) // 2
+
+    if game is not None:
+        game.display_surface = disp_surf
+        game.viewport_rect = (off_x, off_y, scaled_w, scaled_h)
+    return disp_surf, (off_x, off_y, scaled_w, scaled_h)
+
+
+def map_window_to_logical(pos, viewport_rect):
+    """Переводит физические координаты мыши окна в логические координаты игры (1152x858)."""
+    ox, oy, sw, sh = viewport_rect
+    lx = int((pos[0] - ox) * SCREEN_W / max(1, sw))
+    ly = int((pos[1] - oy) * SCREEN_H / max(1, sh))
+    return (max(0, min(SCREEN_W - 1, lx)), max(0, min(SCREEN_H - 1, ly)))
+
+
+def present_logical_canvas(display_surf, logical_surf, viewport_rect):
+    """Выводит логический холст 1152x858 на экран с бритвенно-резким Nearest-Neighbor скейлом."""
+    ox, oy, sw, sh = viewport_rect
+    if sw == SCREEN_W and sh == SCREEN_H and ox == 0 and oy == 0:
+        display_surf.blit(logical_surf, (0, 0))
+    else:
+        display_surf.fill((8, 6, 12))
+        # pygame.transform.scale всегда использует строгий Nearest-Neighbor без билинейного мыла!
+        sharp_scaled = pygame.transform.scale(logical_surf, (sw, sh))
+        display_surf.blit(sharp_scaled, (ox, oy))
 
 
 def reset_profile_progress(prof):
@@ -547,7 +632,7 @@ class MainMenuController:
         self.game = game
         self.active_tab = 0
         self.scroll_x = 0.0
-        self.preview_3d = LiveLightPreview(200, 240)
+        self.preview_3d = LiveLightPreview(280, 320)
         self.preview_walk = False
         self.preview_cloak_color = [200, 70, 75]
         self.anim_timer = 0.0
@@ -555,8 +640,16 @@ class MainMenuController:
         self.meltdown_timer = 0.0
         self.meltdown_active = False
         self.confirm_reset_timer = 0.0
+        self.open_dropdown = None
+        self.dropdown_item_rects = []
 
-        self.nav_rects = [pygame.Rect(42, 180 + i * 74, 224, 56) for i in range(4)]
+        # Левый сайдбар и резиновая правая область, адаптивная под любой SCREEN_W / SCREEN_H
+        self.sidebar_w = 300
+        self.right_x = 32 + self.sidebar_w + 24
+        self.panel_w = SCREEN_W - self.right_x - 32
+        self.panel_stride = self.panel_w + 32
+
+        self.nav_rects = [pygame.Rect(52, 220 + i * 86, self.sidebar_w - 40, 64) for i in range(4)]
         self.btn_rects = {}
 
     def sync_audio_and_display(self):
@@ -568,16 +661,36 @@ class MainMenuController:
         prof = self.game.profile
 
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE and self.meltdown_active:
-                self.meltdown_active = False
-                self.active_tab = 0
-                return True
+            if event.key == pygame.K_ESCAPE:
+                if self.open_dropdown is not None:
+                    self.open_dropdown = None
+                    return True
+                if self.meltdown_active:
+                    self.meltdown_active = False
+                    self.active_tab = 0
+                    return True
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            # 1. Клик по левому сайдбару
+            if self.open_dropdown is not None:
+                for opt_val, opt_rect in self.dropdown_item_rects:
+                    if opt_rect.collidepoint(mouse_pos):
+                        self.game.sfx.play("ui")
+                        if self.open_dropdown == "win_mode":
+                            prof["window_mode"] = opt_val
+                        elif self.open_dropdown == "resolution":
+                            prof["resolution_idx"] = opt_val
+                        save_profile(prof)
+                        apply_display_mode(prof, self.game)
+                        self.open_dropdown = None
+                        return True
+                self.open_dropdown = None
+                self.game.sfx.play("ui")
+                return True
+
             for i, nr in enumerate(self.nav_rects):
                 if nr.collidepoint(mouse_pos):
                     self.active_tab = i
+                    self.open_dropdown = None
                     self.game.sfx.play("ui")
                     if i == 3:
                         self.meltdown_active = True
@@ -587,8 +700,7 @@ class MainMenuController:
                         self.meltdown_active = False
                     return True
 
-            # 2. Кнопки внутри текущей открытой вкладки (когда карусель доехала)
-            if abs(self.scroll_x - self.active_tab * 840.0) > 120.0:
+            if abs(self.scroll_x - self.active_tab * self.panel_stride) > 160.0:
                 return True
 
             for b_key, b_rect in self.btn_rects.items():
@@ -679,14 +791,11 @@ class MainMenuController:
             prof["thought_freq_mode"] = (prof.get("thought_freq_mode", 2) + step) % 4
             save_profile(prof)
 
-        elif b_key == "fullscreen_toggle":
-            prof["fullscreen"] = not prof.get("fullscreen", False)
-            save_profile(prof)
-            flags = pygame.FULLSCREEN if prof["fullscreen"] else 0
-            try:
-                pygame.display.set_mode((SCREEN_W, SCREEN_H), flags, vsync=1)
-            except Exception:
-                pygame.display.set_mode((SCREEN_W, SCREEN_H), flags)
+        elif b_key == "dd_win_mode":
+            self.open_dropdown = None if self.open_dropdown == "win_mode" else "win_mode"
+
+        elif b_key == "dd_resolution":
+            self.open_dropdown = None if self.open_dropdown == "resolution" else "resolution"
 
         elif b_key == "reset_progress":
             if self.confirm_reset_timer <= 0.0:
@@ -707,7 +816,7 @@ class MainMenuController:
             raise SystemExit
 
     def update(self, dt):
-        target_x = self.active_tab * 840.0
+        target_x = self.active_tab * self.panel_stride
         self.scroll_x += (target_x - self.scroll_x) * min(1.0, 12.0 * dt)
         self.confirm_reset_timer = max(0.0, self.confirm_reset_timer - dt)
 
@@ -729,15 +838,15 @@ class MainMenuController:
         screen.fill((12, 10, 16))
         self.btn_rects = {}
 
-        # 1. ЛЕВАЯ КОЛОНКА МЕНЮ (ВСЕГДА НА МЕСТЕ)
-        left_rect = pygame.Rect(24, 24, 260, SCREEN_H - 48)
+        # 1. ЛЕВАЯ КОЛОНКА МЕНЮ (Якорь: левый край)
+        left_rect = pygame.Rect(32, 32, self.sidebar_w, SCREEN_H - 64)
         r.draw_pixel_frame(screen, left_rect, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
 
         title_1 = r.font_title.render("КРЫСИНЫЙ", True, UI_BORDER_HIGHLIGHT)
         title_2 = r.font_title.render("ПОГРЕБ", True, (225, 95, 85))
-        screen.blit(title_1, (left_rect.centerx - title_1.get_width() // 2, 56))
-        screen.blit(title_2, (left_rect.centerx - title_2.get_width() // 2, 82))
-        r.draw_item_icon(screen, "torch", left_rect.centerx - 16, 114, 32)
+        screen.blit(title_1, (left_rect.centerx - title_1.get_width() // 2, 68))
+        screen.blit(title_2, (left_rect.centerx - title_2.get_width() // 2, 98))
+        r.draw_item_icon(screen, "torch", left_rect.centerx - 16, 136, 32)
 
         labels = ["ИГРАТЬ", "УЛУЧШИТЬ", "НАСТРОЙКИ", "ВЫХОД"]
         for i, nr in enumerate(self.nav_rects):
@@ -753,28 +862,27 @@ class MainMenuController:
             lbl_s = r.font_title.render(labels[i], True, UI_TEXT_MAIN if (is_sel or is_hov) else UI_TEXT_DIM)
             screen.blit(lbl_s, (nr.centerx - lbl_s.get_width() // 2, nr.centery - lbl_s.get_height() // 2))
 
-        # Кошелёк игрока внизу левой панели
-        bank_rect = pygame.Rect(40, left_rect.bottom - 112, 228, 88)
+        bank_rect = pygame.Rect(52, left_rect.bottom - 130, self.sidebar_w - 40, 104)
         r.draw_pixel_frame(screen, bank_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
         b_lbl = r.font_small.render("КАЗНА НАЁМНИКА:", True, UI_TEXT_DIM)
-        screen.blit(b_lbl, (bank_rect.centerx - b_lbl.get_width() // 2, bank_rect.y + 14))
+        screen.blit(b_lbl, (bank_rect.centerx - b_lbl.get_width() // 2, bank_rect.y + 16))
         cp_val = prof.get("bank_copper", 0)
         cp_str = format_copper_Trigger(cp_val)
         cp_s = r.font_ui.render(cp_str, True, (255, 215, 80))
-        screen.blit(cp_s, (bank_rect.centerx - cp_s.get_width() // 2, bank_rect.y + 38))
+        screen.blit(cp_s, (bank_rect.centerx - cp_s.get_width() // 2, bank_rect.y + 44))
         raw_s = r.font_small.render(f"(Всего: {cp_val} медяков)", True, UI_TEXT_DIM)
-        screen.blit(raw_s, (bank_rect.centerx - raw_s.get_width() // 2, bank_rect.y + 62))
+        screen.blit(raw_s, (bank_rect.centerx - raw_s.get_width() // 2, bank_rect.y + 72))
 
-        # 2. ПРАВАЯ ОБЛАСТЬ С ЛИСТАЮЩИМИСЯ ОКНАМИ (КАРУСЕЛЬ)
-        viewport_rect = pygame.Rect(304, 24, 824, SCREEN_H - 48)
+        # 2. ПРАВАЯ РЕЗИНОВАЯ ОБЛАСТЬ С ЛИСТАЮЩИМИСЯ ОКНАМИ
+        viewport_rect = pygame.Rect(self.right_x, 32, self.panel_w, SCREEN_H - 64)
         old_clip = screen.get_clip()
         screen.set_clip(viewport_rect)
 
         for tab_i in range(4):
-            panel_x = int(304 + tab_i * 840 - self.scroll_x)
-            if panel_x + 824 < 304 or panel_x > 304 + 824:
+            panel_x = int(self.right_x + tab_i * self.panel_stride - self.scroll_x)
+            if panel_x + self.panel_w < self.right_x or panel_x > self.right_x + self.panel_w:
                 continue
-            p_rect = pygame.Rect(panel_x, 24, 824, SCREEN_H - 48)
+            p_rect = pygame.Rect(panel_x, 32, self.panel_w, SCREEN_H - 64)
             r.draw_pixel_frame(screen, p_rect, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
 
             if tab_i == 0:
@@ -793,10 +901,10 @@ class MainMenuController:
         lbl_s = r.font_small.render(label, True, UI_TEXT_DIM)
         screen.blit(lbl_s, (x + (w - lbl_s.get_width()) // 2, y))
 
-        row_y = y + 20
-        b_prev = pygame.Rect(x, row_y, 38, 36)
-        b_next = pygame.Rect(x + w - 38, row_y, 38, 36)
-        val_box = pygame.Rect(x + 44, row_y, w - 88, 36)
+        row_y = y + 22
+        b_prev = pygame.Rect(x, row_y, 44, 42)
+        b_next = pygame.Rect(x + w - 44, row_y, 44, 42)
+        val_box = pygame.Rect(x + 52, row_y, w - 104, 42)
 
         self.btn_rects[prev_key] = b_prev
         self.btn_rects[next_key] = b_next
@@ -828,15 +936,15 @@ class MainMenuController:
         h_idx = prof.get("head_idx", 0) % len(heads)
         o_idx = prof.get("outfit_idx", 0) % len(outfits)
 
-        # ЛЕВАЯ ПОЛОВИНА: РЕДАКТОР ПЕРСОНАЖА
-        ed_rect = pygame.Rect(p_rect.x + 22, p_rect.y + 22, 380, p_rect.height - 44)
+        # Резиновое деление вкладки ИГРАТЬ на 2 равные колонки под любой экран!
+        col_w = (p_rect.width - 72) // 2
+        ed_rect = pygame.Rect(p_rect.x + 24, p_rect.y + 24, col_w, p_rect.height - 48)
         r.draw_pixel_frame(screen, ed_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
 
         hdr = r.font_title.render("ОБЛИК ГЕРОЯ", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(hdr, (ed_rect.centerx - hdr.get_width() // 2, ed_rect.y + 16))
+        screen.blit(hdr, (ed_rect.centerx - hdr.get_width() // 2, ed_rect.y + 20))
 
-        # 2.5D стенд с живым светом факела
-        prev_box = pygame.Rect(ed_rect.centerx - 104, ed_rect.y + 48, 208, 248)
+        prev_box = pygame.Rect(ed_rect.centerx - 144, ed_rect.y + 56, 288, 328)
         r.draw_pixel_frame(screen, prev_box, (16, 14, 22), UI_BORDER_GOLD, False, 1.0)
 
         d_hero, n_hero = build_custom_hero_sprite(
@@ -855,9 +963,9 @@ class MainMenuController:
         lit_surf = self.preview_3d.render(d_hero, n_hero, dt)
         screen.blit(lit_surf, (prev_box.x + 4, prev_box.y + 4))
 
-        # Кнопки под превью: [Покой/Бег] и [Примерить цвет плаща]
-        b_walk = pygame.Rect(ed_rect.x + 24, prev_box.bottom + 8, 160, 32)
-        b_col = pygame.Rect(ed_rect.right - 184, prev_box.bottom + 8, 160, 32)
+        btn_w = (ed_rect.width - 84) // 2
+        b_walk = pygame.Rect(ed_rect.x + 32, prev_box.bottom + 14, btn_w, 38)
+        b_col = pygame.Rect(ed_rect.right - 32 - btn_w, prev_box.bottom + 14, btn_w, 38)
         self.btn_rects["toggle_preview_walk"] = b_walk
         self.btn_rects["roll_preview_color"] = b_col
 
@@ -867,124 +975,157 @@ class MainMenuController:
             ts = r.font_small.render(txt, True, UI_TEXT_MAIN)
             screen.blit(ts, (br.centerx - ts.get_width() // 2, br.centery - ts.get_height() // 2))
 
-        # Ползунки выбора
-        sel_x = ed_rect.x + 24
-        sel_w = ed_rect.width - 48
-        cur_y = b_walk.bottom + 14
+        sel_x = ed_rect.x + 32
+        sel_w = ed_rect.width - 64
+        cur_y = b_walk.bottom + 22
+        step_y = 82
 
         self._draw_selector_row(screen, sel_x, cur_y, sel_w, "ТИП ПЕРСОНАЖА:", type_db["title"], "type_prev", "type_next", mouse_pos)
-        cur_y += 66
+        cur_y += step_y
         skin_label = "ОКРАС ШЕРСТИ:" if h_type == "ratfolk" else "ЦВЕТ КОЖИ:"
         self._draw_selector_row(screen, sel_x, cur_y, sel_w, skin_label, skins[s_idx][0], "skin_prev", "skin_next", mouse_pos)
-        cur_y += 66
+        cur_y += step_y
         head_label = "ОСОБЕННОСТЬ ГОЛОВЫ:" if h_type == "ratfolk" else "ПРИЧЁСКА И ЛИЦО:"
         self._draw_selector_row(screen, sel_x, cur_y, sel_w, head_label, heads[h_idx][0], "head_prev", "head_next", mouse_pos)
-        cur_y += 66
+        cur_y += step_y
         self._draw_selector_row(screen, sel_x, cur_y, sel_w, "БАЗОВОЕ ОДЕЯНИЕ:", outfits[o_idx][0], "outfit_prev", "outfit_next", mouse_pos)
 
-        # Статус открытия Крысолюда
         if not prof.get("rat_king_defeated", False):
-            lock_txt = r.font_small.render("Крысолюд: убейте Крысиного Короля!", True, (235, 145, 115))
-            screen.blit(lock_txt, (ed_rect.centerx - lock_txt.get_width() // 2, ed_rect.bottom - 56))
-            dev_unlock = pygame.Rect(ed_rect.centerx - 95, ed_rect.bottom - 36, 190, 26)
+            lock_txt = r.font_small.render("Крысолюд: убейте Крысиного Короля в Кампании I!", True, (235, 145, 115))
+            screen.blit(lock_txt, (ed_rect.centerx - lock_txt.get_width() // 2, ed_rect.bottom - 68))
+            dev_unlock = pygame.Rect(ed_rect.centerx - 120, ed_rect.bottom - 42, 240, 30)
             self.btn_rects["unlock_ratfolk_dev"] = dev_unlock
             hov_u = dev_unlock.collidepoint(mouse_pos)
             pygame.draw.rect(screen, (55, 38, 48) if hov_u else (32, 24, 34), dev_unlock, border_radius=4)
             pygame.draw.rect(screen, UI_BORDER_GOLD, dev_unlock, 1, border_radius=4)
             ut = r.font_small.render("[Открыть сейчас (Тест)]", True, (255, 220, 95))
-            screen.blit(ut, (dev_unlock.centerx - ut.get_width() // 2, dev_unlock.y + 5))
+            screen.blit(ut, (dev_unlock.centerx - ut.get_width() // 2, dev_unlock.centery - ut.get_height() // 2))
         else:
             ok_txt = r.font_small.render("★ Тип «Крысолюд» разблокирован!", True, (125, 240, 155))
-            screen.blit(ok_txt, (ed_rect.centerx - ok_txt.get_width() // 2, ed_rect.bottom - 36))
+            screen.blit(ok_txt, (ed_rect.centerx - ok_txt.get_width() // 2, ed_rect.bottom - 42))
 
-        # ПРАВАЯ ПОЛОВИНА: ВЫБОР КАМПАНИИ И СТАРТ
-        camp_rect = pygame.Rect(ed_rect.right + 18, p_rect.y + 22, 380, p_rect.height - 44)
+        # ПРАВАЯ КОЛОНКА: ВЫБОР КОНТРАКТА И СТАРТ
+        camp_rect = pygame.Rect(ed_rect.right + 24, p_rect.y + 24, col_w, p_rect.height - 48)
         r.draw_pixel_frame(screen, camp_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
 
         chdr = r.font_title.render("ВЫБОР КОНТРАКТА", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(chdr, (camp_rect.centerx - chdr.get_width() // 2, camp_rect.y + 16))
+        screen.blit(chdr, (camp_rect.centerx - chdr.get_width() // 2, camp_rect.y + 20))
 
-        card_1 = pygame.Rect(camp_rect.x + 20, camp_rect.y + 54, camp_rect.width - 40, 250)
+        card_1 = pygame.Rect(camp_rect.x + 28, camp_rect.y + 64, camp_rect.width - 56, 280)
         r.draw_pixel_frame(screen, card_1, (30, 25, 36), UI_BORDER_GOLD, True, 1.0)
 
-        c_title = r.font_ui.render("I. КРЫСИНЫЙ ПОГРЕБ", True, (255, 220, 95))
-        screen.blit(c_title, (card_1.x + 16, card_1.y + 16))
+        c_title = r.font_title.render("I. КРЫСИНЫЙ ПОГРЕБ", True, (255, 220, 95))
+        screen.blit(c_title, (card_1.x + 22, card_1.y + 20))
 
         status_str = "Пройдено ★" if prof.get("rat_king_defeated", False) else "Вступительный контракт"
         status_col = (120, 240, 150) if prof.get("rat_king_defeated", False) else (130, 200, 255)
-        screen.blit(r.font_small.render(status_str, True, status_col), (card_1.x + 16, card_1.y + 38))
+        screen.blit(r.font_ui.render(status_str, True, status_col), (card_1.x + 22, card_1.y + 50))
 
         desc_text = (
             "В погребе таверны Гуго расплодились крысы величиной с волка, "
             "а на нижних ярусах сектанты под одним плащом плетут кровавые печати. "
             "Спуститесь на 4-й ярус и сокрушите Крысиного Короля!"
         )
-        for i, ln in enumerate(r.wrap_text(desc_text, r.font_small, card_1.width - 32)):
-            screen.blit(r.font_small.render(ln, True, UI_TEXT_MAIN), (card_1.x + 16, card_1.y + 68 + i * 19))
+        for i, ln in enumerate(r.wrap_text(desc_text, r.font_ui, card_1.width - 44)):
+            screen.blit(r.font_ui.render(ln, True, UI_TEXT_MAIN), (card_1.x + 22, card_1.y + 90 + i * 24))
 
-        rew_s = r.font_small.render("Награда: Открытие типа «Крысолюд»", True, (255, 195, 85))
-        screen.blit(rew_s, (card_1.x + 16, card_1.bottom - 32))
+        rew_s = r.font_ui.render("Награда: Открытие типа «Крысолюд»", True, (255, 195, 85))
+        screen.blit(rew_s, (card_1.x + 22, card_1.bottom - 38))
 
-        # Заглушка Кампании II и Сложности
-        card_2 = pygame.Rect(camp_rect.x + 20, card_1.bottom + 16, camp_rect.width - 40, 90)
+        card_2 = pygame.Rect(camp_rect.x + 28, card_1.bottom + 24, camp_rect.width - 56, 110)
         r.draw_pixel_frame(screen, card_2, (18, 15, 22), UI_BORDER_WOOD, False, 1.0)
-        screen.blit(r.font_ui.render("II. СКЛЕП КОСТЯНОГО СОВЕТА", True, UI_TEXT_DIM), (card_2.x + 16, card_2.y + 18))
-        screen.blit(r.font_small.render("[В разработке — откроется позже]", True, (130, 115, 125)), (card_2.x + 16, card_2.y + 46))
+        screen.blit(r.font_title.render("II. СКЛЕП КОСТЯНОГО СОВЕТА", True, UI_TEXT_DIM), (card_2.x + 22, card_2.y + 22))
+        screen.blit(r.font_ui.render("[В разработке — откроется позже]", True, (130, 115, 125)), (card_2.x + 22, card_2.y + 58))
 
-        diff_box = pygame.Rect(camp_rect.x + 20, card_2.bottom + 18, camp_rect.width - 40, 64)
+        diff_box = pygame.Rect(camp_rect.x + 28, card_2.bottom + 24, camp_rect.width - 56, 84)
         r.draw_pixel_frame(screen, diff_box, UI_PANEL_BG, UI_BORDER_WOOD, False, 1.0)
-        screen.blit(r.font_small.render("СЛОЖНОСТЬ ПОХОДА:", True, UI_TEXT_DIM), (diff_box.x + 16, diff_box.y + 12))
-        screen.blit(r.font_ui.render("Обычная (Стандартный баланс)", True, UI_TEXT_MAIN), (diff_box.x + 16, diff_box.y + 32))
+        screen.blit(r.font_small.render("СЛОЖНОСТЬ ПОХОДА:", True, UI_TEXT_DIM), (diff_box.x + 22, diff_box.y + 16))
+        screen.blit(r.font_title.render("Обычная (Стандартный баланс)", True, UI_TEXT_MAIN), (diff_box.x + 22, diff_box.y + 42))
 
-        note_lines = r.wrap_text("При старте похода судьба случайно определит ваш Характер и выкрасит плащ в его цвета!", r.font_small, camp_rect.width - 44)
+        note_lines = r.wrap_text("При старте похода судьба случайно определит ваш Характер и выкрасит плащ в его цвета!", r.font_ui, camp_rect.width - 56)
         for i, ln in enumerate(note_lines):
-            screen.blit(r.font_small.render(ln, True, UI_TEXT_DIM), (camp_rect.x + 22, diff_box.bottom + 24 + i * 18))
+            screen.blit(r.font_ui.render(ln, True, UI_TEXT_DIM), (camp_rect.x + 28, diff_box.bottom + 32 + i * 24))
 
-        start_btn = pygame.Rect(camp_rect.x + 20, camp_rect.bottom - 86, camp_rect.width - 40, 64)
+        start_btn = pygame.Rect(camp_rect.x + 28, camp_rect.bottom - 104, camp_rect.width - 56, 76)
         self.btn_rects["start_run"] = start_btn
         hov_st = start_btn.collidepoint(mouse_pos)
         r.draw_pixel_frame(screen, start_btn, (46, 92, 52) if hov_st else (32, 68, 38), UI_BORDER_GOLD, hov_st, 1.0)
-        st_lbl = r.font_title.render("В ПОХОД!", True, (255, 245, 200))
+        st_lbl = r.font_popup_big.render("В ПОХОД!", True, (255, 245, 200))
         screen.blit(st_lbl, (start_btn.centerx - st_lbl.get_width() // 2, start_btn.centery - st_lbl.get_height() // 2))
 
     def _render_upgrade_tab(self, screen, p_rect, prof):
         r = self.game.renderer
         hdr = r.font_title.render("ДОЛГАЯ ПРОКАЧКА НАЁМНИКА", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(hdr, (p_rect.centerx - hdr.get_width() // 2, p_rect.y + 40))
+        screen.blit(hdr, (p_rect.centerx - hdr.get_width() // 2, p_rect.y + 48))
 
-        box = pygame.Rect(p_rect.x + 60, p_rect.y + 100, p_rect.width - 120, 320)
+        box = pygame.Rect(p_rect.x + 80, p_rect.y + 110, p_rect.width - 160, 380)
         r.draw_pixel_frame(screen, box, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
 
-        msg1 = r.font_ui.render("Раздел мета-прокачки пока пустует (Заглушка)", True, (255, 215, 95))
-        screen.blit(msg1, (box.centerx - msg1.get_width() // 2, box.y + 50))
+        msg1 = r.font_title.render("Раздел мета-прокачки пока пустует (Заглушка)", True, (255, 215, 95))
+        screen.blit(msg1, (box.centerx - msg1.get_width() // 2, box.y + 60))
 
         info = (
             "Здесь за накопленные Медные Монеты (ММ) вы сможете навсегда усиливать выносливость, "
             "расширять стартовый пояс, прокачивать Удачу и открывать рероллы судеб. "
             "Собирайте монеты в данже и сдавайте драгоценные камни скупщику на этажах!"
         )
-        for i, ln in enumerate(r.wrap_text(info, r.font_thought, box.width - 80)):
+        for i, ln in enumerate(r.wrap_text(info, r.font_thought, box.width - 100)):
             s = r.font_thought.render(ln, True, UI_TEXT_MAIN)
-            screen.blit(s, (box.centerx - s.get_width() // 2, box.y + 110 + i * 26))
+            screen.blit(s, (box.centerx - s.get_width() // 2, box.y + 130 + i * 30))
+
+    def _draw_dropdown_box(self, screen, x, y, w, label, current_text, btn_key, is_open, mouse_pos):
+        r = self.game.renderer
+        lbl_s = r.font_small.render(label, True, UI_TEXT_DIM)
+        screen.blit(lbl_s, (x + (w - lbl_s.get_width()) // 2, y))
+
+        box_r = pygame.Rect(x, y + 22, w, 42)
+        self.btn_rects[btn_key] = box_r
+        hov = box_r.collidepoint(mouse_pos)
+        bg = (52, 42, 38) if (hov or is_open) else UI_SLOT_BG
+        bd = UI_BORDER_GOLD if is_open else UI_BORDER_WOOD
+        r.draw_pixel_frame(screen, box_r, bg, bd, hov or is_open, 1.0)
+
+        arrow = "▲" if is_open else "▼"
+        val_s = r.font_ui.render(f"{current_text}   {arrow}", True, UI_BORDER_HIGHLIGHT)
+        screen.blit(val_s, (box_r.centerx - val_s.get_width() // 2, box_r.centery - val_s.get_height() // 2))
+        return box_r
 
     def _render_settings_tab(self, screen, p_rect, mouse_pos, prof):
         r = self.game.renderer
         hdr = r.font_title.render("НАСТРОЙКИ ИГРЫ", True, UI_BORDER_HIGHLIGHT)
         screen.blit(hdr, (p_rect.centerx - hdr.get_width() // 2, p_rect.y + 32))
 
-        box = pygame.Rect(p_rect.x + 95, p_rect.y + 78, p_rect.width - 190, 560)
+        box_w = min(920, p_rect.width - 140)
+        box = pygame.Rect(p_rect.centerx - box_w // 2, p_rect.y + 84, box_w, p_rect.height - 140)
         r.draw_pixel_frame(screen, box, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
 
-        # 1. Громкость синтезатора звука
-        vol_pct = int(round(prof.get("volume", 0.85) * 100))
-        self._draw_selector_row(screen, box.x + 60, box.y + 28, box.width - 120, "ГРОМКОСТЬ ЗВУКОВ:", f"{vol_pct}%", "vol_down", "vol_up", mouse_pos)
+        row_x = box.x + 80
+        row_w = box.width - 160
+        step_y = 92
 
-        # 2. Скорость печатной машинки мыслей
+        cur_wmode = prof.get("window_mode", "windowed")
+        wmode_title = dict(WINDOW_MODES_LIST).get(cur_wmode, "В окне")
+        dd_wmode_rect = self._draw_dropdown_box(
+            screen, row_x, box.y + 32, row_w,
+            "РЕЖИМ ОТОБРАЖЕНИЯ ЭКРАНА:", wmode_title,
+            "dd_win_mode", self.open_dropdown == "win_mode", mouse_pos
+        )
+
+        cur_r_idx = int(prof.get("resolution_idx", 0)) % len(RESOLUTIONS_LIST)
+        res_title = RESOLUTIONS_LIST[cur_r_idx][2]
+        dd_res_rect = self._draw_dropdown_box(
+            screen, row_x, box.y + 32 + step_y, row_w,
+            "РАЗРЕШЕНИЕ ЭКРАНА (16:9 FULL HD БАЗА):", res_title,
+            "dd_resolution", self.open_dropdown == "resolution", mouse_pos
+        )
+
+        vol_pct = int(round(prof.get("volume", 0.85) * 100))
+        self._draw_selector_row(screen, row_x, box.y + 32 + step_y * 2, row_w, "ГРОМКОСТЬ ЗВУКОВ:", f"{vol_pct}%", "vol_down", "vol_up", mouse_pos)
+
         modes = ["Обычная (Атмосферно)", "Быстрая (x2)", "Мгновенно"]
         m_idx = prof.get("typewriter_mode", 1) % 3
-        self._draw_selector_row(screen, box.x + 60, box.y + 112, box.width - 120, "СКОРОСТЬ ТЕКСТА МЫСЛЕЙ:", modes[m_idx], "speed_cycle", "speed_cycle", mouse_pos)
+        self._draw_selector_row(screen, row_x, box.y + 32 + step_y * 3, row_w, "СКОРОСТЬ ТЕКСТА МЫСЛЕЙ:", modes[m_idx], "speed_cycle", "speed_cycle", mouse_pos)
 
-        # 3. Частота фоновых мыслей героя
         freq_modes = [
             "Только сюжетные и важные",
             "Редко (x0.5, КД 10 сек)",
@@ -992,15 +1133,10 @@ class MainMenuController:
             "Часто (x1.75, КД 3.5 сек)"
         ]
         f_idx = prof.get("thought_freq_mode", 2) % 4
-        self._draw_selector_row(screen, box.x + 60, box.y + 196, box.width - 120, "ЧАСТОТА МЫСЛЕЙ ГЕРОЯ:", freq_modes[f_idx], "freq_prev", "freq_next", mouse_pos)
+        self._draw_selector_row(screen, row_x, box.y + 32 + step_y * 4, row_w, "ЧАСТОТА МЫСЛЕЙ ГЕРОЯ:", freq_modes[f_idx], "freq_prev", "freq_next", mouse_pos)
 
-        # 4. Полный экран / В окне
-        fs_str = "Полный экран" if prof.get("fullscreen", False) else "В окне (1152x858)"
-        self._draw_selector_row(screen, box.x + 60, box.y + 280, box.width - 120, "РЕЖИМ ОТОБРАЖЕНИЯ:", fs_str, "fullscreen_toggle", "fullscreen_toggle", mouse_pos)
-
-        # 5. Кнопка сброса всего прогресса (с двухэтапным подтверждением)
-        pygame.draw.line(screen, UI_BORDER_WOOD, (box.x + 40, box.y + 365), (box.right - 40, box.y + 365), 1)
-        rst_btn = pygame.Rect(box.x + 60, box.y + 385, box.width - 120, 50)
+        pygame.draw.line(screen, UI_BORDER_WOOD, (box.x + 50, box.y + 42 + step_y * 5), (box.right - 50, box.y + 42 + step_y * 5), 1)
+        rst_btn = pygame.Rect(row_x, box.y + 64 + step_y * 5, row_w, 56)
         self.btn_rects["reset_progress"] = rst_btn
         hov_r = rst_btn.collidepoint(mouse_pos)
         if self.confirm_reset_timer > 0.0:
@@ -1013,23 +1149,54 @@ class MainMenuController:
 
         save_hint = r.font_small.render(f"Папка сохранений: {get_profile_dir()}", True, UI_TEXT_DIM)
         screen.blit(save_hint, (box.centerx - save_hint.get_width() // 2, box.bottom - 58))
-        hint = r.font_small.render("Во время игры клавиша [ESC] возвращает в это Главное Меню.", True, UI_TEXT_DIM)
+        hint = r.font_small.render("В игре: [ESC] — Меню | [F2] — FX-Лаборатория | [F3] — Отладка Вектора Билда", True, UI_TEXT_DIM)
         screen.blit(hint, (box.centerx - hint.get_width() // 2, box.bottom - 32))
+
+        self.dropdown_item_rects = []
+        if self.open_dropdown == "win_mode":
+            options = [(k, title, k == cur_wmode) for k, title in WINDOW_MODES_LIST]
+            self._render_dropdown_list_overlay(screen, dd_wmode_rect, options, mouse_pos)
+        elif self.open_dropdown == "resolution":
+            options = [(idx, title, idx == cur_r_idx) for idx, (_, _, title) in enumerate(RESOLUTIONS_LIST)]
+            self._render_dropdown_list_overlay(screen, dd_res_rect, options, mouse_pos)
+
+    def _render_dropdown_list_overlay(self, screen, anchor_rect, options, mouse_pos):
+        r = self.game.renderer
+        item_h = 38
+        list_h = len(options) * item_h + 12
+        list_rect = pygame.Rect(anchor_rect.x, anchor_rect.bottom + 2, anchor_rect.width, list_h)
+        pygame.draw.rect(screen, (6, 5, 10), (list_rect.x + 4, list_rect.y + 4, list_rect.width, list_rect.height))
+        r.draw_pixel_frame(screen, list_rect, (22, 18, 28), UI_BORDER_GOLD, True, 1.0)
+
+        for idx, (opt_val, opt_title, is_selected) in enumerate(options):
+            ir = pygame.Rect(list_rect.x + 6, list_rect.y + 6 + idx * item_h, list_rect.width - 12, item_h - 2)
+            self.dropdown_item_rects.append((opt_val, ir))
+            hov = ir.collidepoint(mouse_pos)
+            if hov:
+                pygame.draw.rect(screen, (68, 54, 46), ir, border_radius=3)
+                pygame.draw.rect(screen, UI_BORDER_HIGHLIGHT, ir, 1, border_radius=3)
+            elif is_selected:
+                pygame.draw.rect(screen, (42, 36, 48), ir, border_radius=3)
+            prefix = "★ " if is_selected else "   "
+            col = (255, 230, 110) if (is_selected or hov) else UI_TEXT_MAIN
+            ts = r.font_ui.render(f"{prefix}{opt_title}", True, col)
+            screen.blit(ts, (ir.x + 14, ir.centery - ts.get_height() // 2))
 
     def _render_exit_tab(self, screen, p_rect, mouse_pos):
         r = self.game.renderer
-        box = pygame.Rect(p_rect.x + 70, p_rect.y + 90, p_rect.width - 140, 460)
+        box_w = min(920, p_rect.width - 140)
+        box = pygame.Rect(p_rect.centerx - box_w // 2, p_rect.y + 110, box_w, 520)
         r.draw_pixel_frame(screen, box, (36, 14, 18), (255, 70, 70), True, 1.0)
 
         hdr = r.font_title.render("⚠ ПРОТОКОЛ СЖИГАНИЯ ПРОЦЕССОРА ⚠", True, (255, 95, 85))
-        screen.blit(hdr, (box.centerx - hdr.get_width() // 2, box.y + 36))
+        screen.blit(hdr, (box.centerx - hdr.get_width() // 2, box.y + 44))
 
         prog = min(1.0, self.meltdown_timer / 3.2)
         temp_c = int(65 + prog * 1450)
         t_lbl = r.font_popup_big.render(f"ТЕМПЕРАТУРА ЯДРА: {temp_c} °C", True, (255, 220, 80))
-        screen.blit(t_lbl, (box.centerx - t_lbl.get_width() // 2, box.y + 100))
+        screen.blit(t_lbl, (box.centerx - t_lbl.get_width() // 2, box.y + 115))
 
-        bar_r = pygame.Rect(box.x + 60, box.y + 155, box.width - 120, 34)
+        bar_r = pygame.Rect(box.x + 80, box.y + 180, box.width - 160, 40)
         pygame.draw.rect(screen, (18, 8, 12), bar_r)
         pygame.draw.rect(screen, (255, int(180 * (1.0 - prog)), 40), (bar_r.x + 3, bar_r.y + 3, int((bar_r.width - 6) * prog), bar_r.height - 6))
         pygame.draw.rect(screen, (255, 90, 90), bar_r, 2)
@@ -1041,11 +1208,11 @@ class MainMenuController:
             "КРИТИЧЕСКИЙ ПЕРЕГРЕВ! Выход через пару мгновений!"
         ]
         st_txt = stages[min(len(stages) - 1, int(prog * len(stages)))]
-        st_s = r.font_ui.render(st_txt, True, UI_TEXT_MAIN)
-        screen.blit(st_s, (box.centerx - st_s.get_width() // 2, box.y + 215))
+        st_s = r.font_title.render(st_txt, True, UI_TEXT_MAIN)
+        screen.blit(st_s, (box.centerx - st_s.get_width() // 2, box.y + 255))
 
-        b_cancel = pygame.Rect(box.x + 60, box.bottom - 95, 260, 54)
-        b_quit = pygame.Rect(box.right - 320, box.bottom - 95, 260, 54)
+        b_cancel = pygame.Rect(box.x + 80, box.bottom - 110, 310, 62)
+        b_quit = pygame.Rect(box.right - 390, box.bottom - 110, 310, 62)
         self.btn_rects["cancel_meltdown"] = b_cancel
         self.btn_rects["quit_now"] = b_quit
 

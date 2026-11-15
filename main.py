@@ -20,7 +20,8 @@ from mission_rats import (
 )
 from menu_and_profile import (
     load_profile, save_profile, format_copper_Trigger,
-    CURRENCY_AND_GEMS_DB, MainMenuController
+    CURRENCY_AND_GEMS_DB, MainMenuController,
+    apply_display_mode, map_window_to_logical, present_logical_canvas
 )
 from fx_lab import FXManager
 
@@ -82,6 +83,8 @@ class GameController:
         self.drag_source = None
         self.world_active = False
         self.fx = FXManager(self)
+        self.display_surface = None
+        self.viewport_rect = (0, 0, SCREEN_W, SCREEN_H)
         self.in_main_menu = True
         self.main_menu = MainMenuController(self)
         self.main_menu.sync_audio_and_display()
@@ -1651,32 +1654,37 @@ class GameController:
 
 
 def main():
+    os.environ["SDL_RENDER_SCALE_QUALITY"] = "0"
+    os.environ["SDL_VIDEO_CENTERED"] = "1"
     pygame.init()
-    try:
-        screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), vsync=1)
-    except Exception:
-        screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+
+    # Внутренний эталонный холст игры (всегда 1152x858, чтобы ни один пиксель не мылился!)
+    screen = pygame.Surface((SCREEN_W, SCREEN_H))
     pygame.display.set_caption("Dungeon Crawler — Mission 1: The Rat Cellar")
     clock = pygame.time.Clock()
 
     game = GameController()
+    apply_display_mode(game.profile, game)
     running = True
 
     while running:
         dt = min(0.05, clock.tick(0) / 1000.0)
         t = pygame.time.get_ticks() * 0.005
-        mouse_pos = pygame.mouse.get_pos()
+        mouse_pos = map_window_to_logical(pygame.mouse.get_pos(), game.viewport_rect)
 
         if game.in_main_menu:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                 else:
+                    if hasattr(event, "pos"):
+                        event.pos = map_window_to_logical(event.pos, game.viewport_rect)
                     game.main_menu.handle_event(event, mouse_pos)
             if not running:
                 break
             game.main_menu.update(dt)
             game.main_menu.render(screen, dt, mouse_pos)
+            present_logical_canvas(game.display_surface, screen, game.viewport_rect)
             pygame.display.flip()
             continue
 
@@ -1686,6 +1694,8 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if hasattr(event, "pos"):
+                event.pos = map_window_to_logical(event.pos, game.viewport_rect)
 
             if hasattr(game, "fx") and game.fx:
                 if game.fx.handle_event(event, Enemy, Interactable):
@@ -2356,6 +2366,7 @@ def main():
         if hasattr(game, "dev_panel") and game.dev_panel:
             game.dev_panel.render(screen, game, mouse_pos)
 
+        present_logical_canvas(game.display_surface, screen, game.viewport_rect)
         pygame.display.flip()
 
     pygame.quit()

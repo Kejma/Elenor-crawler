@@ -1595,18 +1595,25 @@ class Renderer:
         self.entity_y_canvas = np.full((VIEW_W, CANVAS_H), -9999.0, dtype=np.float32)
         self.current_hud_lights = []
 
-        self.font_thought = pygame.font.SysFont("consolas", 16, bold=True)
-        self.font_ui = pygame.font.SysFont("consolas", 15, bold=True)
-        self.font_small = pygame.font.SysFont("consolas", 13, bold=True)
-        self.font_title = pygame.font.SysFont("consolas", 18, bold=True)
+        self.font_thought = pygame.font.SysFont("consolas", 19, bold=True)
+        self.font_ui = pygame.font.SysFont("consolas", 16, bold=True)
+        self.font_small = pygame.font.SysFont("consolas", 14, bold=True)
+        self.font_title = pygame.font.SysFont("consolas", 20, bold=True)
         self.font_popup = pygame.font.SysFont("consolas", 17, bold=True)
         self.font_popup_big = pygame.font.SysFont("consolas", 24, bold=True)
 
         hud_y = CANVAS_H * SCALE
-        self.ability_rects = [pygame.Rect(354 + i * 58, hud_y + 22, 54, 56) for i in range(2)]
-        self.hotbar_rects = [pygame.Rect(478 + i * 56, hud_y + 22, 52, 56) for i in range(4)]
-        self.passive_slot_rects = [pygame.Rect(710 + i * 54, hud_y + 24, 48, 52) for i in range(5)]
-        self.bag_btn_rect = pygame.Rect(SCREEN_W - 156, hud_y + 24, 140, 52)
+        # Центрируем весь боевой пояс ([Q/E] + [1..4] + [5 пассивок]) ровно по центру экрана 1920px!
+        belt_total_w = (2 * 58) + 18 + (4 * 58) + 24 + (5 * 54)
+        belt_start_x = (SCREEN_W - belt_total_w) // 2
+        ab_x = belt_start_x
+        hb_x = ab_x + 2 * 58 + 18
+        ps_x = hb_x + 4 * 58 + 24
+
+        self.ability_rects = [pygame.Rect(ab_x + i * 58, hud_y + 22, 54, 56) for i in range(2)]
+        self.hotbar_rects = [pygame.Rect(hb_x + i * 58, hud_y + 22, 54, 56) for i in range(4)]
+        self.passive_slot_rects = [pygame.Rect(ps_x + i * 54, hud_y + 24, 48, 52) for i in range(5)]
+        self.bag_btn_rect = pygame.Rect(SCREEN_W - 176, hud_y + 22, 156, 56)
         self.inv_slot_rects = []
         self.equip_slot_rects = {}
         self.stat_plus_rects = {}
@@ -2796,16 +2803,19 @@ class Renderer:
                 for vx_p, vy_p in verts:
                     pygame.draw.circle(screen, (255, 220, 120), (vx_p, vy_p), 3)
 
-        # Typewriter Text in Dedicated Thought Box
+        # Typewriter Text in Dedicated Thought Box (адаптивно центрируется под SCALE = 4)
         if shown_thought:
-            box_max_w = THOUGHT_BOX_W * SCALE - 52
+            box_max_w = THOUGHT_BOX_W * SCALE - 68
             lines = self.wrap_text(shown_thought, self.font_thought, box_max_w)[:2]
-            start_x = THOUGHT_BOX_X * SCALE + 26
-            start_y = THOUGHT_BOX_Y * SCALE + 22
+            start_x = THOUGHT_BOX_X * SCALE + 34
+            box_px_h = THOUGHT_BOX_H * SCALE
+            line_step = 26
+            total_txt_h = len(lines) * line_step
+            start_y = THOUGHT_BOX_Y * SCALE + (box_px_h - total_txt_h) // 2 + 2
             for idx, ln in enumerate(lines):
                 t_sh = self.font_thought.render(ln, True, (10, 8, 12))
                 t_fg = self.font_thought.render(ln, True, UI_TEXT_MAIN)
-                ly = start_y + idx * 22
+                ly = start_y + idx * line_step
                 screen.blit(t_sh, (start_x + 2, ly + 2))
                 screen.blit(t_fg, (start_x, ly))
 

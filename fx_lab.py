@@ -10,10 +10,12 @@ from config import (
 
 
 class FXManager:
-    """Управляет всеми графическими эффектами, объёмным туманом, вечными декалями и панелью FX-Лаборатории [F2]."""
+    """Управляет всеми графическими эффектами, объёмным туманом, вечными декалями и панелями [F2] / [F3]."""
     def __init__(self, game):
         self.game = game
         self.panel_open = False
+        self.f3_open = False
+        self.f3_btn_rects = {}
 
         # 9 тумблеров графических улучшений
         self.flags = {
@@ -307,10 +309,36 @@ class FXManager:
         g.sfx.play("levelup")
 
     def handle_event(self, event, EnemyCls, InteractableCls):
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_F2:
-            self.panel_open = not self.panel_open
-            self.game.sfx.play("ui")
-            return True
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_F2:
+                self.panel_open = not self.panel_open
+                self.game.sfx.play("ui")
+                return True
+            if event.key == pygame.K_F3:
+                self.f3_open = not self.f3_open
+                self.game.sfx.play("ui")
+                return True
+
+        if self.f3_open and event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            p = self.game.player
+            for b_key, b_rect in self.f3_btn_rects.items():
+                if b_rect.collidepoint((mx, my)):
+                    self.game.sfx.play("ui")
+                    if b_key == "add_body":
+                        p.record_build_action("body", 2.0)
+                    elif b_key == "add_cunning":
+                        p.record_build_action("cunning", 2.0)
+                    elif b_key == "add_mind":
+                        p.record_build_action("mind", 2.0)
+                    elif b_key == "reset_aff":
+                        p.action_affinity = {"body": 0.0, "cunning": 0.0, "mind": 0.0}
+                    elif b_key == "add_luck":
+                        p.luck = (p.luck % 10) + 1
+                    elif b_key == "test_roll":
+                        p.pending_perk_rolls = max(1, p.pending_perk_rolls)
+                        self.game.roll_perk_choices()
+                    return True
 
         if not self.panel_open:
             return False
@@ -347,11 +375,14 @@ class FXManager:
 
     def render_panel(self, screen, mouse_pos):
         r = self.game.renderer
-        hint_txt = "[F2] FX-Лаборатория (Закрыть)" if self.panel_open else "[F2] FX-Лаборатория"
-        h_s = r.font_small.render(hint_txt, True, (255, 225, 95) if self.panel_open else UI_TEXT_DIM)
+        hint_txt = "[F2] FX-Лаб | [F3] Телеметрия билда"
+        h_s = r.font_small.render(hint_txt, True, (255, 225, 95) if (self.panel_open or self.f3_open) else UI_TEXT_DIM)
         pygame.draw.rect(screen, (16, 14, 22), (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), border_radius=4)
         pygame.draw.rect(screen, UI_BORDER_WOOD, (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), 1, border_radius=4)
         screen.blit(h_s, (SCREEN_W - h_s.get_width() - 14, 11))
+
+        if self.f3_open:
+            self._render_f3_telemetry(screen, mouse_pos)
 
         if not self.panel_open:
             return
@@ -427,3 +458,128 @@ class FXManager:
             r.draw_pixel_frame(screen, br, (48, 40, 52) if hov else b_col, UI_BORDER_WOOD, hov, 1.0)
             ts = r.font_small.render(b_txt, True, UI_TEXT_MAIN)
             screen.blit(ts, (br.centerx - ts.get_width() // 2, br.centery - ts.get_height() // 2))
+
+    def _render_f3_telemetry(self, screen, mouse_pos):
+        """Отрисовывает панель [F3] с детальным раскладом Вектора Билда (Силач/Ловкач/Маг) и внутренних переменных."""
+        from config import get_rarity_weights
+        r = self.game.renderer
+        g = self.game
+        p = g.player
+
+        pw, ph = 450, 520
+        px, py = 16, 36
+        panel_rect = pygame.Rect(px, py, pw, ph)
+        r.draw_pixel_frame(screen, panel_rect, (18, 16, 26), UI_BORDER_GOLD, False, 1.0)
+
+        hdr = r.font_ui.render("📊 [F3] ОТЛАДКА ВЕКТОРА БИЛДА И ПЕРЕМЕННЫХ", True, UI_BORDER_HIGHLIGHT)
+        screen.blit(hdr, (px + (pw - hdr.get_width()) // 2, py + 12))
+
+        # Считаем покомпонентный вклад в каждую ветку (Статы / Экипировка / Перки / Боевые действия)
+        stat_part = {
+            "body": max(0.0, (p.body - 1) * 1.5),
+            "cunning": max(0.0, (p.cunning - 1) * 1.5),
+            "mind": max(0.0, (p.mind - 1) * 1.5),
+        }
+        equip_part = {"body": 0.0, "cunning": 0.0, "mind": 0.0}
+        for itm in p.equipment.values():
+            if not itm or itm.is_torch:
+                continue
+            if itm.armor_class == "plate" or itm.two_handed or itm.weap_style in ("mace", "cleaver", "axe"):
+                equip_part["body"] += 2.5
+            if itm.armor_class == "leather" or itm.weap_style in ("dagger", "spear") or itm.noise_mod < 0:
+                equip_part["cunning"] += 2.5
+            if itm.armor_class == "cloth" or itm.mag_bonus > 0 or itm.mp_regen > 0:
+                equip_part["mind"] += 2.8
+            equip_part["body"] += itm.phys_bonus * 0.7 + itm.phys_def * 0.5
+            equip_part["mind"] += itm.mag_bonus * 1.1 + itm.mag_def * 0.6
+
+        perk_tags = {
+            "tough_skin": "body", "iron_grip": "body", "stone_ribs": "body",
+            "titan_blood": "body", "blood_hunger": "body", "whirlwind": "body", "earth_slam": "body",
+            "cat_step": "cunning", "keen_edge": "cunning", "throw_knife": "cunning", "poison_flask": "cunning",
+            "clear_mind": "mind", "storm_aura": "mind",
+            "pyro_firebolt": "mind", "pyro_ignite": "mind",
+            "stratos_frost_nova": "mind", "stratos_chain_lightning": "mind",
+            "persephone_rejuvenation": "mind", "persephone_entangle": "mind"
+        }
+        perk_part = {"body": 0.0, "cunning": 0.0, "mind": 0.0}
+        for pid, lvl in p.perks.items():
+            perk_part[perk_tags.get(pid, "body")] += lvl * 3.0
+
+        total_scores = p.get_build_affinities()
+        total_sum = sum(total_scores.values()) + 1.0
+
+        branches = [
+            ("body",    "СИЛАЧ (Тело)",     (235, 115, 105)),
+            ("cunning", "ЛОВКАЧ (Ловк.)",   (115, 235, 150)),
+            ("mind",    "МАГ (Разум)",      (120, 195, 255)),
+        ]
+
+        cur_y = py + 40
+        for b_key, b_title, b_col in branches:
+            tot = total_scores[b_key]
+            share = tot / total_sum
+            mult = 1.0 + 1.45 * share
+
+            box_b = pygame.Rect(px + 14, cur_y, pw - 28, 66)
+            pygame.draw.rect(screen, (26, 22, 34), box_b, border_radius=4)
+            pygame.draw.rect(screen, b_col, box_b, 1, border_radius=4)
+
+            top_line = f"{b_title}: {tot:.2f} очк. | Доля: {int(round(share * 100))}% -> Шанс перков: x{mult:.2f}"
+            screen.blit(r.font_small.render(top_line, True, b_col), (box_b.x + 8, box_b.y + 6))
+
+            sub_line = (
+                f"Статы: {stat_part[b_key]:.1f}  |  Шмот: {equip_part[b_key]:.1f}  |  "
+                f"Перки: {perk_part[b_key]:.1f}  |  Действия: {p.action_affinity[b_key]:.2f}"
+            )
+            screen.blit(r.font_small.render(sub_line, True, UI_TEXT_MAIN), (box_b.x + 8, box_b.y + 25))
+
+            # Полоска доли ветки
+            bar_w = box_b.width - 16
+            pygame.draw.rect(screen, (14, 12, 18), (box_b.x + 8, box_b.y + 46, bar_w, 12))
+            pygame.draw.rect(screen, b_col, (box_b.x + 9, box_b.y + 47, int((bar_w - 2) * share), 10))
+            cur_y += 72
+
+        # Кнопки живого тестирования притяжки перков
+        self.f3_btn_rects = {}
+        btn_specs = [
+            ("add_body",    "+2 Силач"),
+            ("add_cunning", "+2 Ловкач"),
+            ("add_mind",    "+2 Маг"),
+            ("reset_aff",   "Сброс действ."),
+            ("add_luck",    f"Удача: {p.luck} (+1)"),
+            ("test_roll",   "🎲 Тест Перков"),
+        ]
+        bw = (pw - 40) // 3
+        for idx, (bk, bt) in enumerate(btn_specs):
+            ci = idx % 3
+            ri = idx // 3
+            br = pygame.Rect(px + 14 + ci * (bw + 6), cur_y + ri * 32, bw, 28)
+            self.f3_btn_rects[bk] = br
+            hov = br.collidepoint(mouse_pos)
+            pygame.draw.rect(screen, (52, 44, 62) if hov else (34, 28, 44), br, border_radius=4)
+            pygame.draw.rect(screen, UI_BORDER_GOLD if bk == "test_roll" else UI_BORDER_WOOD, br, 1, border_radius=4)
+            ts = r.font_small.render(bt, True, (255, 230, 110) if bk == "test_roll" else UI_TEXT_MAIN)
+            screen.blit(ts, (br.centerx - ts.get_width() // 2, br.centery - ts.get_height() // 2))
+        cur_y += 70
+
+        pygame.draw.line(screen, UI_BORDER_WOOD, (px + 14, cur_y), (px + pw - 14, cur_y), 1)
+        cur_y += 8
+
+        # Блок 2: Веса редкости (с учётом текущей Удачи) и внутренние переменные движка
+        rw = get_rarity_weights(p.luck)
+        rw_str = f"Веса редкости (Удача {p.luck}): Белые {rw[0]:.0f}% | Зел {rw[1]:.1f}% | Син {rw[2]:.1f}% | Эпик {rw[3]:.1f}% | Лег {rw[4]:.1f}%"
+        screen.blit(r.font_small.render(rw_str, True, (255, 215, 110)), (px + 14, cur_y))
+        cur_y += 22
+
+        win_res = g.display_surface.get_size() if hasattr(g, "display_surface") and g.display_surface else (SCREEN_W, SCREEN_H)
+        vars_lines = [
+            f"Характер: {p.full_name}  |  Причуда (Quirk): {getattr(p, 'quirk', 'none')}",
+            f"Освещённость героя: {p.illumination:.2f}  |  Шум шагов: {int(p.noise_factor * 100)}%  |  Мана за удар: +{p.mp_on_hit:.1f}",
+            f"Таймер фоновых мыслей: {g.bg_thought_cd:.1f}с  |  Блок важной мысли: {g.important_thought_lock:.1f}с",
+            f"Очередь важных мыслей: {len(g.important_thought_queue)} шт.  |  Записей в журнале: {len(g.journal_logs)}/100",
+            f"Окно: {win_res[0]}x{win_res[1]} (Внутренний рендер: {SCREEN_W}x{SCREEN_H} Nearest-Neighbor)",
+        ]
+        for v_ln in vars_lines:
+            screen.blit(r.font_small.render(v_ln, True, UI_TEXT_DIM), (px + 14, cur_y))
+            cur_y += 19

@@ -4,31 +4,31 @@ TILE_H = 16
 SPRITE_W = 16
 SPRITE_H = 20
 
-VIEW_COLS = 24
-VIEW_ROWS = 13
+VIEW_COLS = 30                       # 30 tiles * 16 px = 480 px (x4 = 1920 px Full HD!)
+VIEW_ROWS = 13                       # 13 tiles * 16 px = 208 px
 
 MAP_COLS = 66
 MAP_ROWS = 42
 
-VIEW_W = VIEW_COLS * TILE_W          # 384 px native viewport width
+VIEW_W = VIEW_COLS * TILE_W          # 480 px native viewport width (16:9)
 VIEW_H = VIEW_ROWS * TILE_H          # 208 px native viewport height
 
-THOUGHT_ZONE_H = 46
-CANVAS_H = VIEW_H + THOUGHT_ZONE_H   # 254 px total normal-mapped canvas height
+THOUGHT_ZONE_H = 38
+CANVAS_H = VIEW_H + THOUGHT_ZONE_H   # 246 px total normal-mapped canvas height (246 * 4 = 984 px)
 
-THOUGHT_BOX_W = 264
-THOUGHT_BOX_H = 40
+THOUGHT_BOX_W = 320
+THOUGHT_BOX_H = 32
 THOUGHT_BOX_X = (VIEW_W - THOUGHT_BOX_W) // 2
 THOUGHT_BOX_Y = VIEW_H + (THOUGHT_ZONE_H - THOUGHT_BOX_H) // 2
 
-SCALE = 3                            # 1152 px width
-HUD_HEIGHT = 96                      # Bottom HUD bar
+SCALE = 4                            # Exact 4x integer scale -> 1920x1080 native Full HD!
+HUD_HEIGHT = 96                      # Bottom HUD bar (984 + 96 = 1080 px)
 
-SCREEN_W = VIEW_W * SCALE            # 1152 px
-SCREEN_H = CANVAS_H * SCALE + HUD_HEIGHT  # 858 px
+SCREEN_W = VIEW_W * SCALE            # 1920 px
+SCREEN_H = CANVAS_H * SCALE + HUD_HEIGHT  # 1080 px
 
 # --- REALTIME, LOS & LIGHTING SETTINGS ---
-LOS_MAX_RADIUS = 230.0               # Unobstructed sightline distance (sees distant lights!)
+LOS_MAX_RADIUS = 265.0               # Unobstructed sightline distance for wider 16:9 viewport
 TORCH_BASE_RADIUS = 116.0            # Torch triples your effective vision distance!
 DARK_VISION_RADIUS = 68.0            # Tight dark-vision radius (pitch black beyond this!)
 TORCH_BURN_RATE = 0.85
