@@ -1,4 +1,4 @@
-Данжн кравлер — 2D Action-Roguelike
+## Elenor-crawler — 2D Action-Roguelike
 
 Мрачно-ироничный 2D Action-Roguelike / Dungeon Crawler на **Python (Pygame + NumPy + ModernGL)** с честным 2.5D-освещением по картам нормалей, динамическими тенями, типа объёмным туманом и пищалкой вместо звука.
 
