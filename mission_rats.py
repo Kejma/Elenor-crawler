@@ -185,7 +185,6 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
         game.objects.append(InteractableCls(19, 16, "armor_stand"))
         game.objects.append(InteractableCls(19, 22, "coat_rack"))
         game.objects.append(InteractableCls(19, 24, "notice_board"))
-        game.objects.append(InteractableCls(23, 20, "woven_rug"))
 
         for tx, ty in ((21, 17), (25, 17), (21, 22), (25, 22)):
             game.objects.append(InteractableCls(tx, ty, "tavern_table"))
@@ -206,7 +205,6 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
         game.objects.append(InteractableCls(29, 9, "bookshelf"))
         game.objects.append(InteractableCls(20, 12, "wash_basin"))
         game.objects.append(InteractableCls(29, 12, "crate_stack"))
-        game.objects.append(InteractableCls(24, 11, "woven_rug"))
 
         # Южная комната (кухня и винокурня — котёл, вешала с окороками, бадья, бочки, поленница)
         game.objects.append(InteractableCls(20, 28, "cauldron"))

@@ -43,9 +43,13 @@ class Dungeon:
         self._ray_cos = np.cos(angles)[:, None]
         self._ray_sin = np.sin(angles)[:, None]
         self._ray_r = np.arange(2.0, LOS_MAX_RADIUS, 2.0, dtype=np.float32)[None, :]
+        self._fov_surf = pygame.Surface((VIEW_W, VIEW_H))
+        self._fov_full_mask = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
+        self._base_block_grid = None
         self.forest_rect = pygame.Rect(3, 12, 14, 16)
         self.start_pos = (8, 20)
         self.boss_room = None
+        self.carpets = set()
         self.generate(floor_num=1)
 
     def _has_adjacent_door(self, x, y):
@@ -56,6 +60,7 @@ class Dungeon:
 
     def invalidate_light_cache(self):
         self._light_cache = {}
+        self._base_block_grid = None
 
     def _carve_rect(self, rect, floor_id):
         for ry in range(rect.top, rect.bottom):
@@ -72,6 +77,7 @@ class Dungeon:
         self.levers = {}
         self.solid_props = set()
         self.overlays = {}
+        self.carpets = set()
         self.atmo_zones = []
         self.fog_zones = []
         self.boss_room = None
@@ -147,6 +153,16 @@ class Dungeon:
             for dx, dy in ((17, 20), (22, 14), (24, 26), (32, 20)):
                 self.grid[dy][dx] = 4
                 self.doors[(dx, dy)] = Door(dx, dy, locked_by_lever=False)
+
+            # Большой парадный ковёр в Главном Зале (перед камином и между столами)
+            for cy in range(18, 23):
+                for cx in range(21, 27):
+                    self.carpets.add((cx, cy))
+
+            # Уютный ковёр в хозяйской спальне Гуго
+            for cy in range(10, 14):
+                for cx in range(22, 27):
+                    self.carpets.add((cx, cy))
 
             yard = pygame.Rect(4, 13, 13, 15)
             self.forest_rect = yard
@@ -525,19 +541,22 @@ class Dungeon:
         self._last_viewer_pos = (world_ox / TILE_W, world_oy / TILE_H)
         cam_ix, cam_iy = int(round(cam_x)), int(round(cam_y))
 
-        fov_surf = pygame.Surface((VIEW_W, VIEW_H))
+        fov_surf = self._fov_surf
         fov_surf.fill((0, 0, 0))
 
         start_tx = max(0, min(MAP_COLS - 1, int(world_ox) // TILE_W))
         start_ty = max(0, min(MAP_ROWS - 1, int(world_oy) // TILE_H))
 
-        # Строим булеву карту препятствий (1 раз за кадр)
-        block_grid = np.zeros((MAP_COLS, MAP_ROWS), dtype=bool)
-        for ry in range(MAP_ROWS):
-            row = self.grid[ry]
-            for rx in range(MAP_COLS):
-                if row[rx] in (1, 6, 7):
-                    block_grid[rx, ry] = True
+        if self._base_block_grid is None:
+            base_bg = np.zeros((MAP_COLS, MAP_ROWS), dtype=bool)
+            for ry in range(MAP_ROWS):
+                row = self.grid[ry]
+                for rx in range(MAP_COLS):
+                    if row[rx] in (1, 6, 7):
+                        base_bg[rx, ry] = True
+            self._base_block_grid = base_bg
+
+        block_grid = self._base_block_grid.copy()
         for (dx, dy), door in self.doors.items():
             if not door.is_open:
                 block_grid[dx, dy] = True
@@ -593,8 +612,8 @@ class Dungeon:
                     (vtx * TILE_W - cam_ix, vty * TILE_H - cam_iy, TILE_W, TILE_H)
                 )
 
-        full_mask = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
-        fov_arr = pygame.surfarray.array3d(fov_surf)[:, :, 0].astype(np.float32) / 255.0
-        full_mask[:, :VIEW_H] = fov_arr
+        fov_red_view = pygame.surfarray.pixels3d(fov_surf)[:, :, 0]
+        np.multiply(fov_red_view, 1.0 / 255.0, out=self._fov_full_mask[:, :VIEW_H], casting="unsafe")
+        del fov_red_view
 
-        return full_mask, visible_tiles, open_visible_tiles
+        return self._fov_full_mask, visible_tiles, open_visible_tiles

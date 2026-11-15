@@ -81,6 +81,104 @@ def build_hero_sprite(cloak_color, armor_class="none", has_helmet=False, has_tor
 
     return enforce_crisp_rim_normals(h_diff, h_norm)
 
+def generate_carpet_tile_pair(has_n, has_s, has_w, has_e):
+    diff, norm = make_pair(16, 16, opaque=True)
+    c_base_dark = (102, 28, 34)
+    c_base_light = (118, 34, 42)
+    gold_dark = (148, 105, 48)
+    gold_bright = (205, 160, 68)
+    fringe_col = (205, 192, 160)
+    fringe_dark = (140, 125, 95)
+
+    # 1. Тканевое бархатное полотно ковра
+    for y in range(16):
+        for x in range(16):
+            col = c_base_light if (x + y) % 2 == 0 else c_base_dark
+            diff.set_at((x, y), (*col, 255))
+            norm.set_at((x, y), (128, 128, 255, 255))
+
+    # 2. Золотая кайма вдоль свободных краёв
+    if not has_n:
+        for x in range(16):
+            diff.set_at((x, 1), gold_dark)
+            diff.set_at((x, 2), gold_bright)
+            if x % 2 == 0:
+                diff.set_at((x, 0), fringe_col)
+            else:
+                diff.set_at((x, 0), fringe_dark)
+    if not has_s:
+        for x in range(16):
+            diff.set_at((x, 13), gold_bright)
+            diff.set_at((x, 14), gold_dark)
+            if x % 2 == 0:
+                diff.set_at((x, 15), fringe_col)
+            else:
+                diff.set_at((x, 15), fringe_dark)
+    if not has_w:
+        for y in range(16):
+            diff.set_at((1, y), gold_dark)
+            diff.set_at((2, y), gold_bright)
+            if y % 2 == 0:
+                diff.set_at((0, y), fringe_col)
+            else:
+                diff.set_at((0, y), fringe_dark)
+    if not has_e:
+        for y in range(16):
+            diff.set_at((13, y), gold_bright)
+            diff.set_at((14, y), gold_dark)
+            if y % 2 == 0:
+                diff.set_at((15, y), fringe_col)
+            else:
+                diff.set_at((15, y), fringe_dark)
+
+    # 3. Королевский медальон по центру (только если тайл полностью внутренний)
+    if has_n and has_s and has_w and has_e:
+        for y in range(4, 12):
+            for x in range(4, 12):
+                dist = abs(x - 7.5) + abs(y - 7.5)
+                if dist <= 4.2:
+                    m_col = gold_bright if dist in (2, 4) else (58, 86, 74)
+                    diff.set_at((x, y), m_col)
+        diff.set_at((7, 7), (235, 210, 120))
+        diff.set_at((8, 7), (235, 210, 120))
+        diff.set_at((7, 8), (235, 210, 120))
+        diff.set_at((8, 8), (235, 210, 120))
+
+    return diff, norm
+
+
+def get_carpet_autotile_key(carpets_set, x, y):
+    has_n = (x, y - 1) in carpets_set
+    has_s = (x, y + 1) in carpets_set
+    has_w = (x - 1, y) in carpets_set
+    has_e = (x + 1, y) in carpets_set
+
+    if not has_n and not has_s and not has_w and not has_e:
+        return "carpet_single"
+    if has_w and has_e and not has_n and not has_s:
+        return "carpet_h"
+    if has_n and has_s and not has_w and not has_e:
+        return "carpet_v"
+
+    if not has_n and not has_w:
+        return "carpet_nw"
+    if not has_n and not has_e:
+        return "carpet_ne"
+    if not has_s and not has_w:
+        return "carpet_sw"
+    if not has_s and not has_e:
+        return "carpet_se"
+
+    if not has_n:
+        return "carpet_n"
+    if not has_s:
+        return "carpet_s"
+    if not has_w:
+        return "carpet_w"
+    if not has_e:
+        return "carpet_e"
+
+    return "carpet_c"
 
 def create_placeholder_assets():
     assets = {}
@@ -924,28 +1022,23 @@ def create_placeholder_assets():
                 ca_norm.set_at((x, y), (nx, ny, 225, 255))
     assets["cauldron"] = (ca_diff, ca_norm)
 
-    # 14. Уютный потёртый домотканый ковёр с бахромой (`woven_rug`, 16x20) — спокойные тёплые тона без свечения!
-    wr_diff, wr_norm = make_pair(16, 20)
-    for y in range(5, 18):
-        for x in range(1, 15):
-            if x in (1, 14):
-                # Мягкая нитяная бахрома по краям ковра (через строчку)
-                if y % 2 == 0:
-                    wr_diff.set_at((x, y), (128, 108, 82))
-                    wr_norm.set_at((x, y), (128, 128, 255, 255))
-                continue
-            weave = ((x + y) % 2) * 6
-            if x in (2, 13) or y in (5, 17):
-                col = (76 - weave, 46 - weave // 2, 34)
-            elif x in (4, 11) or y in (7, 15):
-                col = (138 - weave, 96 - weave, 52)
-            elif abs(x - 7.5) + abs(y - 11.0) <= 2.6:
-                col = (146 - weave, 104 - weave, 56) if (abs(x - 7.5) + abs(y - 11.0) >= 1.5) else (68, 88, 76)
-            else:
-                col = (112 - weave, 34 - weave // 2, 38)
-            wr_diff.set_at((x, y), col)
-            wr_norm.set_at((x, y), (128, 128, 255, 255))
-    assets["woven_rug"] = (wr_diff, wr_norm)
+    # 14. Автотайлинг ковра (12 фрагментов: центр, стороны, углы и полосы)
+    carpet_configs = {
+        "carpet_c":      (True,  True,  True,  True),
+        "carpet_n":      (False, True,  True,  True),
+        "carpet_s":      (True,  False, True,  True),
+        "carpet_w":      (True,  True,  False, True),
+        "carpet_e":      (True,  True,  True,  False),
+        "carpet_nw":     (False, True,  False, True),
+        "carpet_ne":     (False, True,  True,  False),
+        "carpet_sw":     (True,  False, False, True),
+        "carpet_se":     (True,  False, True,  False),
+        "carpet_h":      (False, False, True,  True),
+        "carpet_v":      (True,  True,  False, False),
+        "carpet_single": (False, False, False, False),
+    }
+    for c_id, (hn, hs, hw, he) in carpet_configs.items():
+        assets[c_id] = generate_carpet_tile_pair(hn, hs, hw, he)
 
     # 15. Сколоченные деревянные ящики (`crate_stack`, 16x20)
     cs_diff, cs_norm = make_pair(16, 20)
@@ -1184,7 +1277,7 @@ class GPULightShader:
         self.tex_fov = self.ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.tex_masks = self.ctx.texture((MAP_COLS, MAP_ROWS * self.MAX_LIGHTS), 1, dtype="f4")
         self.tex_walls = self.ctx.texture((MAP_COLS, MAP_ROWS), 1, dtype="f4")
-        self.tex_emissive = self.ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f1")
+        self.tex_emissive = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
         self.tex_out = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
 
         for tex in (self.tex_diff, self.tex_norm, self.tex_ent_y, self.tex_fov, self.tex_masks, self.tex_walls, self.tex_emissive, self.tex_out):
@@ -1491,8 +1584,7 @@ class GPULightShader:
         if wall_grid_np is not None:
             self.tex_walls.write(np.ascontiguousarray(wall_grid_np.T, dtype=np.float32).tobytes())
         if emissive_canvas is not None:
-            em_arr = pygame.surfarray.array3d(emissive_canvas)[:, :, 0].T
-            self.tex_emissive.write(np.ascontiguousarray(em_arr, dtype=np.uint8).tobytes())
+            self.tex_emissive.write(pygame.image.tobytes(emissive_canvas, "RGB"))
 
         n_lgt = min(len(lights), self.MAX_LIGHTS)
         self.pos_rad_buf.fill(0.0)
@@ -1580,6 +1672,11 @@ class Renderer:
         self.flip_cache = {}
         self.chill_cache = {}
         self.emissive_cache = {}
+        self.alpha_mask_cache = {}
+        self._shadow_small = pygame.Surface((10, 4), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow_small, (8, 6, 12, 120), (0, 0, 10, 4))
+        self._shadow_big = pygame.Surface((20, 6), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow_big, (8, 6, 12, 120), (0, 0, 20, 6))
         self.gpu_shader = None
         try:
             self.gpu_shader = GPULightShader()
@@ -2086,6 +2183,14 @@ class Renderer:
                     self.diff_canvas.blit(ov_d, (sx, sy))
                     self.norm_canvas.blit(ov_n, (sx, sy))
 
+                # Автотайлинг ковра: рисуется поверх досок, но строго под мебелью и персонажами
+                if hasattr(dungeon, "carpets") and (c, r) in dungeon.carpets:
+                    c_key = get_carpet_autotile_key(dungeon.carpets, c, r)
+                    if c_key in self.assets:
+                        c_diff, c_norm = self.assets[c_key]
+                        self.diff_canvas.blit(c_diff, (sx, sy))
+                        self.norm_canvas.blit(c_norm, (sx, sy))
+
                 door = dungeon.doors.get((c, r))
                 if door:
                     d_key = "door_open" if door.is_open else ("door_locked" if door.locked else "door_closed")
@@ -2191,7 +2296,6 @@ class Renderer:
         render_list.sort(key=lambda item: item["wy"])
 
         use_shadows = fx_mgr.flags.get("drop_shadows", True) if fx_mgr else True
-        sh_surf = pygame.Surface((28, 12), pygame.SRCALPHA) if use_shadows else None
         world_shadow_lights = [(br["x"] + 0.5, br["y"] + 0.5, br["radius"] / TILE_W) for br in dungeon.braziers]
         for obj in objects:
             if obj.kind in ("campfire", "fireplace"):
@@ -2233,12 +2337,12 @@ class Renderer:
                     else:
                         sh_dx, sh_dy = 0.0, 0.5
 
-                    sh_w = 20 if ew > 20 else 10
-                    sh_h = 6 if ew > 20 else 4
-                    sh_surf.fill((0, 0, 0, 0))
-                    pygame.draw.ellipse(sh_surf, (8, 6, 12, 120), (0, 0, sh_w, sh_h))
+                    if ew > 20:
+                        sh_stamp, sh_w, sh_h = self._shadow_big, 20, 6
+                    else:
+                        sh_stamp, sh_w, sh_h = self._shadow_small, 10, 4
                     foot_cx = draw_x + ew * 0.5
-                    self.diff_canvas.blit(sh_surf, (int(round(foot_cx - sh_w * 0.5 + sh_dx)), int(round(sole_sy - sh_h * 0.5 + sh_dy))))
+                    self.diff_canvas.blit(sh_stamp, (int(round(foot_cx - sh_w * 0.5 + sh_dx)), int(round(sole_sy - sh_h * 0.5 + sh_dy))))
 
                 if ent["alpha"] < 255:
                     d_tmp = d_surf.copy()
@@ -2252,14 +2356,18 @@ class Renderer:
                         em_s = self._get_entity_emissive_surf(d_surf, em_role)
                         self.emissive_canvas.blit(em_s, (draw_x, draw_y))
 
-                    # Источники света (жаровни, костры, камин) НЕ записываются в буфер глубины, чтобы не затенять и не обводить контуром самих себя!
                     if not ent.get("is_light_source", False):
                         y_start_depth = draw_y + 28 if ent.get("is_tree", False) else draw_y
                         cx0, cx1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
                         cy0, cy1 = max(0, y_start_depth), min(VIEW_H, draw_y + eh)
                         if cx0 < cx1 and cy0 < cy1:
-                            alpha_slice = pygame.surfarray.array_alpha(d_surf)[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
-                            self.entity_y_canvas[cx0:cx1, cy0:cy1] = np.where(alpha_slice > 15, sole_sy, self.entity_y_canvas[cx0:cx1, cy0:cy1])
+                            s_id = id(d_surf)
+                            a_mask = self.alpha_mask_cache.get(s_id)
+                            if a_mask is None:
+                                a_mask = pygame.surfarray.array_alpha(d_surf) > 15
+                                self.alpha_mask_cache[s_id] = a_mask
+                            mask_slice = a_mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
+                            np.copyto(self.entity_y_canvas[cx0:cx1, cy0:cy1], sole_sy, where=mask_slice)
 
         tz_diff, tz_norm = self.assets["thought_zone"]
         self.diff_canvas.blit(tz_diff, (0, VIEW_H))

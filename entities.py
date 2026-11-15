@@ -338,7 +338,7 @@ class Player:
     @property
     def mp_on_hit(self):
         """Мана, выбиваемая каждым попаданием в ближнем бою (Комбо А)."""
-        gain = 1.0 + self.perk_mp_regen
+        gain = 0.3 + self.perk_mp_regen
         for itm in self.equipment.values():
             if itm and getattr(itm, "armor_class", "") == "cloth":
                 gain += 1.0
@@ -864,6 +864,7 @@ class Enemy:
             self.alert_bang_timer = 0.38
             self.current_speech = None
             self.path_timer = 0.0
+            self.attack_cd = max(self.attack_cd, random.uniform(0.12, 0.45))
             sfx.play("alert")
             if self.chat_partner and self.chat_partner.state != "combat":
                 self.chat_partner.state = "combat"
@@ -871,6 +872,7 @@ class Enemy:
                 self.chat_partner.alert_bang_timer = 0.38
                 self.chat_partner.current_speech = None
                 self.chat_partner.path_timer = 0.0
+                self.chat_partner.attack_cd = max(self.chat_partner.attack_cd, random.uniform(0.35, 0.75))
 
     def update_ai(self, dt, player, dungeon, all_mobs, projectiles, sfx, add_popup, on_player_hit):
         self.bump_x *= max(0.0, 1.0 - 14.0 * dt)
@@ -1042,26 +1044,35 @@ class Enemy:
 
         if self.is_ranged:
             has_los = dungeon.has_line_of_sight(self.x, self.y, player.x, player.y, 9.5)
-            if dist > 5.8 or not has_los:
+            melee_engage_dist = 1.75 if self.size_tiles >= 2 else 2.0
+            melee_hit_reach = 1.75 if self.size_tiles >= 2 else 1.25
+
+            # 1. Движение: если игрок подошёл вплотную (<= 2.0 тайла), культист идёт на сближение в рукопашную!
+            if dist <= melee_engage_dist:
+                if dist > melee_hit_reach * 0.88:
+                    self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)
+            elif dist > 5.8 or not has_los:
                 self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)
-            elif dist < 2.3 and not self.is_boss:
+            elif dist < 2.8 and not self.is_boss:
                 self._step_with_collision(-nx, -ny, dt, dungeon, all_mobs)
             elif self.is_boss and dist > 1.35:
                 self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)
 
-            boss_reach = 1.75 if self.size_tiles >= 2 else 1.25
-            if self.is_boss and dist <= boss_reach and self.attack_cd <= 0.0:
-                self.attack_cd = 0.95
+            # 2. Атака: удар в ближнем бою ИЛИ дистанционный каст с небольшим разбросом КД
+            if dist <= melee_hit_reach and self.attack_cd <= 0.0:
+                self.attack_cd = 0.95 if self.is_boss else 1.05
                 self.trigger_bump(nx, ny)
+                sfx.play("hit")
                 on_player_hit(random.randint(self.dmg_min, self.dmg_max), is_magic=False)
-            elif has_los and dist <= 8.2 and self.attack_cd <= 0.0:
+            elif dist > melee_engage_dist and has_los and dist <= 8.2 and self.attack_cd <= 0.0:
+                cd_jitter = random.uniform(-0.15, 0.30)
                 if self.kind in ("rat_cultist", "rat_king"):
                     self.cast_windup_max = 0.58 if self.is_boss else 0.68
                     self.cast_windup_timer = self.cast_windup_max
-                    self.attack_cd = 1.85 if self.is_boss else 2.55
+                    self.attack_cd = (1.85 if self.is_boss else 2.55) + cd_jitter
                     sfx.play("spell_windup")
                 else:
-                    self.attack_cd = 1.55
+                    self.attack_cd = 1.55 + cd_jitter
                     self.trigger_bump(nx * 0.5, ny * 0.5)
                     sfx.play("magic")
                     dmg = random.randint(self.dmg_min, self.dmg_max)

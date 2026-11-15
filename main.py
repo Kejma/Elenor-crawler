@@ -55,6 +55,10 @@ def load_modular_locales():
             merged["perks"]["pyro_ignite"]["mp_cost"] = 8
         if "clear_mind" in merged["perks"]:
             merged["perks"]["clear_mind"]["desc"] = "ПАССИВНО: Повышает магическую мощь (+2) и запас маны (+3)."
+    if "adjectives" in merged:
+        for adj_data in merged["adjectives"].values():
+            if adj_data.get("quirk") == "pyromaniac":
+                adj_data["quirk_desc"] = "Мгновенно зажигает факел (+22% к радиусу света)."
     return merged
 
 
@@ -75,6 +79,16 @@ class GameController:
         self.balance_data = self._load_balance_table()
         self.profile = load_profile()
         self.sfx = SoundSynth()
+        self._sfx_last_played = {}
+        _orig_play = self.sfx.play
+        def _throttled_play(name, *args, **kwargs):
+            now_t = pygame.time.get_ticks()
+            min_gap = 85 if name in ("spell_windup", "alert", "mob_talk") else 45
+            if now_t - self._sfx_last_played.get(name, -999) < min_gap:
+                return
+            self._sfx_last_played[name] = now_t
+            _orig_play(name, *args, **kwargs)
+        self.sfx.play = _throttled_play
         self.dungeon = Dungeon()
         self.renderer = Renderer()
         self.dev_panel = DevPanel()
@@ -1595,22 +1609,26 @@ class GameController:
                     self.objects.append(Interactable(drop_tx, drop_ty, "loot", loot_drop))
                     self.sfx.play("coin_drop")
 
-            # Комбо Б: из убитого врага на пол вылетает эфирный осколок маны (живёт 4 секунды!)
-            shard_count = 3 if getattr(m, "is_boss", False) else 1
-            for _ in range(shard_count):
-                s_ang = random.uniform(0, 6.28)
-                s_dist = random.uniform(0.35, 0.95)
-                sx_cand = m.x + math.cos(s_ang) * s_dist
-                sy_cand = m.y + math.sin(s_ang) * s_dist
-                if self.dungeon.is_blocking_move(int(sx_cand), int(sy_cand)):
-                    sx_cand, sy_cand = m.x, m.y
-                self.visual_fx.append({
-                    "kind": "mana_shard",
-                    "x": sx_cand, "y": sy_cand,
-                    "mp": 2 + (1 if m.is_ranged else 0),
-                    "color": (85, 205, 255),
-                    "timer": 4.2, "max_timer": 4.2
-                })
+            is_magic_mob = (getattr(m, "is_boss", False) or m.is_ranged or m.kind in ("rat_cultist", "cultist", "necromancer"))
+            should_drop_shard = is_magic_mob or (random.random() < 0.28)
+
+            if should_drop_shard:
+                shard_count = 3 if getattr(m, "is_boss", False) else 1
+                base_mp = 3 if getattr(m, "is_boss", False) else (2 if is_magic_mob else 1)
+                for _ in range(shard_count):
+                    s_ang = random.uniform(0, 6.28)
+                    s_dist = random.uniform(0.35, 0.95)
+                    sx_cand = m.x + math.cos(s_ang) * s_dist
+                    sy_cand = m.y + math.sin(s_ang) * s_dist
+                    if self.dungeon.is_blocking_move(int(sx_cand), int(sy_cand)):
+                        sx_cand, sy_cand = m.x, m.y
+                    self.visual_fx.append({
+                        "kind": "mana_shard",
+                        "x": sx_cand, "y": sy_cand,
+                        "mp": base_mp,
+                        "color": (85, 205, 255),
+                        "timer": 4.2, "max_timer": 4.2
+                    })
 
             if getattr(m, "is_boss", False):
                 if not self.profile.get("rat_king_defeated", False):
@@ -1971,16 +1989,6 @@ def main():
 
         if game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open and game.world_active:
             game.update_auto_perks(dt)
-
-            # Бонус Пиромана: рядом с костром, камином или жаровней кулдауны тикают на 30% быстрее!
-            if getattr(game.player, "quirk", "none") == "pyromaniac" and game.player.cooldowns:
-                near_fire = any(math.hypot(game.player.x - (br["x"] + 0.5), game.player.y - (br["y"] + 0.5)) <= 3.5 for br in game.dungeon.braziers)
-                if not near_fire:
-                    near_fire = any(o.kind in ("campfire", "fireplace") and math.hypot(game.player.x - (o.x + 0.5), game.player.y - (o.y + 0.5)) <= 3.5 for o in game.objects)
-                if near_fire:
-                    for ck in list(game.player.cooldowns.keys()):
-                        game.player.cooldowns[ck] = max(0.0, game.player.cooldowns[ck] - dt * 0.30)
-
             game.update_world_reactions(dt, moved=moved)
 
             for obj in game.objects:
@@ -2069,10 +2077,10 @@ def main():
 
         game.fx.update(dt, game.player, game.dungeon, game.mobs, game.add_popup)
         sh_x, sh_y = game.fx.shake_offset
-        target_cam_x = max(0.0, min(float(MAP_COLS * TILE_W - VIEW_W), game.player.x * TILE_W - VIEW_W * 0.5)) + sh_x
-        target_cam_y = max(0.0, min(float(MAP_ROWS * TILE_H - VIEW_H), game.player.y * TILE_H - VIEW_H * 0.5)) + sh_y
-        game.cam_x += (target_cam_x - game.cam_x) * min(1.0, 10.0 * dt)
-        game.cam_y += (target_cam_y - game.cam_y) * min(1.0, 10.0 * dt)
+        px_world = round(game.player.x * TILE_W)
+        py_world = round(game.player.y * TILE_H)
+        game.cam_x = max(0.0, min(float(MAP_COLS * TILE_W - VIEW_W), px_world - VIEW_W * 0.5)) + round(sh_x)
+        game.cam_y = max(0.0, min(float(MAP_ROWS * TILE_H - VIEW_H), py_world - VIEW_H * 0.5)) + round(sh_y)
 
         world_ox = game.player.x * TILE_W
         world_oy = game.player.y * TILE_H

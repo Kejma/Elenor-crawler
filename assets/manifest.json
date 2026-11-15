@@ -634,5 +634,137 @@
     ],
     "random_rot": false,
     "rev": 5
+  },
+  "carpet_c": {
+    "file": "carpet_c",
+    "name": "Ковёр: Центр",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_n": {
+    "file": "carpet_n",
+    "name": "Ковёр: Верх",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_s": {
+    "file": "carpet_s",
+    "name": "Ковёр: Низ",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_w": {
+    "file": "carpet_w",
+    "name": "Ковёр: Лево",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_e": {
+    "file": "carpet_e",
+    "name": "Ковёр: Право",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_nw": {
+    "file": "carpet_nw",
+    "name": "Ковёр: Угол С-З",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_ne": {
+    "file": "carpet_ne",
+    "name": "Ковёр: Угол С-В",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_sw": {
+    "file": "carpet_sw",
+    "name": "Ковёр: Угол Ю-З",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_se": {
+    "file": "carpet_se",
+    "name": "Ковёр: Угол Ю-В",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_h": {
+    "file": "carpet_h",
+    "name": "Ковёр: Полоса гор.",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_v": {
+    "file": "carpet_v",
+    "name": "Ковёр: Полоса верт.",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "carpet_single": {
+    "file": "carpet_single",
+    "name": "Ковёр: Одиночный",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
   }
 }

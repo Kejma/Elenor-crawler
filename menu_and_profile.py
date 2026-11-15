@@ -29,14 +29,28 @@ WINDOW_MODES_LIST = [
     ("fullscreen", "Полный экран"),
 ]
 
-RESOLUTIONS_LIST = [
-    (1920, 1080, "1920 x 1080 (Full HD — Родное x1)"),
+ALL_SUPPORTED_RESOLUTIONS = [
     (3840, 2160, "3840 x 2160 (4K UHD — Целочисленное x2)"),
     (2560, 1440, "2560 x 1440 (2K QHD 16:9)"),
+    (1920, 1080, "1920 x 1080 (Full HD — Родное x1)"),
     (1600, 900,  "1600 x 900 (HD+ 16:9)"),
     (1366, 768,  "1366 x 768 (Ноутбук 16:9)"),
     (1280, 720,  "1280 x 720 (HD 16:9)"),
 ]
+
+def get_available_resolutions():
+    try:
+        sizes = pygame.display.get_desktop_sizes()
+        max_w, max_h = sizes[0]
+    except Exception:
+        info = pygame.display.Info()
+        max_w = getattr(info, "current_w", 1920) or 1920
+        max_h = getattr(info, "current_h", 1080) or 1080
+
+    filtered = [r for r in ALL_SUPPORTED_RESOLUTIONS if r[0] <= max_w and r[1] <= max_h]
+    return filtered if filtered else [(1280, 720, "1280 x 720 (HD 16:9)")]
+
+RESOLUTIONS_LIST = ALL_SUPPORTED_RESOLUTIONS
 
 DEFAULT_PROFILE = {
     "bank_copper": 0,
@@ -104,8 +118,12 @@ def apply_display_mode(prof, game=None):
     os.environ["SDL_VIDEO_CENTERED"] = "1"
 
     w_mode = prof.get("window_mode", "windowed")
-    r_idx = int(prof.get("resolution_idx", 0)) % len(RESOLUTIONS_LIST)
-    target_w, target_h, _ = RESOLUTIONS_LIST[r_idx]
+    avail = get_available_resolutions()
+    r_idx = int(prof.get("resolution_idx", 0))
+    if r_idx >= len(avail):
+        r_idx = 0
+        prof["resolution_idx"] = 0
+    target_w, target_h, _ = avail[r_idx]
 
     flags = 0
     if w_mode == "borderless":
@@ -1111,8 +1129,9 @@ class MainMenuController:
             "dd_win_mode", self.open_dropdown == "win_mode", mouse_pos
         )
 
-        cur_r_idx = int(prof.get("resolution_idx", 0)) % len(RESOLUTIONS_LIST)
-        res_title = RESOLUTIONS_LIST[cur_r_idx][2]
+        avail = get_available_resolutions()
+        cur_r_idx = int(prof.get("resolution_idx", 0)) % len(avail)
+        res_title = avail[cur_r_idx][2]
         dd_res_rect = self._draw_dropdown_box(
             screen, row_x, box.y + 32 + step_y, row_w,
             "РАЗРЕШЕНИЕ ЭКРАНА (16:9 FULL HD БАЗА):", res_title,
@@ -1157,7 +1176,8 @@ class MainMenuController:
             options = [(k, title, k == cur_wmode) for k, title in WINDOW_MODES_LIST]
             self._render_dropdown_list_overlay(screen, dd_wmode_rect, options, mouse_pos)
         elif self.open_dropdown == "resolution":
-            options = [(idx, title, idx == cur_r_idx) for idx, (_, _, title) in enumerate(RESOLUTIONS_LIST)]
+            avail = get_available_resolutions()
+            options = [(idx, title, idx == cur_r_idx) for idx, (_, _, title) in enumerate(avail)]
             self._render_dropdown_list_overlay(screen, dd_res_rect, options, mouse_pos)
 
     def _render_dropdown_list_overlay(self, screen, anchor_rect, options, mouse_pos):
