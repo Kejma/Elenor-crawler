@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.vscode/
+.idea/
+save_profile.json
+assets/png_export/

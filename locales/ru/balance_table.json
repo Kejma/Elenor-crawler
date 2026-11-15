@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "simulated_runs": 200,
+    "target_survival_margin": 0.08,
+    "expected_rarity_multiplier": 1.132,
+    "total_player_ehp_floor1": 46.4
+  },
+  "enemies": {
+    "wolf": {
+      "hp": 10,
+      "dmg_min": 6,
+      "dmg_max": 8,
+      "phys_def": 0,
+      "mag_def": 0,
+      "xp": 12,
+      "floor_hp_growth": 0.28,
+      "floor_dmg_growth": 0.22
+    },
+    "skeleton": {
+      "hp": 19,
+      "dmg_min": 11,
+      "dmg_max": 16,
+      "phys_def": 1,
+      "mag_def": 0,
+      "xp": 15,
+      "floor_hp_growth": 0.28,
+      "floor_dmg_growth": 0.22
+    },
+    "cultist": {
+      "hp": 16,
+      "dmg_min": 11,
+      "dmg_max": 17,
+      "phys_def": 0,
+      "mag_def": 3,
+      "xp": 18,
+      "floor_hp_growth": 0.28,
+      "floor_dmg_growth": 0.22
+    },
+    "necromancer": {
+      "hp": 26,
+      "dmg_min": 13,
+      "dmg_max": 20,
+      "phys_def": 1,
+      "mag_def": 5,
+      "xp": 26,
+      "floor_hp_growth": 0.28,
+      "floor_dmg_growth": 0.22
+    },
+    "brute": {
+      "hp": 31,
+      "dmg_min": 15,
+      "dmg_max": 22,
+      "phys_def": 3,
+      "mag_def": 1,
+      "xp": 24,
+      "floor_hp_growth": 0.28,
+      "floor_dmg_growth": 0.22
+    }
+  }
+}

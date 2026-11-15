@@ -1,0 +1,638 @@
+{
+  "floor_0": {
+    "file": "floor_0",
+    "name": "Каменная плита подвала",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "floor_2": {
+    "file": "floor_2",
+    "name": "Подземная вода",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false
+  },
+  "floor_3": {
+    "file": "floor_3",
+    "name": "Лесной мох / Трава",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "floor_4": {
+    "file": "floor_4",
+    "name": "Дощатый настил таверны",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "wall": {
+    "file": "wall",
+    "name": "Каменная стена подвала",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "tree": {
+    "file": "tree",
+    "name": "Вековая ель",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false
+  },
+  "door_closed": {
+    "file": "door_closed",
+    "name": "Дверь (Закрыта)",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 3
+  },
+  "door_open": {
+    "file": "door_open",
+    "name": "Дверь (Открыта)",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false
+  },
+  "door_locked": {
+    "file": "door_locked",
+    "name": "Кованая решётка",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false
+  },
+  "wolf": {
+    "file": "wolf",
+    "name": "Лесной волк",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "skeleton": {
+    "file": "skeleton",
+    "name": "Скелет-воин",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "cultist": {
+    "file": "cultist",
+    "name": "Тёмный культист",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "necromancer": {
+    "file": "necromancer",
+    "name": "Архи-некромант",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "brute": {
+    "file": "brute",
+    "name": "Костяной громила",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "chest": {
+    "file": "chest",
+    "name": "Сундук с хабаром",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "idol": {
+    "file": "idol",
+    "name": "Древний идол",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "campfire": {
+    "file": "campfire",
+    "name": "Походный костёр",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "brazier": {
+    "file": "brazier",
+    "name": "Напольная жаровня",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "bookshelf": {
+    "file": "bookshelf",
+    "name": "Книжный шкаф",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "alchemy": {
+    "file": "alchemy",
+    "name": "Алхимический стол",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "rack": {
+    "file": "rack",
+    "name": "Оружейная стойка",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "trap": {
+    "file": "trap",
+    "name": "Напольные шипы",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "stairs": {
+    "file": "stairs",
+    "name": "Лестница вниз",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "lever_off": {
+    "file": "lever_off",
+    "name": "Рычаг (Выкл)",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "lever_on": {
+    "file": "lever_on",
+    "name": "Рычаг (Вкл)",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "loot": {
+    "file": "loot",
+    "name": "Мешочек с лутом",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "hero_base": {
+    "file": "hero_base",
+    "name": "Герой (Базовый)",
+    "cat": "hero",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "rat": {
+    "file": "rat",
+    "name": "Погребная крыса",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "rat_cultist": {
+    "file": "rat_cultist",
+    "name": "Две крысы под плащом",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 5,
+    "random_rot": false
+  },
+  "rat_king": {
+    "file": "rat_king",
+    "name": "Крысиный Король (Босс 2x2)",
+    "cat": "mobs",
+    "size": [
+      32,
+      36
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "npc_innkeeper": {
+    "file": "npc_innkeeper",
+    "name": "Трактирщик Гуго (NPC)",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "barrel": {
+    "file": "barrel",
+    "name": "Винная бочка",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "ritual_altar": {
+    "file": "ritual_altar",
+    "name": "Кровавый алтарь",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false
+  },
+  "floor_5": {
+    "file": "floor_5",
+    "name": "Пещерный грунт",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "rev": 5,
+    "random_rot": true
+  },
+  "wall_wood": {
+    "file": "wall_wood",
+    "name": "Бревенчатая стена",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "wall_cave": {
+    "file": "wall_cave",
+    "name": "Скальный свод пещеры",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "tavern_table": {
+    "file": "tavern_table",
+    "name": "Трактирный стол",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 5,
+    "random_rot": false
+  },
+  "bar_counter": {
+    "file": "bar_counter",
+    "name": "Барная стойка",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 5,
+    "random_rot": false
+  },
+  "wine_cask": {
+    "file": "wine_cask",
+    "name": "Большая винная бочка",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 2,
+    "random_rot": false
+  },
+  "bed": {
+    "file": "bed",
+    "name": "Кровать с тюфяком",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 5,
+    "random_rot": false
+  },
+  "fireplace": {
+    "file": "fireplace",
+    "name": "Каменный камин",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 2,
+    "random_rot": false
+  },
+  "shelf_bottles": {
+    "file": "shelf_bottles",
+    "name": "Полка с бутылками",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 2,
+    "random_rot": false
+  },
+  "chair_bench": {
+    "file": "chair_bench",
+    "name": "Деревянная скамья",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 2,
+    "random_rot": false
+  },
+  "coat_rack": {
+    "file": "coat_rack",
+    "name": "Вешалка с плащом",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 2,
+    "random_rot": false
+  },
+  "cauldron": {
+    "file": "cauldron",
+    "name": "Котёл с похлёбкой",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 2,
+    "random_rot": false
+  },
+  "woven_rug": {
+    "file": "woven_rug",
+    "name": "Домотканый ковёр",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 5,
+    "random_rot": false
+  },
+  "crate_stack": {
+    "file": "crate_stack",
+    "name": "Деревянные ящики",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "rev": 2,
+    "random_rot": false
+  },
+  "floor_6": {
+    "file": "floor_6",
+    "name": "Лесная дорога",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "_normals_10_strict": true,
+  "ov_pebbles": {
+    "file": "ov_pebbles",
+    "name": "Россыпь камушков",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_moss": {
+    "file": "ov_moss",
+    "name": "Пятна мха",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_cracks": {
+    "file": "ov_cracks",
+    "name": "Трещины и сколы",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_planks_wear": {
+    "file": "ov_planks_wear",
+    "name": "Щепки и потёртости",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "grandfather_clock": {
+    "file": "grandfather_clock",
+    "name": "Напольные часы с маятником",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "mounted_boar": {
+    "file": "mounted_boar",
+    "name": "Трофейная голова вепря",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "notice_board": {
+    "file": "notice_board",
+    "name": "Доска заказов и розыска",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "lute_stand": {
+    "file": "lute_stand",
+    "name": "Забытая лютня барда",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "wash_basin": {
+    "file": "wash_basin",
+    "name": "Бадья для умывания",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "meat_rack": {
+    "file": "meat_rack",
+    "name": "Вешала с окороками",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "firewood_pile": {
+    "file": "firewood_pile",
+    "name": "Поленница берёзовых дров",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "armor_stand": {
+    "file": "armor_stand",
+    "name": "Старый рыцарский доспех",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  }
+}

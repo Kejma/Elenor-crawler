@@ -1,0 +1,168 @@
+{
+  "perks": {
+    "pyro_firebolt": {
+      "name": "Огненный снаряд",
+      "god": "Бог Пиро",
+      "type": "active",
+      "skill_kind": "spell",
+      "cast_type": "projectile",
+      "rarity": "common",
+      "icon": "bomb",
+      "mp_cost": 3,
+      "cooldown": 1.6,
+      "power": 11,
+      "proj_speed": 12.5,
+      "windup": 0.0,
+      "knockback": 0.2,
+      "color": [255, 125, 40],
+      "upgradable_stats": ["power", "cooldown"],
+      "desc": "Дар Пиро. Стремительный сгусток пламени, мгновенно летящий в сторону курсора и освещающий путь."
+    },
+    "pyro_ignite": {
+      "name": "Воспламенение",
+      "god": "Бог Пиро",
+      "type": "active",
+      "skill_kind": "spell",
+      "cast_type": "self_ignite",
+      "rarity": "uncommon",
+      "icon": "torch",
+      "mp_cost": 5,
+      "cooldown": 8.5,
+      "power": 4,
+      "duration": 5.0,
+      "windup": 0.35,
+      "color": [255, 95, 30],
+      "upgradable_stats": ["power", "cooldown", "duration"],
+      "desc": "Дар Пиро. Окутывает героя пламенем: враги поджигаются при ударе по вам, а за спиной остаётся горящий след."
+    },
+    "stratos_frost_nova": {
+      "name": "Кольцо холода",
+      "god": "Бог Стратос",
+      "type": "active",
+      "skill_kind": "spell",
+      "cast_type": "frost_nova",
+      "rarity": "common",
+      "icon": "skill_zap",
+      "mp_cost": 4,
+      "cooldown": 6.5,
+      "power": 4,
+      "aoe_radius": 2.4,
+      "status": "root",
+      "status_dur": 1.2,
+      "windup": 0.0,
+      "color": [95, 215, 255],
+      "upgradable_stats": ["power", "cooldown", "status_dur", "aoe_radius"],
+      "desc": "Дар Стратоса. Ледяная волна вокруг героя сковывает врагов корнями льда, а затем замедляет их шаг."
+    },
+    "stratos_chain_lightning": {
+      "name": "Удар молнии",
+      "god": "Бог Стратос",
+      "type": "active",
+      "skill_kind": "spell",
+      "cast_type": "chain_lightning",
+      "rarity": "rare",
+      "icon": "skill_zap",
+      "mp_cost": 4,
+      "cooldown": 3.2,
+      "power": 7,
+      "bounces": 1,
+      "aoe_radius": 4.5,
+      "windup": 0.28,
+      "color": [135, 235, 255],
+      "upgradable_stats": ["power", "cooldown", "bounces"],
+      "desc": "Дар Стратоса. Пучок искр поражает цель и перескакивает по видимым врагам поблизости."
+    },
+    "persephone_rejuvenation": {
+      "name": "Омоложение",
+      "god": "Бог Персефона",
+      "type": "active",
+      "skill_kind": "spell",
+      "cast_type": "self_rejuvenation",
+      "rarity": "uncommon",
+      "icon": "heart",
+      "mp_cost": 5,
+      "cooldown": 10.0,
+      "power": 14,
+      "duration": 5.0,
+      "windup": 0.0,
+      "color": [110, 245, 145],
+      "upgradable_stats": ["power", "cooldown", "duration"],
+      "desc": "Дар Персефоны. Мгновенно исцеляет часть ран и окружает героя живительными светлячками регенерации."
+    },
+    "persephone_entangle": {
+      "name": "Опутывание",
+      "god": "Бог Персефона",
+      "type": "active",
+      "skill_kind": "spell",
+      "cast_type": "entangle_cursor",
+      "rarity": "common",
+      "icon": "trinket",
+      "mp_cost": 4,
+      "cooldown": 5.5,
+      "power": 5,
+      "aoe_radius": 2.1,
+      "status": "root",
+      "status_dur": 2.2,
+      "windup": 0.22,
+      "color": [95, 225, 115],
+      "upgradable_stats": ["power", "cooldown", "status_dur", "aoe_radius"],
+      "desc": "Дар Персефоны. В точке курсора прорастают цепкие корни, наносящие урон и удерживающие врагов на месте."
+    },
+    "tough_skin": {
+      "name": "Дубовая кожа",
+      "type": "passive",
+      "rarity": "common",
+      "icon": "heart",
+      "desc": "Укрепляет плоть героя, повышая максимальный запас здоровья."
+    },
+    "iron_grip": {
+      "name": "Железный хват",
+      "type": "passive",
+      "rarity": "common",
+      "icon": "weapon_sword",
+      "desc": "Удары в ближнем бою становятся тяжелее и точнее."
+    },
+    "clear_mind": {
+      "name": "Ясный разум",
+      "type": "passive",
+      "rarity": "uncommon",
+      "icon": "mana",
+      "desc": "Повышает магическую мощь, запас маны и пробуждает её естественную регенерацию."
+    },
+    "cat_step": {
+      "name": "Кошачий шаг",
+      "type": "passive",
+      "rarity": "common",
+      "icon": "boots",
+      "desc": "Приглушает шум шагов и помогает ловчее уходить от ударов."
+    },
+    "keen_edge": {
+      "name": "Острый глаз",
+      "type": "passive",
+      "rarity": "uncommon",
+      "icon": "weapon_cleaver",
+      "desc": "Повышает вероятность критического удара и физическую силу."
+    },
+    "stone_ribs": {
+      "name": "Каменные рёбра",
+      "type": "passive",
+      "rarity": "rare",
+      "icon": "shield",
+      "desc": "Снижает входящий физический и магический урон."
+    },
+    "blood_hunger": {
+      "name": "Жажда крови",
+      "type": "passive",
+      "rarity": "epic",
+      "icon": "ring",
+      "desc": "Удары оружием восстанавливают здоровье за каждую поражённую цель."
+    },
+    "titan_blood": {
+      "name": "Кровь Титана",
+      "type": "passive",
+      "rarity": "legendary",
+      "icon": "trinket",
+      "desc": "Дарует огромный запас здоровья, крепкую броню и постоянную регенерацию ран."
+    }
+  }
+}
