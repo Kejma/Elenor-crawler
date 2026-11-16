@@ -1,133 +1,6 @@
 import math
 import random
-
-# --- MISSION 1 BESTIARY PROFILES (HARDCORE TUNING) ---
-MOB_PROFILES = {
-    "rat": {
-        "sprite": "rat",
-        "hp": 15,
-        "speed": 3.20,
-        "dmg_min": 4,
-        "dmg_max": 7,
-        "phys_def": 1,
-        "mag_def": 0,
-        "detect_range": 5.2,
-        "perception": 1.05,
-        "is_ranged": False,
-        "is_boss": False,
-        "size_tiles": 1,
-        "xp": 14,
-    },
-    "rat_cultist": {
-        "sprite": "rat_cultist",
-        "hp": 28,
-        "speed": 2.65,
-        "dmg_min": 6,
-        "dmg_max": 10,
-        "phys_def": 2,
-        "mag_def": 3,
-        "detect_range": 6.4,
-        "perception": 1.15,
-        "is_ranged": True,
-        "proj_color": (235, 50, 70),
-        "is_boss": False,
-        "size_tiles": 1,
-        "xp": 24,
-    },
-    "rat_king": {
-        "sprite": "rat_king",
-        "hp": 240,
-        "speed": 2.35,
-        "dmg_min": 11,
-        "dmg_max": 16,
-        "phys_def": 5,
-        "mag_def": 5,
-        "detect_range": 8.5,
-        "perception": 1.45,
-        "is_ranged": True,
-        "proj_color": (255, 40, 60),
-        "is_boss": True,
-        "size_tiles": 2,
-        "xp": 160,
-    },
-    "wolf": {
-        "sprite": "wolf",
-        "hp": 14,
-        "speed": 2.95,
-        "dmg_min": 3,
-        "dmg_max": 6,
-        "phys_def": 0,
-        "mag_def": 0,
-        "detect_range": 5.2,
-        "perception": 1.05,
-        "is_ranged": False,
-        "is_boss": False,
-        "size_tiles": 1,
-        "xp": 12,
-    },
-    "skeleton": {
-        "sprite": "skeleton",
-        "hp": 22,
-        "speed": 2.50,
-        "dmg_min": 5,
-        "dmg_max": 8,
-        "phys_def": 2,
-        "mag_def": 0,
-        "detect_range": 5.2,
-        "perception": 0.95,
-        "is_ranged": False,
-        "is_boss": False,
-        "size_tiles": 1,
-        "xp": 16,
-    },
-    "cultist": {
-        "sprite": "cultist",
-        "hp": 20,
-        "speed": 2.30,
-        "dmg_min": 5,
-        "dmg_max": 9,
-        "phys_def": 1,
-        "mag_def": 3,
-        "detect_range": 6.0,
-        "perception": 1.10,
-        "is_ranged": True,
-        "proj_color": (215, 75, 255),
-        "is_boss": False,
-        "size_tiles": 1,
-        "xp": 18,
-    },
-    "necromancer": {
-        "sprite": "necromancer",
-        "hp": 28,
-        "speed": 2.00,
-        "dmg_min": 6,
-        "dmg_max": 10,
-        "phys_def": 2,
-        "mag_def": 5,
-        "detect_range": 6.5,
-        "perception": 1.20,
-        "is_ranged": True,
-        "proj_color": (85, 255, 130),
-        "is_boss": False,
-        "size_tiles": 1,
-        "xp": 26,
-    },
-    "brute": {
-        "sprite": "brute",
-        "hp": 36,
-        "speed": 1.85,
-        "dmg_min": 7,
-        "dmg_max": 11,
-        "phys_def": 4,
-        "mag_def": 1,
-        "detect_range": 4.8,
-        "perception": 0.85,
-        "is_ranged": False,
-        "is_boss": False,
-        "size_tiles": 1,
-        "xp": 24,
-    },
-}
+from entities import MOB_PROFILES
 
 
 def get_mission_texts(loc_dict):
@@ -351,7 +224,11 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
 
 
 def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
-    """Обрабатывает уникальные объекты Кампании I (Трактирщик Гуго, декор таверны, бочки, кровавый алтарь)."""
+    """
+    Обрабатывает СТРОГО сюжетные объекты Кампании I:
+    Трактирщик Гуго, реплики осмотра мебели таверны и ритуальный алтарь Крысиного Короля.
+    Базовые пропсы (бочки, сундуки, стойки) обрабатываются общим движком!
+    """
     m1 = get_mission_texts(game.loc)
     prop_thoughts_db = game.loc.get("prop_thoughts", {})
 
@@ -366,61 +243,23 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
         obj.talk_index += 1
         obj.speech_text = line
         obj.speech_timer = 5.5
-        game.sfx.play("mob_talk")
+        game.play_spatial("mob_talk", obj.x + 0.5, obj.y + 0.5)
         game.set_thought(line, important=True)
         return True
 
     if obj.kind in prop_thoughts_db:
-        game.sfx.play("step")
-        # Осмотр мебели — ФОНОВАЯ мысль (срабатывает с шансом 75% и не чаще раза в 6 секунд!)
+        game.play_spatial("step", obj.x + 0.5, obj.y + 0.5)
         if game.can_trigger_background_thought(chance=0.75):
             game.set_thought(game.pick_text(prop_thoughts_db[obj.kind], f"prop_{obj.kind}"), important=False, chance=1.0)
         return True
 
-    if obj.kind == "barrel":
-        obj.used = True
-        if hasattr(game, "fx") and game.fx:
-            game.fx.add_barrel_debris(obj.x, obj.y)
-            game.fx.trigger_shake(1.8, 0.14)
-        game.play_spatial("crit", obj.x + 0.5, obj.y + 0.5)
-        game.emit_noise(obj.x + 0.5, obj.y + 0.5, 5.8)
-        roll = random.random()
-        if roll < 0.26:
-            itm = game.roll_weapon_drop()
-            game.objects.append(InteractableCls(obj.x, obj.y, "loot", itm))
-            game.trigger_event_thought("barrel_weapon", item=itm.name)
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {itm.name}", itm.rarity_color)
-        elif roll < 0.52:
-            pot_id = random.choice(["potion_hp", "potion_hp_weak", "herbal_salve"])
-            pot = game.make_item(pot_id if pot_id in game.loc.get("items", {}) else "potion_hp")
-            game.objects.append(InteractableCls(obj.x, obj.y, "loot", pot))
-            game.trigger_event_thought("barrel_potion", item=pot.name)
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {pot.name}", (120, 245, 140))
-        elif roll < 0.76:
-            loot_itm = game.roll_currency_or_gem_drop(allow_gem=True)
-            game.objects.append(InteractableCls(obj.x, obj.y, "loot", loot_itm))
-            game.sfx.play("coin_drop")
-            game.trigger_event_thought("barrel_treasure", item=loot_itm.name)
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {loot_itm.name}", loot_itm.rarity_color)
-        else:
-            ambush_rat = EnemyCls(obj.x, obj.y, kind="rat", state="combat")
-            _scale_mob_for_floor(ambush_rat, game.dungeon.floor_num)
-            ambush_rat.awareness = 100.0
-            ambush_rat.alert_bang_timer = 0.38
-            game.mobs.append(ambush_rat)
-            game.sfx.play("alert")
-            # Крыса из бочки — ВАЖНОЕ событие (100% срабатывание)!
-            game.trigger_event_thought("barrel_rat_ambush")
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, "ЗАСАДА!", (255, 95, 95))
-        return True
-
     if obj.kind == "ritual_altar":
         if any(getattr(m, "is_boss", False) for m in game.mobs):
-            game.sfx.play("hurt")
+            game.play_spatial("hurt", obj.x + 0.5, obj.y + 0.5)
             game.trigger_event_thought("altar_locked")
             return True
         obj.used = True
-        game.sfx.play("magic")
+        game.play_spatial("magic", obj.x + 0.5, obj.y + 0.5)
         game.emit_noise(obj.x + 0.5, obj.y + 0.5, 7.5)
         game.player.hp = float(game.player.max_hp)
         game.player.mp = float(game.player.max_mp)
@@ -431,3 +270,25 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
         return True
 
     return False
+
+
+def update_mission_audio(game, dt):
+    """
+    Звуковой менеджер Кампании I:
+    На 4 ярусе (пещеры) транслирует пространственный ритуал от Крысиного Короля.
+    В покое — спокойный шаманский бубен, в бою — тревожный боевой марш, после смерти — тишина.
+    """
+    if getattr(game.dungeon, "floor_num", 1) == 4:
+        living_boss = next((m for m in game.mobs if getattr(m, "is_boss", False) and m.hp > 0), None)
+        if living_boss is not None:
+            theme = "ritual_combat" if living_boss.state == "combat" else "ritual_idle"
+            game.sfx.update_ambient_spatial(
+                theme,
+                game.player.x, game.player.y,
+                living_boss.x, living_boss.y,
+                dungeon=game.dungeon, max_dist=42.0, max_air_dist=26.0, dt=dt
+            )
+            return
+
+    # На остальных этажах или после гибели босса музыка ритуала плавно затухает
+    game.sfx.update_ambient_spatial(None, game.player.x, game.player.y, 0.0, 0.0, dt=dt)

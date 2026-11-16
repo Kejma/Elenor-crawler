@@ -227,6 +227,55 @@ class SoundSynth:
         if self.enabled:
             for snd in self.sounds.values():
                 snd.set_volume(self.volume)
+            menu_ch = getattr(self, "menu_channel", None)
+            if menu_ch is not None and menu_ch.get_busy():
+                menu_ch.set_volume(self.volume * 0.50)
+
+    def start_menu_music(self, track_filename="scottishe Sunshine.json"):
+        """Компилирует трек из JSON при первом вызове и запускает бесконечный луп в Главном меню."""
+        if not self.enabled:
+            return
+        if not hasattr(self, "menu_channel") or self.menu_channel is None:
+            self.menu_channel = pygame.mixer.Channel(18)
+
+        if self.menu_channel.get_busy():
+            return
+
+        # Гасим эмбиент данжа, если игрок вышел в меню через ESC
+        self.stop_disco_track()
+
+        if not hasattr(self, "menu_music_sound") or self.menu_music_sound is None:
+            try:
+                import json
+                import os
+                from music_engine import SongData, MusicLoopCompiler
+                # Проверяем файл сначала в подпапке music/, а затем в корне
+                fpath = os.path.join(os.path.dirname(__file__), "music", track_filename)
+                if not os.path.isfile(fpath):
+                    fpath = os.path.join(os.path.dirname(__file__), track_filename)
+                if not os.path.isfile(fpath):
+                    print(f"[Audio] Файл трека не найден: {track_filename}")
+                    return
+                with open(fpath, "r", encoding="utf-8") as f:
+                    song_data = SongData.from_dict(json.load(f))
+                compiler = MusicLoopCompiler(sample_rate=self.freq)
+                self.menu_music_sound, _ = compiler.compile_song(song_data, make_muffled=False)
+            except Exception as e:
+                print(f"[Audio] Ошибка загрузки музыки меню: {e}")
+                return
+
+        if self.menu_music_sound is not None:
+            self.menu_channel.set_volume(self.volume * 0.50)
+            self.menu_channel.play(self.menu_music_sound, loops=-1, fade_ms=400)
+
+    def stop_menu_music(self, fade_ms=500):
+        """Плавно глушит музыку меню при входе в подземелье."""
+        menu_ch = getattr(self, "menu_channel", None)
+        if menu_ch is not None and menu_ch.get_busy():
+            if fade_ms > 0:
+                menu_ch.fadeout(fade_ms)
+            else:
+                menu_ch.stop()
 
     def play(self, name):
         if self.enabled and name in self.sounds and self.volume > 0.01:

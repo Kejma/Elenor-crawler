@@ -911,9 +911,53 @@ class Player:
         return None
 
 
+# Базовый бестиарий подземелья (живёт в ядре сущностей, а не в сюжетных миссиях!)
+MOB_PROFILES = {
+    "rat": {
+        "sprite": "rat", "hp": 15, "speed": 3.20, "dmg_min": 4, "dmg_max": 7,
+        "phys_def": 1, "mag_def": 0, "detect_range": 5.2, "perception": 1.05,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 14,
+    },
+    "rat_cultist": {
+        "sprite": "rat_cultist", "hp": 28, "speed": 2.65, "dmg_min": 6, "dmg_max": 10,
+        "phys_def": 2, "mag_def": 3, "detect_range": 6.4, "perception": 1.15,
+        "is_ranged": True, "proj_color": (235, 50, 70), "is_boss": False, "size_tiles": 1, "xp": 24,
+    },
+    "rat_king": {
+        "sprite": "rat_king", "hp": 240, "speed": 2.35, "dmg_min": 11, "dmg_max": 16,
+        "phys_def": 5, "mag_def": 5, "detect_range": 8.5, "perception": 1.45,
+        "is_ranged": True, "proj_color": (255, 40, 60), "is_boss": True, "size_tiles": 2, "xp": 160,
+    },
+    "wolf": {
+        "sprite": "wolf", "hp": 14, "speed": 2.95, "dmg_min": 3, "dmg_max": 6,
+        "phys_def": 0, "mag_def": 0, "detect_range": 5.2, "perception": 1.05,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 12,
+    },
+    "skeleton": {
+        "sprite": "skeleton", "hp": 22, "speed": 2.50, "dmg_min": 5, "dmg_max": 8,
+        "phys_def": 2, "mag_def": 0, "detect_range": 5.2, "perception": 0.95,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 16,
+    },
+    "cultist": {
+        "sprite": "cultist", "hp": 20, "speed": 2.30, "dmg_min": 5, "dmg_max": 9,
+        "phys_def": 1, "mag_def": 3, "detect_range": 6.0, "perception": 1.10,
+        "is_ranged": True, "proj_color": (215, 75, 255), "is_boss": False, "size_tiles": 1, "xp": 18,
+    },
+    "necromancer": {
+        "sprite": "necromancer", "hp": 28, "speed": 2.00, "dmg_min": 6, "dmg_max": 10,
+        "phys_def": 2, "mag_def": 5, "detect_range": 6.5, "perception": 1.20,
+        "is_ranged": True, "proj_color": (85, 255, 130), "is_boss": False, "size_tiles": 1, "xp": 26,
+    },
+    "brute": {
+        "sprite": "brute", "hp": 36, "speed": 1.85, "dmg_min": 7, "dmg_max": 11,
+        "phys_def": 4, "mag_def": 1, "detect_range": 4.8, "perception": 0.85,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 24,
+    },
+}
+
+
 class Enemy:
     def __init__(self, x, y, kind="rat", state="patrolling", chat_lines=None):
-        from mission_rats import MOB_PROFILES
         self.x = float(x) + 0.5
         self.y = float(y) + 0.5
         self.bump_x = 0.0

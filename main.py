@@ -16,7 +16,8 @@ from entities import Item, Player, Enemy, Interactable, Projectile, Particle, Fl
 from renderer import Renderer
 from dev_panel import DevPanel
 from mission_rats import (
-    get_mission_texts, populate_mission_floor, handle_mission_object_interaction
+    get_mission_texts, populate_mission_floor, handle_mission_object_interaction,
+    update_mission_audio
 )
 from menu_and_profile import (
     load_profile, save_profile, format_copper_Trigger,
@@ -941,16 +942,52 @@ class GameController:
             return self._pickup_loot_object(obj)
 
         obj.used = True
-        if obj.kind == "bookshelf":
-            self.sfx.play("magic")
-            self.emit_noise(obj.x + 0.5, obj.y + 0.5, 3.5)
+        ox_c, oy_c = obj.x + 0.5, obj.y + 0.5
+
+        if obj.kind == "barrel":
+            if hasattr(self, "fx") and self.fx:
+                self.fx.add_barrel_debris(obj.x, obj.y)
+                self.fx.trigger_shake(1.8, 0.14)
+            self.play_spatial("crit", ox_c, oy_c)
+            self.emit_noise(ox_c, oy_c, 5.8)
+            roll = random.random()
+            if roll < 0.26:
+                itm = self.roll_weapon_drop()
+                self.objects.append(Interactable(obj.x, obj.y, "loot", itm))
+                self.trigger_event_thought("barrel_weapon", item=itm.name)
+                self.add_popup(ox_c, oy_c, f"Выпало: {itm.name}", itm.rarity_color)
+            elif roll < 0.52:
+                pot_id = random.choice(["potion_hp", "potion_hp_weak", "herbal_salve"])
+                pot = self.make_item(pot_id if pot_id in self.loc.get("items", {}) else "potion_hp")
+                self.objects.append(Interactable(obj.x, obj.y, "loot", pot))
+                self.trigger_event_thought("barrel_potion", item=pot.name)
+                self.add_popup(ox_c, oy_c, f"Выпало: {pot.name}", (120, 245, 140))
+            elif roll < 0.76:
+                loot_itm = self.roll_currency_or_gem_drop(allow_gem=True)
+                self.objects.append(Interactable(obj.x, obj.y, "loot", loot_itm))
+                self.play_spatial("coin_drop", ox_c, oy_c)
+                self.trigger_event_thought("barrel_treasure", item=loot_itm.name)
+                self.add_popup(ox_c, oy_c, f"Выпало: {loot_itm.name}", loot_itm.rarity_color)
+            else:
+                ambush_mob = Enemy(obj.x, obj.y, kind="rat", state="combat")
+                ambush_mob.apply_balance_profile(self.balance_data.get("enemies", {}).get("rat"), floor_num=self.dungeon.floor_num)
+                ambush_mob.awareness = 100.0
+                ambush_mob.alert_bang_timer = 0.38
+                self.mobs.append(ambush_mob)
+                self.play_spatial("alert", ox_c, oy_c)
+                self.trigger_event_thought("barrel_rat_ambush")
+                self.add_popup(ox_c, oy_c, "ЗАСАДА!", (255, 95, 95))
+
+        elif obj.kind == "bookshelf":
+            self.play_spatial("magic", ox_c, oy_c)
+            self.emit_noise(ox_c, oy_c, 3.5)
             self.trigger_event_thought("bookshelf_read")
             if self.player.gain_xp(15):
                 self.trigger_levelup_shine()
             scroll = self.roll_item_by_rarity(allowed_types=["consumable_spell"])
             if not self.player.add_item_to_inventory(scroll):
                 self.objects.append(Interactable(obj.x, obj.y, "loot", scroll))
-            self.add_popup(obj.x + 0.5, obj.y + 0.5, "+15 ОПЫТ / Свиток", (130, 220, 255))
+            self.add_popup(ox_c, oy_c, "+15 ОПЫТ / Свиток", (130, 220, 255))
 
         elif obj.kind == "alchemy":
             self.player.hp_bonus += 4
@@ -958,51 +995,51 @@ class GameController:
             pot = self.roll_item_by_rarity(allowed_types=["consumable"])
             if not self.player.add_item_to_inventory(pot):
                 self.objects.append(Interactable(obj.x, obj.y, "loot", pot))
-            self.sfx.play("heal")
-            self.emit_noise(obj.x + 0.5, obj.y + 0.5, 4.0)
+            self.play_spatial("heal", ox_c, oy_c)
+            self.emit_noise(ox_c, oy_c, 4.0)
             self.trigger_event_thought("alchemy_use")
-            self.add_popup(obj.x + 0.5, obj.y + 0.5, "+4 Макс.ХП / Зелье", (120, 245, 155))
+            self.add_popup(ox_c, oy_c, "+4 Макс.ХП / Зелье", (120, 245, 155))
 
         elif obj.kind == "rack":
             gear = self.roll_item_by_rarity(allowed_types=["equipment"])
             self.objects.append(Interactable(obj.x, obj.y, "loot", gear))
-            self.sfx.play("ui")
-            self.emit_noise(obj.x + 0.5, obj.y + 0.5, 4.5)
+            self.play_spatial("ui", ox_c, oy_c)
+            self.emit_noise(ox_c, oy_c, 4.5)
             self.trigger_event_thought("rack_loot", item=gear.name)
-            self.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {gear.name}", gear.rarity_color)
+            self.add_popup(ox_c, oy_c, f"Выпало: {gear.name}", gear.rarity_color)
 
         elif obj.kind == "chest":
             if random.randint(1, 20) + self.player.cunning >= 11:
                 treasure = self.roll_currency_or_gem_drop(allow_gem=True, force_gem=(random.random() < 0.55))
                 self.objects.append(Interactable(obj.x, obj.y, "loot", treasure))
-                self.play_spatial("coin_drop", obj.x + 0.5, obj.y + 0.5)
-                self.emit_noise(obj.x + 0.5, obj.y + 0.5, 4.0)
+                self.play_spatial("coin_drop", ox_c, oy_c)
+                self.emit_noise(ox_c, oy_c, 4.0)
                 self.trigger_event_thought("chest_pick_ok", item=treasure.name)
-                self.add_popup(obj.x + 0.5, obj.y + 0.5, f"В сундуке: {treasure.name}", treasure.rarity_color)
+                self.add_popup(ox_c, oy_c, f"В сундуке: {treasure.name}", treasure.rarity_color)
             elif self.player.body >= 3:
                 coin_drop = self.roll_currency_or_gem_drop(allow_gem=False)
                 self.objects.append(Interactable(obj.x, obj.y, "loot", coin_drop))
-                self.sfx.play("crit")
-                self.emit_noise(obj.x + 0.5, obj.y + 0.5, 8.5)
+                self.play_spatial("crit", ox_c, oy_c)
+                self.emit_noise(ox_c, oy_c, 8.5)
                 self.trigger_event_thought("chest_smash", item=coin_drop.name)
-                self.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {coin_drop.name}", coin_drop.rarity_color)
+                self.add_popup(ox_c, oy_c, f"Выпало: {coin_drop.name}", coin_drop.rarity_color)
             else:
                 self.player.hp = max(1.0, self.player.hp - 2)
-                self.sfx.play("hurt")
-                self.emit_noise(obj.x + 0.5, obj.y + 0.5, 6.0)
+                self.play_spatial("hurt", ox_c, oy_c)
+                self.emit_noise(ox_c, oy_c, 6.0)
                 self.trigger_event_thought("chest_fail", force_important=True)
-                self.add_popup(obj.x + 0.5, obj.y + 0.5, "СЛОМАНО (-2 ХП)", (255, 95, 95))
+                self.add_popup(ox_c, oy_c, "СЛОМАНО (-2 ХП)", (255, 95, 95))
 
         elif obj.kind == "idol":
             if self.player.mind >= 3:
                 self.player.hp = min(float(self.player.max_hp), self.player.hp + 12)
                 self.player.mp = min(float(self.player.max_mp), self.player.mp + 10)
                 self.player.trait_vision_mod += 10
-                self.sfx.play("magic")
+                self.play_spatial("magic", ox_c, oy_c)
                 self.trigger_event_thought("idol_smart")
-                self.add_popup(obj.x + 0.5, obj.y + 0.5, "+12 ХП / +Обзор", (110, 245, 190))
+                self.add_popup(ox_c, oy_c, "+12 ХП / +Обзор", (110, 245, 190))
             else:
-                self.sfx.play("step")
+                self.play_spatial("step", ox_c, oy_c)
                 self.trigger_event_thought("idol_dumb")
         return True
 
@@ -1827,6 +1864,7 @@ def main():
         mouse_pos = map_window_to_logical(pygame.mouse.get_pos(), game.viewport_rect)
 
         if game.in_main_menu:
+            game.sfx.start_menu_music("scottishe Sunshine.json")
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -1842,6 +1880,7 @@ def main():
             pygame.display.flip()
             continue
 
+        game.sfx.stop_menu_music(fade_ms=500)
         world_mx = (mouse_pos[0] / SCALE + game.cam_x) / TILE_W
         world_my = (mouse_pos[1] / SCALE + game.cam_y) / TILE_H
 
@@ -2274,19 +2313,9 @@ def main():
 
         game.fx.update(dt, game.player, game.dungeon, game.mobs, game.add_popup)
 
-        # Пространственный звук Ритуала Крысиного Короля (спокойный ритуал -> боевой при аггро -> тишина после смерти)
+        # Фоновая пространственная музыка активной кампании (управляется модулем миссии!)
         if not getattr(game.fx, "disco_active", False):
-            living_boss = next((m for m in game.mobs if getattr(m, "is_boss", False) and m.hp > 0), None)
-            if living_boss is not None:
-                ritual_theme = "ritual_combat" if living_boss.state == "combat" else "ritual_idle"
-                game.sfx.update_ambient_spatial(
-                    ritual_theme,
-                    game.player.x, game.player.y,
-                    living_boss.x, living_boss.y,
-                    dungeon=game.dungeon, max_dist=42.0, max_air_dist=26.0, dt=dt
-                )
-            else:
-                game.sfx.update_ambient_spatial(None, game.player.x, game.player.y, 0.0, 0.0, dt=dt)
+            update_mission_audio(game, dt)
 
         sh_x, sh_y = game.fx.shake_offset
         px_world = round(game.player.x * TILE_W)
