@@ -1020,7 +1020,7 @@ class Enemy:
         elif status_name == "root":
             self.root_timer = max(self.root_timer, duration)
 
-    def alert_to_combat(self, sfx, add_popup):
+    def alert_to_combat(self, sfx, add_popup, player=None, dungeon=None):
         if self.state != "combat":
             self.state = "combat"
             self.awareness = 100.0
@@ -1028,7 +1028,10 @@ class Enemy:
             self.current_speech = None
             self.path_timer = 0.0
             self.attack_cd = max(self.attack_cd, random.uniform(0.12, 0.45))
-            sfx.play("alert")
+            if hasattr(sfx, "play_spatial") and player is not None:
+                sfx.play_spatial("alert", self.x, self.y, player.x, player.y, dungeon, max_dist=16.0)
+            else:
+                sfx.play("alert")
             if self.chat_partner and self.chat_partner.state != "combat":
                 self.chat_partner.state = "combat"
                 self.chat_partner.awareness = 100.0
@@ -1118,7 +1121,7 @@ class Enemy:
                     gain += 130.0
                 self.awareness = min(100.0, self.awareness + gain * dt)
                 if self.awareness >= 100.0:
-                    self.alert_to_combat(sfx, add_popup)
+                    self.alert_to_combat(sfx, add_popup, player=player, dungeon=dungeon)
             else:
                 self.awareness = max(0.0, self.awareness - 12.0 * dt)
 
@@ -1137,7 +1140,9 @@ class Enemy:
                             if self.chat_partner:
                                 self.chat_partner.current_speech = line
                         self.chat_index += 1
-                        if dist <= 7.5:
+                        if hasattr(sfx, "play_spatial"):
+                            sfx.play_spatial("mob_talk", self.x, self.y, player.x, player.y, dungeon, max_dist=14.0)
+                        elif dist <= 7.5:
                             sfx.play("mob_talk")
                     else:
                         self.current_speech = None
@@ -1157,7 +1162,9 @@ class Enemy:
                         self.solo_timer = random.uniform(4.5, 8.0)
                         self.solo_show_timer = 4.0
                         self.current_speech = random.choice(self.solo_lines)
-                        if dist <= 8.5:
+                        if hasattr(sfx, "play_spatial"):
+                            sfx.play_spatial("mob_talk", self.x, self.y, player.x, player.y, dungeon, max_dist=14.0)
+                        elif dist <= 8.5:
                             sfx.play("mob_talk")
 
             if self.state == "patrolling":
@@ -1233,11 +1240,17 @@ class Enemy:
                     self.cast_windup_max = 0.58 if self.is_boss else 0.68
                     self.cast_windup_timer = self.cast_windup_max
                     self.attack_cd = (1.85 if self.is_boss else 2.55) + cd_jitter
-                    sfx.play("spell_windup")
+                    if hasattr(sfx, "play_spatial"):
+                        sfx.play_spatial("spell_windup", self.x, self.y, player.x, player.y, dungeon, max_dist=18.0)
+                    else:
+                        sfx.play("spell_windup")
                 else:
                     self.attack_cd = 1.55 + cd_jitter
                     self.trigger_bump(nx * 0.5, ny * 0.5)
-                    sfx.play("magic")
+                    if hasattr(sfx, "play_spatial"):
+                        sfx.play_spatial("magic", self.x, self.y, player.x, player.y, dungeon, max_dist=18.0)
+                    else:
+                        sfx.play("magic")
                     dmg = random.randint(self.dmg_min, self.dmg_max)
                     projectiles.append(Projectile(
                         self.x, self.y, nx, ny,

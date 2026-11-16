@@ -130,6 +130,16 @@ class GameController:
         self.journal_filters = {"combat": True, "event": True, "speech": True}
         self.reset_run()
 
+    def play_spatial(self, name, sx, sy, max_dist=18.0, base_gain=1.0):
+        """Удобный хелпер для запуска пространственного звука окружения."""
+        if hasattr(self, "sfx") and hasattr(self.sfx, "play_spatial"):
+            px = getattr(self.player, "x", None)
+            py = getattr(self.player, "y", None)
+            dungeon = getattr(self, "dungeon", None)
+            self.sfx.play_spatial(name, sx, sy, px, py, dungeon=dungeon, max_dist=max_dist, base_gain=base_gain)
+        else:
+            self.sfx.play(name)
+
     def add_log(self, cat, text, color=None):
         """Добавляет запись в Журнал похода (хранит последние 100 записей)."""
         if not text:
@@ -864,7 +874,7 @@ class GameController:
 
                 door.is_open = not door.is_open
                 self.dungeon.invalidate_light_cache()
-                self.sfx.play("door")
+                self.play_spatial("door", dx + 0.5, dy + 0.5)
                 self.emit_noise(dx + 0.5, dy + 0.5, 3.8)
                 if door.is_open:
                     self.trigger_event_thought("door_open")
@@ -878,7 +888,7 @@ class GameController:
                     d.locked = False
                     d.is_open = True
                 self.dungeon.invalidate_light_cache()
-                self.sfx.play("door")
+                self.play_spatial("door", cx, cy)
                 self.emit_noise(cx, cy, 7.0)
                 self.trigger_event_thought("lever_pull")
                 self.add_popup(cx, cy, "ОТКРЫТО!", (130, 245, 160))
@@ -962,12 +972,10 @@ class GameController:
             self.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {gear.name}", gear.rarity_color)
 
         elif obj.kind == "chest":
-            # Успех взлома/выбивания — ФОНОВАЯ мысль (игрок и так видит выпавший лут!),
-            # а ПРОВАЛ (`chest_fail`) — ВАЖНАЯ (объясняет, почему сундук пропал и ранил героя)!
             if random.randint(1, 20) + self.player.cunning >= 11:
                 treasure = self.roll_currency_or_gem_drop(allow_gem=True, force_gem=(random.random() < 0.55))
                 self.objects.append(Interactable(obj.x, obj.y, "loot", treasure))
-                self.sfx.play("coin_drop")
+                self.play_spatial("coin_drop", obj.x + 0.5, obj.y + 0.5)
                 self.emit_noise(obj.x + 0.5, obj.y + 0.5, 4.0)
                 self.trigger_event_thought("chest_pick_ok", item=treasure.name)
                 self.add_popup(obj.x + 0.5, obj.y + 0.5, f"В сундуке: {treasure.name}", treasure.rarity_color)
@@ -1735,7 +1743,7 @@ class GameController:
                 if random.random() < drop_chance:
                     loot_drop = self.roll_currency_or_gem_drop(allow_gem=True, gem_mult=0.1)
                     self.objects.append(Interactable(drop_tx, drop_ty, "loot", loot_drop))
-                    self.sfx.play("coin_drop")
+                    self.play_spatial("coin_drop", drop_tx + 0.5, drop_ty + 0.5)
 
             is_magic_mob = (getattr(m, "is_boss", False) or m.is_ranged or m.kind in ("rat_cultist", "cultist", "necromancer"))
             should_drop_shard = is_magic_mob or (random.random() < 0.28)
@@ -2265,6 +2273,21 @@ def main():
             game.trigger_event_thought("torch_burned_out", force_important=True)
 
         game.fx.update(dt, game.player, game.dungeon, game.mobs, game.add_popup)
+
+        # Пространственный звук Ритуала Крысиного Короля (спокойный ритуал -> боевой при аггро -> тишина после смерти)
+        if not getattr(game.fx, "disco_active", False):
+            living_boss = next((m for m in game.mobs if getattr(m, "is_boss", False) and m.hp > 0), None)
+            if living_boss is not None:
+                ritual_theme = "ritual_combat" if living_boss.state == "combat" else "ritual_idle"
+                game.sfx.update_ambient_spatial(
+                    ritual_theme,
+                    game.player.x, game.player.y,
+                    living_boss.x, living_boss.y,
+                    dungeon=game.dungeon, max_dist=42.0, max_air_dist=26.0, dt=dt
+                )
+            else:
+                game.sfx.update_ambient_spatial(None, game.player.x, game.player.y, 0.0, 0.0, dt=dt)
+
         sh_x, sh_y = game.fx.shake_offset
         px_world = round(game.player.x * TILE_W)
         py_world = round(game.player.y * TILE_H)

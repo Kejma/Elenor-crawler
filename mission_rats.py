@@ -382,7 +382,7 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
         if hasattr(game, "fx") and game.fx:
             game.fx.add_barrel_debris(obj.x, obj.y)
             game.fx.trigger_shake(1.8, 0.14)
-        game.sfx.play("crit")
+        game.play_spatial("crit", obj.x + 0.5, obj.y + 0.5)
         game.emit_noise(obj.x + 0.5, obj.y + 0.5, 5.8)
         roll = random.random()
         if roll < 0.26:
