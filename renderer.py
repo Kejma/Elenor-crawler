@@ -2018,6 +2018,49 @@ class Renderer:
             if icon_name == "weapon_mace":
                 pygame.draw.circle(surface, (200, 205, 215), (x + size - 8, y + 8), 6)
             pygame.draw.line(surface, (165, 120, 60), (x + 4, y + size - 4), (x + 12, y + size - 12), 4)
+        elif icon_name == "weapon_dagger":
+            pygame.draw.line(surface, (135, 85, 45), (x + 6, y + size - 6), (x + 12, y + size - 12), 4)
+            pygame.draw.line(surface, (215, 175, 75), (x + 9, y + size - 14), (x + 14, y + size - 9), 3)
+            pygame.draw.line(surface, (220, 230, 245), (x + 12, y + size - 12), (x + size - 5, y + 5), 3)
+        elif icon_name == "weapon_curved":
+            pts = [(x + 8, y + size - 8), (cx - 2, cy - 2), (cx + 5, cy - 8), (x + size - 5, y + 6)]
+            pygame.draw.lines(surface, (215, 185, 115), False, pts, 4)
+            pygame.draw.line(surface, (145, 85, 42), (x + 5, y + size - 5), (x + 10, y + size - 10), 4)
+        elif icon_name == "weapon_katar":
+            pygame.draw.line(surface, (195, 165, 75), (x + 5, y + size - 10), (x + 12, y + size - 5), 3)
+            pygame.draw.line(surface, (195, 165, 75), (x + 8, y + size - 13), (x + 15, y + size - 8), 3)
+            pygame.draw.polygon(surface, (210, 225, 240), [(x + 10, y + size - 14), (x + 16, y + size - 8), (x + size - 4, y + 4)])
+        elif icon_name == "weapon_spear":
+            pygame.draw.line(surface, (145, 95, 48), (x + 4, y + size - 4), (x + size - 8, y + 8), 3)
+            pygame.draw.polygon(surface, (215, 225, 240), [(x + size - 11, y + 7), (x + size - 3, y + 3), (x + size - 7, y + 11)])
+        elif icon_name == "weapon_halberd":
+            pygame.draw.line(surface, (140, 90, 45), (x + 4, y + size - 4), (x + size - 5, y + 5), 3)
+            pygame.draw.polygon(surface, (195, 205, 220), [(cx - 1, cy - 3), (cx + 10, cy - 6), (cx + 6, cy + 5)])
+            pygame.draw.line(surface, (225, 180, 75), (cx - 2, cy - 2), (cx - 6, cy - 6), 3)
+        elif icon_name == "weapon_flamberge":
+            pts = [(x + 9, y + size - 9), (cx - 2, cy + 2), (cx, cy - 3), (cx + 5, cy - 4), (x + size - 4, y + 4)]
+            pygame.draw.lines(surface, (245, 165, 75), False, pts, 4)
+            pygame.draw.line(surface, (215, 185, 80), (x + 6, y + size - 13), (x + 13, y + size - 6), 3)
+            pygame.draw.line(surface, (135, 75, 40), (x + 4, y + size - 4), (x + 9, y + size - 9), 4)
+        elif icon_name == "weapon_thrown_jav":
+            pygame.draw.line(surface, (155, 105, 55), (x + 5, y + size - 5), (cx + 3, cy - 3), 3)
+            pygame.draw.line(surface, (185, 195, 210), (cx + 2, cy - 2), (x + size - 4, y + 4), 2)
+            pygame.draw.circle(surface, (130, 135, 148), (cx + 2, cy - 2), 3)
+        elif icon_name == "weapon_thrown_axe":
+            pygame.draw.line(surface, (150, 95, 48), (x + 6, y + size - 6), (x + size - 8, y + 8), 4)
+            pygame.draw.polygon(surface, (205, 215, 230), [(cx, cy - 4), (x + size - 4, y + 6), (cx + 7, cy + 5)])
+        elif icon_name == "weapon_chakram":
+            pygame.draw.circle(surface, (220, 235, 250), (cx, cy), 10, 3)
+            pygame.draw.circle(surface, (255, 215, 90), (cx, cy), 7, 1)
+        elif icon_name == "weapon_bolas":
+            pygame.draw.line(surface, (145, 100, 55), (cx, cy), (cx - 8, cy - 6), 2)
+            pygame.draw.line(surface, (145, 100, 55), (cx, cy), (cx + 8, cy - 5), 2)
+            pygame.draw.line(surface, (145, 100, 55), (cx, cy), (cx, cy + 9), 2)
+            for bx, by in ((cx - 8, cy - 6), (cx + 8, cy - 5), (cx, cy + 9)):
+                pygame.draw.circle(surface, (175, 180, 192), (bx, by), 4)
+        elif icon_name == "weapon_sling":
+            pygame.draw.arc(surface, (165, 115, 62), (x + 6, y + 6, size - 12, size - 10), 0.4, 3.8, 3)
+            pygame.draw.circle(surface, (185, 192, 205), (cx + 2, cy + 2), 5)
         elif icon_name == "shield":
             pygame.draw.circle(surface, (160, 170, 185), (cx, cy), 10)
             pygame.draw.circle(surface, (215, 175, 80), (cx, cy), 4)
@@ -2536,21 +2579,50 @@ class Renderer:
             sx = int((pr.wx * TILE_W - cam_x) * SCALE)
             sy = int((pr.wy * TILE_H - cam_y) * SCALE)
             if 0 <= sy < VIEW_H * SCALE:
-                if getattr(pr, "visual_kind", "orb") == "spinning_dagger":
-                    ang = getattr(pr, "angle", 0.0)
-                    cos_a, sin_a = math.cos(ang), math.sin(ang)
-                    perp_x, perp_y = -sin_a, cos_a
+                vk = getattr(pr, "visual_kind", "orb")
+                ang = getattr(pr, "angle", 0.0)
+                cos_a, sin_a = math.cos(ang), math.sin(ang)
+                perp_x, perp_y = -sin_a, cos_a
+
+                if vk == "spinning_dagger":
                     tip = (int(sx + cos_a * 14), int(sy + sin_a * 14))
                     guard_c = (int(sx - cos_a * 3), int(sy - sin_a * 3))
                     pommel = (int(sx - cos_a * 12), int(sy - sin_a * 12))
                     g1 = (int(guard_c[0] + perp_x * 6), int(guard_c[1] + perp_y * 6))
                     g2 = (int(guard_c[0] - perp_x * 6), int(guard_c[1] - perp_y * 6))
-                    # Dark outline, wooden grip, brass crossguard & gleaming steel blade
                     pygame.draw.line(screen, (20, 18, 26), pommel, tip, 6)
                     pygame.draw.line(screen, (135, 82, 42), pommel, guard_c, 4)
                     pygame.draw.line(screen, (215, 175, 70), g1, g2, 3)
                     pygame.draw.line(screen, (210, 220, 235), guard_c, tip, 4)
                     pygame.draw.line(screen, (250, 252, 255), guard_c, tip, 2)
+                elif vk == "thrown_javelin":
+                    tail = (int(sx - cos_a * 18), int(sy - sin_a * 18))
+                    neck = (int(sx + cos_a * 6), int(sy + sin_a * 6))
+                    tip = (int(sx + cos_a * 18), int(sy + sin_a * 18))
+                    pygame.draw.line(screen, (20, 18, 26), tail, tip, 5)
+                    pygame.draw.line(screen, (150, 98, 48), tail, neck, 3)
+                    pygame.draw.line(screen, (220, 230, 245), neck, tip, 3)
+                elif vk == "thrown_axe":
+                    haft0 = (int(sx - cos_a * 12), int(sy - sin_a * 12))
+                    haft1 = (int(sx + cos_a * 10), int(sy + sin_a * 10))
+                    b1 = (int(haft1[0] + perp_x * 9), int(haft1[1] + perp_y * 9))
+                    b2 = (int(sx + cos_a * 3 + perp_x * 7), int(sy + sin_a * 3 + perp_y * 7))
+                    pygame.draw.line(screen, (145, 90, 44), haft0, haft1, 4)
+                    pygame.draw.polygon(screen, (215, 225, 240), [haft1, b1, b2])
+                elif vk == "thrown_chakram":
+                    pygame.draw.circle(screen, (25, 22, 32), (sx, sy), 12, 5)
+                    pygame.draw.circle(screen, (220, 235, 250), (sx, sy), 11, 3)
+                    pygame.draw.circle(screen, (255, 220, 95), (int(sx + cos_a * 9), int(sy + sin_a * 9)), 3)
+                elif vk == "thrown_bolas":
+                    for b_i in range(3):
+                        ba = ang + b_i * (2.0 * math.pi / 3.0)
+                        bx = int(sx + math.cos(ba) * 11)
+                        by = int(sy + math.sin(ba) * 11)
+                        pygame.draw.line(screen, (155, 108, 58), (sx, sy), (bx, by), 2)
+                        pygame.draw.circle(screen, (180, 185, 198), (bx, by), 4)
+                elif vk == "sling_stone":
+                    pygame.draw.circle(screen, (30, 28, 36), (sx, sy), 6)
+                    pygame.draw.circle(screen, (190, 198, 210), (sx, sy), 4)
                 else:
                     pygame.draw.circle(screen, (255, 255, 255), (sx, sy), 7)
                     pygame.draw.circle(screen, pr.color, (sx, sy), 11, 3)
@@ -2633,6 +2705,22 @@ class Renderer:
                         p_col = (255, 235, 110) if phase < 0.45 else (255, 115, 30)
                         sz = 3 if phase < 0.6 else 2
                         pygame.draw.rect(screen, p_col, (sx + px_off, py_off, sz, sz))
+
+                # Звёздочки оглушения (Stun), кружащиеся над головой контуженного врага
+                if is_lit and getattr(m, "stun_timer", 0.0) > 0.0 and 0 <= sy < VIEW_H * SCALE:
+                    orbit_rx = 20 if getattr(m, "size_tiles", 1) >= 2 else 13
+                    orbit_ry = 6 if getattr(m, "size_tiles", 1) >= 2 else 4
+                    orbit_cy = sy - 14
+                    for st_i in range(3):
+                        ang_s = now_sec * 7.5 + st_i * (2.0 * math.pi / 3.0)
+                        st_x = sx + int(math.cos(ang_s) * orbit_rx)
+                        st_y = orbit_cy + int(math.sin(ang_s) * orbit_ry)
+                        # Рисуем 4-лучевую золотую звёздочку с тёмной обводкой и белым центром
+                        pygame.draw.line(screen, (25, 18, 12), (st_x - 4, st_y), (st_x + 4, st_y), 3)
+                        pygame.draw.line(screen, (25, 18, 12), (st_x, st_y - 4), (st_x, st_y + 4), 3)
+                        pygame.draw.line(screen, (255, 220, 65), (st_x - 3, st_y), (st_x + 3, st_y), 2)
+                        pygame.draw.line(screen, (255, 220, 65), (st_x, st_y - 3), (st_x, st_y + 3), 2)
+                        pygame.draw.rect(screen, (255, 255, 235), (st_x - 1, st_y - 1, 2, 2))
 
                 # HP bars & Awareness ONLY render when the mob is actually illuminated (`is_lit`)! (Текстовые дебаффы убраны)
                 if is_lit and 0 <= sy < VIEW_H * SCALE:
@@ -3541,61 +3629,57 @@ class Renderer:
 
     def _build_item_stat_lines(self, player, item, ui_texts, comp_item=None):
         from menu_and_profile import format_copper_Trigger
-        lines = []
+        raw_lines = []
+        max_w = 276  # Гарантированный отступ внутри карточки шириной 308 px
+
+        def add_wrapped(text, color):
+            for ln in self.wrap_text(str(text), self.font_small, max_w):
+                raw_lines.append((ln, color))
+
         rarity_title = ui_texts["rarities"].get(item.rarity, item.rarity)
-        lines.append((rarity_title, item.rarity_color))
+        if item.two_handed:
+            rarity_title += " • Двуручное"
+        elif item.weap_style == "thrown":
+            rarity_title += " • Метательное"
+        add_wrapped(rarity_title, item.rarity_color)
 
         # Лаконичный формат для Драгоценностей и Монет
         if item.type in ("gem", "currency_coin"):
-            lines.append((format_copper_Trigger(item.copper_value), (255, 220, 85)))
-            lines.append(("Драгоценность." if item.type == "gem" else "Монеты.", UI_TEXT_MAIN))
-            for d_ln in self.wrap_text(item.desc, self.font_small, 260):
-                lines.append((d_ln, UI_TEXT_DIM))
-            return lines
+            add_wrapped(format_copper_Trigger(item.copper_value), UI_BORDER_HIGHLIGHT)
+            add_wrapped("Драгоценность." if item.type == "gem" else "Монеты.", UI_TEXT_MAIN)
+            add_wrapped(item.desc, UI_TEXT_DIM)
+            return raw_lines
 
         if getattr(item, "heal_hp", 0) > 0:
             eff_heal = player.get_heal_amount(item)
             bonus_tag = " (+25% Ипохондрик)" if eff_heal > item.heal_hp else ""
-            lines.append((f"Исцеление: +{eff_heal} ХП{bonus_tag}", (115, 245, 140)))
+            add_wrapped(f"Исцеление: +{eff_heal} ХП{bonus_tag}", UI_TEXT_MAIN)
 
         if getattr(item, "god", ""):
-            lines.append((f"Покровитель: {item.god}", (255, 215, 95)))
+            add_wrapped(f"Покровитель: {item.god}", UI_BORDER_HIGHLIGHT)
 
         if item.type == "consumable_spell":
             tot_scroll = int(math.floor(item.power * 1.65 + player.mag_attack * 1.5))
-            lines.append((f"Одноразовый свиток (КД {item.cooldown:.1f}с): Урон {tot_scroll}", (120, 225, 255)))
+            add_wrapped(f"Одноразовый свиток (КД {item.cooldown:.1f}с) — Урон {tot_scroll}", UI_TEXT_MAIN)
         elif item.type == "permanent_spell":
             tot_spell = int(math.floor(item.power + player.mag_attack))
             pwr_lbl = "Исцеление" if item.id == "persephone_rejuvenation" else ("Урон горения" if item.id == "pyro_ignite" else "Урон")
-            lines.append((f"Заклинание ({item.mp_cost} Маны | КД {item.cooldown:.2f}с): {pwr_lbl} {tot_spell}", (130, 240, 165)))
+            add_wrapped(f"Заклинание ({item.mp_cost} Маны | КД {item.cooldown:.2f}с) — {pwr_lbl} {tot_spell}", UI_TEXT_MAIN)
         elif item.type == "combat_skill":
             tot_skill = int(math.floor(item.power + player.phys_attack))
-            lines.append((f"Боевой приём (0 Маны | КД {item.cooldown:.2f}с): Урон {tot_skill}", (255, 205, 110)))
+            add_wrapped(f"Боевой приём (0 Маны | КД {item.cooldown:.2f}с) — Урон {tot_skill}", UI_TEXT_MAIN)
 
-        if getattr(item, "duration", 0.0) > 0.0:
-            lines.append((f"Длительность баффа: {item.duration:.2f} сек.", (255, 200, 120)))
-        if getattr(item, "status_dur", 0.0) > 0.0:
-            lines.append((f"Время контроля: {item.status_dur:.2f} сек.", (165, 225, 255)))
-        if getattr(item, "aoe_radius", 0.0) > 0.0 and item.cast_type in ("frost_nova", "entangle_cursor", "aoe_cursor"):
-            lines.append((f"Радиус области: {item.aoe_radius:.1f} м", (165, 225, 255)))
-        if item.cast_type == "chain_lightning":
-            lines.append((f"Макс. отскоков молнии: {int(item.bounces)}", (155, 235, 255)))
+        if item.type in ("consumable_spell", "permanent_spell", "combat_skill"):
+            if getattr(item, "duration", 0.0) > 0.0:
+                add_wrapped(f"Длительность: {item.duration:.2f} сек.", UI_TEXT_MAIN)
+            if getattr(item, "status_dur", 0.0) > 0.0:
+                add_wrapped(f"Время контроля: {item.status_dur:.2f} сек.", UI_TEXT_MAIN)
+            if getattr(item, "aoe_radius", 0.0) > 0.0 and item.cast_type in ("frost_nova", "entangle_cursor", "aoe_cursor"):
+                add_wrapped(f"Радиус области: {item.aoe_radius:.1f} м", UI_TEXT_MAIN)
+            if item.cast_type == "chain_lightning":
+                add_wrapped(f"Макс. отскоков молнии: {int(item.bounces)}", UI_TEXT_MAIN)
 
-        if item.slot == "right_hand":
-            spd_str = f"{1.0 / max(0.1, item.atk_cd):.1f} уд/с"
-            t_str = "Все в дуге" if item.max_targets > 5 else f"{item.max_targets} ц."
-            lines.append((f"Темп: {spd_str} | Дальн: {item.reach:.1f}м | Дуга: {int(item.arc_deg)}° ({t_str})", (255, 210, 125)))
-            if item.armor_pierce > 0:
-                lines.append((f"Пролом брони: игнорирует {item.armor_pierce} ед. защиты", (255, 165, 95)))
-        if item.two_handed:
-            lines.append(("Двуручное оружие (Обе руки)", (255, 175, 95)))
-        if item.life_steal > 0:
-            lines.append((f"Вампиризм: +{item.life_steal} ХП за удар", (245, 95, 110)))
-        if item.is_torch:
-            lines.append(("Источник вечного огня [Клавиша F]", (255, 215, 90)))
-        if getattr(item, "armor_class", "none") == "cloth":
-            lines.append(("Поток маны: +1 МП за удар и с осколков", (130, 205, 255)))
-
+        # Основные числовые бонусы экипировки (в едином спокойном цвете UI_TEXT_MAIN)
         stat_pairs = [
             ("phys_bonus", ui_texts["phys_atk"]),
             ("mag_bonus", ui_texts["mag_atk"]),
@@ -3612,9 +3696,24 @@ class Renderer:
                 if comp_item is not None and diff != 0:
                     d_str = f" ({'+' if diff > 0 else ''}{diff})"
                     col = (100, 240, 120) if diff > 0 else (255, 105, 105)
-                    lines.append((base_str + d_str, col))
+                    add_wrapped(base_str + d_str, col)
                 else:
-                    lines.append((base_str, UI_TEXT_MAIN))
+                    add_wrapped(base_str, UI_TEXT_MAIN)
+
+        if getattr(item, "dmg_min", 0) > 0:
+            # С учётом вклада характеристик героя
+            scale_k = 1.35 if item.two_handed else 1.0
+            stat_add = int(round(player.phys_attack * scale_k))
+            total_min = item.dmg_min + stat_add
+            total_max = item.dmg_max + stat_add
+            add_wrapped(f"Урон: {total_min}–{total_max}", UI_TEXT_MAIN)
+
+        if item.armor_pierce > 0:
+            add_wrapped(f"Пролом брони: +{item.armor_pierce}", UI_TEXT_MAIN)
+        if getattr(item, "crit_bonus", 0.0) > 0:
+            add_wrapped(f"Шанс крита: +{int(round(item.crit_bonus * 100))}%", UI_TEXT_MAIN)
+        if item.life_steal > 0:
+            add_wrapped(f"Вампиризм: +{item.life_steal} ХП", UI_TEXT_MAIN)
 
         n_val = int(item.noise_mod * 100)
         n_old = int(comp_item.noise_mod * 100) if comp_item else 0
@@ -3624,21 +3723,31 @@ class Renderer:
             if comp_item is not None and n_diff != 0:
                 d_str = f" ({'+' if n_diff > 0 else ''}{n_diff}%)"
                 col = (100, 240, 120) if n_diff < 0 else (255, 105, 105)
-                lines.append((b_str + d_str, col))
+                add_wrapped(b_str + d_str, col)
             else:
-                lines.append((b_str, UI_TEXT_MAIN))
+                add_wrapped(b_str, UI_TEXT_MAIN)
+
+        if item.is_torch:
+            add_wrapped("Источник вечного огня [Клавиша F]", UI_BORDER_HIGHLIGHT)
+        if getattr(item, "armor_class", "none") == "cloth":
+            add_wrapped("Поток маны — +1 МП за удар и с осколков", UI_BORDER_HIGHLIGHT)
+
+        # Уникальное свойство оружия без слова «Фишка:» и без двойных двоеточий
+        if getattr(item, "feature_tag", ""):
+            clean_feat = item.feature_tag.replace(": ", " — ", 1)
+            add_wrapped(clean_feat, UI_BORDER_HIGHLIGHT)
 
         clean_desc = self._clean_perk_desc(item.desc)
-        for d_ln in self.wrap_text(clean_desc, self.font_small, 260):
-            lines.append((d_ln, UI_TEXT_DIM))
-        return lines
+        if clean_desc:
+            add_wrapped(clean_desc, UI_TEXT_DIM)
+        return raw_lines
 
     def _render_item_tooltip(self, screen, player, item, ui_texts, mouse_pos, compare=False, world_item=False):
         comp_item = player.get_comparison_item(item) if compare else None
         main_lines = self._build_item_stat_lines(player, item, ui_texts, comp_item)
 
-        card_w = 295
-        card_h = 46 + len(main_lines) * 19
+        card_w = 308
+        card_h = 48 + len(main_lines) * 19
 
         if world_item:
             tx, ty = 16, 16
@@ -3660,7 +3769,7 @@ class Renderer:
 
         if comp_item:
             comp_lines = self._build_item_stat_lines(player, comp_item, ui_texts, None)
-            ch = 46 + len(comp_lines) * 19
+            ch = 48 + len(comp_lines) * 19
             self.draw_pixel_frame(screen, (cx, ty, card_w, ch), (18, 15, 22), comp_item.rarity_color, False, 1.0)
             screen.blit(self.font_ui.render(f"[Надето] {comp_item.name}", True, comp_item.rarity_color), (cx + 14, ty + 12))
             for i, (txt, col) in enumerate(comp_lines):

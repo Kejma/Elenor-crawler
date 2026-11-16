@@ -13,6 +13,8 @@ class DevPanel:
         self.reveal_map = False
         self.click_mode = None  # None, "teleport", or ("spawn_mob", kind) / ("spawn_obj", kind)
         self.active_tab = "items"  # "items", "perks", "spawner"
+        self.spawn_rarity_idx = 0
+        self.spawn_rarities = ["common", "uncommon", "rare", "epic", "legendary"]
 
         self.font_title = pygame.font.SysFont("consolas", 16, bold=True)
         self.font_ui = pygame.font.SysFont("consolas", 13, bold=True)
@@ -119,9 +121,13 @@ class DevPanel:
             for m in list(game.mobs):
                 m.hp = 0
                 game._check_mob_death(m)
+        elif b_id == "act_cycle_rarity":
+            step = -1 if mouse_btn == 3 else 1
+            self.spawn_rarity_idx = (self.spawn_rarity_idx + step) % len(self.spawn_rarities)
         elif b_id.startswith("give_item:"):
             item_id = b_id.split(":")[1]
-            itm = game.make_item(item_id)
+            chosen_rar = self.spawn_rarities[self.spawn_rarity_idx]
+            itm = game.make_item(item_id, rarity=chosen_rar)
             if not p.add_item_to_inventory(itm):
                 if not p.try_auto_equip_if_slot_empty(itm):
                     game.objects.append(Interactable(int(p.x), int(p.y), "loot", itm))
@@ -198,18 +204,29 @@ class DevPanel:
         content_y = win_rect.y + 164
 
         if self.active_tab == "items":
+            cur_rar = self.spawn_rarities[self.spawn_rarity_idx]
+            rar_col_btn = RARITY_COLORS.get(cur_rar, UI_TEXT_MAIN)
+            rar_names_ru = {"common": "ОБЫЧНОЕ [I]", "uncommon": "ДОБРОТНОЕ [II]", "rare": "РЕДКОЕ [III]", "epic": "ЭПИЧЕСКОЕ [IV]", "legendary": "ЛЕГЕНДАРНОЕ [V]"}
+            rar_rect = pygame.Rect(win_rect.right - 360, win_rect.y + 122, 340, 30)
+            pygame.draw.rect(screen, (36, 30, 48), rar_rect, border_radius=4)
+            pygame.draw.rect(screen, rar_col_btn, rar_rect, 2, border_radius=4)
+            rt_s = self.font_ui.render(f"Тир оружия: {rar_names_ru[cur_rar]} (ЛКМ/ПКМ)", True, rar_col_btn)
+            screen.blit(rt_s, (rar_rect.x + (rar_rect.width - rt_s.get_width()) // 2, rar_rect.y + 6))
+            self.buttons.append(("act_cycle_rarity", rar_rect))
+
             items_db = game.loc.get("items", {})
             for idx, (item_id, idata) in enumerate(items_db.items()):
-                col = idx % 4
-                row = idx // 4
-                ir = pygame.Rect(win_rect.x + 20 + col * 238, content_y + row * 38, 230, 32)
+                col = idx % 7
+                row = idx // 7
+                ir = pygame.Rect(win_rect.x + 16 + col * 246, content_y + row * 31, 240, 27)
                 hov = ir.collidepoint(mouse_pos)
-                r_col = RARITY_COLORS.get(idata.get("rarity", "common"), UI_TEXT_MAIN)
+                is_weap = (idata.get("type") == "equipment" and idata.get("slot") == "right_hand" and not idata.get("is_torch", False))
+                r_col = rar_col_btn if is_weap else RARITY_COLORS.get(idata.get("rarity", "common"), UI_TEXT_MAIN)
                 pygame.draw.rect(screen, (42, 36, 56) if hov else UI_SLOT_BG, ir, border_radius=4)
                 pygame.draw.rect(screen, r_col, ir, 2 if hov else 1, border_radius=4)
-                game.renderer.draw_item_icon(screen, idata["icon"], ir.x + 4, ir.y + 2, 28)
-                nm = self.font_small.render(idata["name"][:21], True, r_col)
-                screen.blit(nm, (ir.x + 36, ir.y + 9))
+                game.renderer.draw_item_icon(screen, idata["icon"], ir.x + 2, ir.y, 26)
+                nm = self.font_small.render(idata["name"][:22], True, r_col)
+                screen.blit(nm, (ir.x + 32, ir.y + 6))
                 self.buttons.append((f"give_item:{item_id}", ir))
 
         elif self.active_tab == "perks":

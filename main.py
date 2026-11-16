@@ -32,18 +32,30 @@ class _SafeFormatDict(dict):
         return "{" + key + "}"
 
 
+from items_data import BASE_ITEMS_DB
+
+
 def load_modular_locales():
     base_dir = os.path.dirname(__file__)
     ru_dir = os.path.join(base_dir, "locales", "ru")
-    merged = {"items": dict(CURRENCY_AND_GEMS_DB)}
+    # Базовый реестр характеристик оружия и предметов
+    merged = {"items": {k: dict(v) for k, v in BASE_ITEMS_DB.items()}}
+    merged["items"].update(CURRENCY_AND_GEMS_DB)
+
     if os.path.isdir(ru_dir):
         for fname in sorted(os.listdir(ru_dir)):
             if fname.endswith(".json"):
                 fpath = os.path.join(ru_dir, fname)
                 with open(fpath, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    if fname == "items.json" and "items" not in data:
-                        merged["items"].update(data)
+                    if fname == "items.json":
+                        raw_dict = data if "items" not in data else data["items"]
+                        # Локализация накладывает только названия и художественные тексты поверх характеристик!
+                        for itm_id, text_fields in raw_dict.items():
+                            if itm_id in merged["items"]:
+                                merged["items"][itm_id].update(text_fields)
+                            else:
+                                merged["items"][itm_id] = text_fields
                     else:
                         for k, v in data.items():
                             if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
@@ -197,8 +209,8 @@ class GameController:
                 return json.load(f)
         return {}
 
-    def make_item(self, item_id):
-        itm = Item(item_id, self.loc["items"][item_id])
+    def make_item(self, item_id, rarity=None):
+        itm = Item(item_id, self.loc["items"][item_id], rarity_override=rarity)
         # Слегка варьируем количество монет в горсти для живости!
         if item_id == "coin_copper":
             itm.copper_value = random.randint(4, 9)
@@ -207,6 +219,23 @@ class GameController:
         elif item_id == "coin_gold":
             itm.copper_value = random.randint(1, 2) * 100 + random.randint(0, 4) * 10
         return itm
+
+    def roll_weapon_drop(self, force_rarity=None):
+        """Выбирает любой вид оружия на равных правах и присваивает ему сгенерированную редкость экземпляра."""
+        tiers = ["common", "uncommon", "rare", "epic", "legendary"]
+        if force_rarity in tiers:
+            chosen_rarity = force_rarity
+        else:
+            luck_val = getattr(getattr(self, "player", None), "luck", 1)
+            chosen_rarity = random.choices(tiers, weights=get_rarity_weights(luck_val), k=1)[0]
+
+        weap_pool = [
+            iid for iid, data in self.loc["items"].items()
+            if data.get("type") == "equipment" and data.get("slot") == "right_hand" and not data.get("is_torch", False)
+        ]
+        if not weap_pool:
+            return self.make_item("rusty_dagger", rarity=chosen_rarity)
+        return self.make_item(random.choice(weap_pool), rarity=chosen_rarity)
 
     def roll_currency_or_gem_drop(self, allow_gem=True, force_gem=False, gem_mult=1.0):
         fl = getattr(self.dungeon, "floor_num", 2)
@@ -220,23 +249,36 @@ class GameController:
         return self.make_item(random.choices(coin_ids, weights=c_weights, k=1)[0])
 
     def roll_item_by_rarity(self, allowed_types=None):
-        """Rolls an item using Luck-scaled weights (78% Common at Luck = 1!)."""
+        """Rolls an item using Luck-scaled weights; any weapon can roll at any rarity!"""
         tiers = ["common", "uncommon", "rare", "epic", "legendary"]
         luck_val = getattr(getattr(self, "player", None), "luck", 1)
         weights = get_rarity_weights(luck_val)
         chosen_rarity = random.choices(tiers, weights=weights, k=1)[0]
 
-        candidates = [
+        can_drop_weapon = (allowed_types is None or "equipment" in allowed_types)
+        non_weapon_candidates = [
             item_id for item_id, data in self.loc["items"].items()
-            if data.get("rarity", "common") == chosen_rarity
+            if not (data.get("type") == "equipment" and data.get("slot") == "right_hand")
+            and data.get("type") not in ("currency_coin", "gem")
+            and not data.get("is_torch", False)
+            and data.get("rarity", "common") == chosen_rarity
             and (allowed_types is None or data.get("type") in allowed_types)
         ]
-        if not candidates:
-            candidates = [
+
+        if can_drop_weapon:
+            weap_chance = 0.62 if allowed_types == ["equipment"] else 0.35
+            if not non_weapon_candidates or random.random() < weap_chance:
+                return self.roll_weapon_drop(force_rarity=chosen_rarity)
+
+        if not non_weapon_candidates:
+            non_weapon_candidates = [
                 item_id for item_id, data in self.loc["items"].items()
-                if allowed_types is None or data.get("type") in allowed_types
+                if data.get("type") not in ("currency_coin", "gem")
+                and not data.get("is_torch", False)
+                and (allowed_types is None or data.get("type") in allowed_types)
             ]
-        return self.make_item(random.choice(candidates))
+        picked_id = random.choice(non_weapon_candidates)
+        return self.make_item(picked_id, rarity=chosen_rarity)
 
     def _is_perk_eligible(self, pid, pdata):
         ptype = pdata.get("type", "passive")
@@ -457,6 +499,9 @@ class GameController:
         }
 
     def reset_run(self):
+        if hasattr(self, "fx") and self.fx:
+            self.fx.disco_active = False
+        self.sfx.stop_disco_track()
         self.inv_open = False
         self.journal_open = False
         self.journal_scroll = 0
@@ -514,6 +559,9 @@ class GameController:
                     break
 
     def descend_to_next_floor(self):
+        if hasattr(self, "fx") and self.fx:
+            self.fx.disco_active = False
+        self.sfx.stop_disco_track()
         next_fl = self.dungeon.floor_num + 1
         self.dungeon.generate(floor_num=next_fl)
         sx, sy = getattr(self.dungeon, "start_pos", self.dungeon.rooms[0].center)
@@ -702,7 +750,8 @@ class GameController:
             self.add_popup(self.player.x, self.player.y, "БЕССМЕРТИЕ", (255, 225, 90))
             return
         if random.random() < self.player.dodge_chance:
-            self.player.record_build_action("cunning", 0.25)
+            # Уворот даёт умеренную прибавку через трёхплечевые весы
+            self.player.record_build_action("cunning", 0.08)
             self.add_popup(self.player.x, self.player.y, "УВОРОТ", (140, 230, 255))
             self.add_log("combat", "Уклонение от вражеской атаки!", (140, 230, 255))
             self.trigger_event_thought("combat_dodge")
@@ -1055,7 +1104,6 @@ class GameController:
 
     def _execute_melee_swing(self, target_wx, target_wy):
         px, py = self.player.x, self.player.y
-        self.emit_noise(px, py, 5.2)
         weap = self.player.equipment["right_hand"]
 
         style = weap.weap_style if weap else "fist"
@@ -1071,6 +1119,44 @@ class GameController:
         dy = target_wy - origin_y
         dist = max(0.001, math.hypot(dx, dy))
         nx, ny = dx / dist, dy / dist
+
+        # 1. МЕТАТЕЛЬНОЕ ОРУЖИЕ В ПРАВОЙ РУКЕ (с замедлением при броске)
+        if style == "thrown" and weap is not None:
+            self.emit_noise(px, py, 4.2)
+            self.player.trigger_bump(nx * 0.35, ny * 0.35)
+            self.player.throw_slowdown_timer = 0.28  # Замедление ног во время броска!
+            self.sfx.play("skill_windup")
+            w_min = getattr(weap, "dmg_min", 2)
+            w_max = getattr(weap, "dmg_max", 4)
+            base_dmg = random.randint(w_min, w_max) + self.player.phys_attack + (self.player.cunning // 3)
+            self.projectiles.append(Projectile(
+                px, origin_y, nx, ny,
+                speed=weap.proj_speed,
+                mag_dmg=base_dmg,
+                color=weap.color,
+                from_player=True,
+                status=weap.status,
+                status_dur=weap.status_dur,
+                knockback=knockback,
+                visual_kind=getattr(weap, "proj_visual", "spinning_dagger"),
+                emits_light=False,
+                is_weapon_proj=True,
+                armor_pierce=armor_pierce,
+                shatter_armor=getattr(weap, "shatter_armor", 0),
+                bounces=max(0, int(getattr(weap, "bounces", 0))),
+                crit_chance=self.player.crit_chance,
+                status_chance=getattr(weap, "status_chance", 1.0),
+                life_steal=life_steal,
+                max_dist=reach + 0.85
+            ))
+            return
+
+        # 2. ПЛАВНЫЙ ВЫПАД С ШАГОМ ВПЕРЁД (Сабля, Гладиус, Фальката, Эсток, Фламберг)
+        lunge = getattr(weap, "lunge_dist", 0.0) if weap else 0.0
+        if lunge > 0.0:
+            self.player.trigger_lunge(nx, ny, lunge)
+
+        self.emit_noise(px, py, 5.2)
         base_ang = math.atan2(ny, nx)
         self.player.trigger_bump(
             nx * (0.48 if style in ("dagger", "spear") else 0.32),
@@ -1079,21 +1165,21 @@ class GameController:
 
         half_arc_rad = math.radians(arc_deg * 0.5)
         if style in ("dagger", "spear", "fist"):
-            steps = 9 if style == "spear" else 6
+            steps = 11 if reach >= 2.2 else (9 if style == "spear" else 6)
             col = (180, 240, 255) if style == "spear" else (240, 240, 250)
             for i in range(1, steps + 1):
-                r_step = (i / steps) * reach * 0.88
+                r_step = (i / steps) * reach * 0.90
                 self.particles.append(Particle(
                     px + nx * r_step, origin_y + ny * r_step,
                     nx * 2.8, ny * 2.8, col, 2.6, 0.14
                 ))
         else:
-            spark_count = 16 if arc_deg >= 120 else 10
+            spark_count = 18 if arc_deg >= 140 else (14 if arc_deg >= 90 else 10)
             col = (255, 195, 110) if arc_deg >= 100 else (230, 240, 255)
             for i in range(spark_count):
                 frac = (i / max(1, spark_count - 1)) * 2.0 - 1.0
                 ang = base_ang + frac * half_arc_rad
-                r_dist = reach * 0.75
+                r_dist = reach * 0.78
                 self.particles.append(Particle(
                     px + math.cos(ang) * r_dist, origin_y + math.sin(ang) * r_dist,
                     math.cos(ang) * 2.2, math.sin(ang) * 2.2, col, 3.0, 0.18
@@ -1106,7 +1192,7 @@ class GameController:
             foot_dist = math.hypot(m.x - px, m.y - py)
             torso_dist = math.hypot(m.x - px, (m.y - 0.32) - origin_y)
             md = max(0.0, min(foot_dist, torso_dist) - size_pad)
-            if md <= reach + 0.25 and dungeon_los_ok(self.dungeon, px, py, m.x, m.y):
+            if md <= reach + 0.25 and self.dungeon.has_line_of_sight(px, py, m.x, m.y, reach + 1.0):
                 hit_model = False
                 if is_cursor_on_mob(m, target_wx, target_wy):
                     hit_model = True
@@ -1128,52 +1214,94 @@ class GameController:
                     candidates.append((md, m))
 
         candidates.sort(key=lambda pair: pair[0])
-        targets_to_hit = [pair[1] for pair in candidates[:max_targets]]
+        targets_selected = candidates[:max_targets]
 
-        for m in targets_to_hit:
-            dmg, is_crit = self.player.roll_melee_damage()
-            if m.state != "combat":
-                dmg = int(dmg * self.player.backstab_mult)
-                is_crit = True
-                m.alert_to_combat(self.sfx, self.add_popup)
+        multi_hit = getattr(weap, "multi_hit", 1) if weap else 1
+        any_killed = False
 
-            eff_def = max(0, m.phys_def - armor_pierce)
-            final_dmg = max(1, dmg - eff_def)
-            m.hp -= final_dmg
+        for md, m in targets_selected:
+            for hit_i in range(multi_hit):
+                if m not in self.mobs or m.hp <= 0:
+                    break
+                dmg, is_crit = self.player.roll_melee_damage()
 
-            k_dx = m.x - px
-            k_dy = m.y - py
-            k_len = max(0.001, math.hypot(k_dx, k_dy))
-            m.apply_knockback(k_dx / k_len, k_dy / k_len, knockback)
+                bs_bonus = getattr(weap, "backstab_bonus", 0.0) if weap else 0.0
+                is_vulnerable = (m.state != "combat" or m.stun_timer > 0 or m.root_timer > 0 or m.slow_timer > 0)
+                if m.state != "combat":
+                    dmg = int(dmg * max(self.player.backstab_mult, bs_bonus))
+                    is_crit = True
+                    m.alert_to_combat(self.sfx, self.add_popup)
+                elif bs_bonus > 1.0 and is_vulnerable:
+                    dmg = int(dmg * bs_bonus)
+                    is_crit = True
 
-            if life_steal > 0:
-                self.player.hp = min(float(self.player.max_hp), self.player.hp + life_steal)
-                self.add_popup(self.player.x, self.player.y, f"+{life_steal}", (120, 245, 140))
+                # Остриё на дистанции (Sweet Spot)
+                if weap and getattr(weap, "sweet_spot", False) and md >= reach * 0.56:
+                    dmg = int(dmg * 1.45)
+                    for _ in range(5):
+                        ang_s = random.uniform(0, 6.28)
+                        self.particles.append(Particle(m.x, m.y - 0.3, math.cos(ang_s) * 2.6, math.sin(ang_s) * 2.6, (255, 215, 70), 3.0, 0.22))
 
-            # Комбо А: каждый удар оружием в ближнем бою выбивает ману!
-            if self.player.mp < self.player.max_mp:
-                mp_gain = self.player.mp_on_hit * (1.5 if is_crit else 1.0)
-                self.player.mp = min(float(self.player.max_mp), self.player.mp + mp_gain)
+                # Штраф в упор у сверхдлинной пики
+                if weap and getattr(weap, "close_penalty", False) and md < 1.15:
+                    dmg = max(1, int(dmg * 0.50))
 
-            m.hit_flash_timer = 0.12
-            m.hit_flash_crit = is_crit
-            self.fx.add_blood_splatter(m.x, m.y, count=6 if is_crit else 3, is_kill=False)
+                eff_def = max(0, m.phys_def - armor_pierce)
+                final_dmg = max(1, dmg - eff_def)
+                m.hp -= final_dmg
 
-            if is_crit:
-                self.player.record_build_action("cunning", 0.22)
-                self.sfx.play("crit")
-                self.fx.trigger_shake(2.0, 0.14)
-                self.add_log("combat", f"Критический удар по врагу ({m.kind}): -{final_dmg} ХП!", (255, 230, 95))
-                self.add_popup(m.x, m.y, f"-{final_dmg}", (255, 230, 75), big=True)
-            else:
-                self.player.record_build_action("body", 0.15)
-                self.sfx.play("hit")
-                self.add_log("combat", f"Удар по врагу ({m.kind}): -{final_dmg} ХП.")
-                self.add_popup(m.x, m.y, f"-{final_dmg}", (255, 245, 230))
+                # Раскол лат
+                shatter = getattr(weap, "shatter_armor", 0) if weap else 0
+                if shatter > 0 and m.phys_def > 0:
+                    m.phys_def = max(0, m.phys_def - shatter)
 
-            self._check_mob_death(m)
+                # Крюк-захват или отталкивание
+                k_dx = m.x - px
+                k_dy = m.y - py
+                k_len = max(0.001, math.hypot(k_dx, k_dy))
+                if weap and getattr(weap, "hook_pull", False):
+                    if md > 0.95:
+                        m.apply_knockback(-k_dx / k_len, -k_dy / k_len, knockback)
+                else:
+                    m.apply_knockback(k_dx / k_len, k_dy / k_len, knockback)
 
-        if not targets_to_hit:
+                # Наложение статусов от оружия
+                if weap and weap.status and random.random() <= getattr(weap, "status_chance", 1.0):
+                    m.apply_status(weap.status, weap.status_dur, self.add_popup, dmg_val=max(2, final_dmg // 3))
+
+                if life_steal > 0:
+                    self.player.hp = min(float(self.player.max_hp), self.player.hp + life_steal)
+                    self.add_popup(self.player.x, self.player.y, f"+{life_steal}", (120, 245, 140))
+
+                if self.player.mp < self.player.max_mp:
+                    mp_gain = self.player.mp_on_hit * (1.5 if is_crit else 1.0)
+                    self.player.mp = min(float(self.player.max_mp), self.player.mp + mp_gain)
+
+                m.hit_flash_timer = 0.12
+                m.hit_flash_crit = is_crit
+                self.fx.add_blood_splatter(m.x, m.y, count=6 if is_crit else 3, is_kill=False)
+
+                y_pop_off = -0.22 * hit_i
+                if is_crit:
+                    self.player.record_build_action("cunning", 0.22)
+                    self.sfx.play("crit")
+                    self.fx.trigger_shake(2.0, 0.14)
+                    self.add_log("combat", f"Критический удар по врагу ({m.kind}): -{final_dmg} ХП!", (255, 230, 95))
+                    self.add_popup(m.x, m.y + y_pop_off, f"-{final_dmg}", (255, 230, 75), big=True)
+                else:
+                    self.player.record_build_action("body", 0.15)
+                    self.sfx.play("hit")
+                    self.add_log("combat", f"Удар по врагу ({m.kind}): -{final_dmg} ХП.")
+                    self.add_popup(m.x, m.y + y_pop_off, f"-{final_dmg}", (255, 245, 230))
+
+                if m.hp <= 0:
+                    any_killed = True
+                self._check_mob_death(m)
+
+        if any_killed and weap and getattr(weap, "reset_cd_on_kill", False):
+            self.player.attack_cd = 0.05
+
+        if not targets_selected:
             self.sfx.play("step")
 
     def use_or_equip_item(self, item, target_wx=None, target_wy=None, from_hotbar=False):
@@ -1931,6 +2059,7 @@ def main():
             dx = (1 if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) else 0) - (1 if (keys[pygame.K_a] or keys[pygame.K_LEFT]) else 0)
             dy = (1 if (keys[pygame.K_s] or keys[pygame.K_DOWN]) else 0) - (1 if (keys[pygame.K_w] or keys[pygame.K_UP]) else 0)
 
+            game.player.update_lunge(dt, game.dungeon)
             moved = game.player.move_realtime(dx, dy, dt, game.dungeon)
             if moved:
                 game.world_active = True
@@ -2046,22 +2175,82 @@ def main():
 
                 if pr.from_player:
                     for m in list(game.mobs):
+                        if m in getattr(pr, "hit_mobs", set()):
+                            continue
                         if is_cursor_on_mob(m, pr.wx, pr.wy):
+                            pr.hit_mobs.add(m)
+                            was_unaware = (m.state != "combat")
                             m.alert_to_combat(game.sfx, game.add_popup)
-                            dmg = max(1, int(math.floor(pr.mag_dmg - m.mag_def)))
+
+                            if getattr(pr, "is_weapon_proj", False):
+                                # Штраф при стрельбе в упор (< 1.35 м): враг мешает натянуть пращу/замахнуться дротиком!
+                                dist_to_shooter = math.hypot(m.x - game.player.x, m.y - game.player.y)
+                                is_point_blank = (dist_to_shooter < 1.35)
+                                if is_point_blank:
+                                    pr.mag_dmg = max(1, int(pr.mag_dmg * 0.50))
+                                    pr.knockback = max(0.05, pr.knockback * 0.35)
+
+                                is_crit = was_unaware or (random.random() < getattr(pr, "crit_chance", 0.0))
+                                raw_d = int(pr.mag_dmg * (1.75 if is_crit else 1.0))
+                                eff_def = max(0, m.phys_def - getattr(pr, "armor_pierce", 0))
+                                dmg = max(1, raw_d - eff_def)
+                                if getattr(pr, "shatter_armor", 0) > 0 and m.phys_def > 0:
+                                    m.phys_def = max(0, m.phys_def - pr.shatter_armor)
+                                if getattr(pr, "life_steal", 0) > 0:
+                                    game.player.hp = min(float(game.player.max_hp), game.player.hp + pr.life_steal)
+                                if game.player.mp < game.player.max_mp:
+                                    game.player.mp = min(float(game.player.max_mp), game.player.mp + game.player.mp_on_hit * 0.5)
+                                # Только реальное попадание метательным оружием развивает Ловкача!
+                                game.player.record_build_action("cunning", 0.16)
+                            else:
+                                is_crit = False
+                                dmg = max(1, int(math.floor(pr.mag_dmg - m.mag_def)))
+
                             m.hp -= dmg
-                            m.hit_flash_timer = 0.11
-                            m.hit_flash_crit = False
-                            game.fx.add_blood_splatter(m.x, m.y, count=3, is_kill=False)
+                            m.hit_flash_timer = 0.12
+                            m.hit_flash_crit = is_crit
+                            game.fx.add_blood_splatter(m.x, m.y, count=6 if is_crit else 3, is_kill=False)
+
                             if pr.knockback > 0:
                                 v_len = max(0.001, math.hypot(pr.vx, pr.vy))
                                 m.apply_knockback(pr.vx / v_len, pr.vy / v_len, pr.knockback)
-                            if pr.status:
+                            if pr.status and random.random() <= getattr(pr, "status_chance", 1.0):
                                 m.apply_status(pr.status, pr.status_dur, game.add_popup, dmg_val=max(2, dmg // 3))
-                            game.sfx.play("hit")
-                            game.add_popup(m.x, m.y, f"-{dmg}", pr.color)
+
+                            if is_crit:
+                                game.sfx.play("crit")
+                                game.fx.trigger_shake(1.6, 0.12)
+                                game.add_popup(m.x, m.y, f"-{dmg}", (255, 230, 75), big=True)
+                            else:
+                                game.sfx.play("hit")
+                                game.add_popup(m.x, m.y, f"-{dmg}", pr.color)
+
                             game._check_mob_death(m)
-                            if pr in game.projectiles:
+
+                            bounced = False
+                            if getattr(pr, "bounces", 0) > 0:
+                                nxt_m = min(
+                                    (
+                                        other for other in game.mobs
+                                        if other is not m and other not in pr.hit_mobs and other.hp > 0
+                                        and math.hypot(other.x - m.x, other.y - m.y) <= 3.8
+                                        and game.dungeon.has_line_of_sight(m.x, m.y, other.x, other.y, 4.0)
+                                    ),
+                                    key=lambda other: math.hypot(other.x - m.x, other.y - m.y),
+                                    default=None
+                                )
+                                if nxt_m is not None:
+                                    pr.bounces -= 1
+                                    bdx = nxt_m.x - pr.wx
+                                    bdy = (nxt_m.y - 0.25) - pr.wy
+                                    blen = max(0.001, math.hypot(bdx, bdy))
+                                    spd = getattr(pr, "speed", math.hypot(pr.vx, pr.vy))
+                                    pr.vx = (bdx / blen) * spd
+                                    pr.vy = (bdy / blen) * spd
+                                    pr.life = max(pr.life, 0.65)
+                                    bounced = True
+
+                            if not bounced and pr in game.projectiles:
                                 game.projectiles.remove(pr)
                             break
                 else:
@@ -2088,8 +2277,8 @@ def main():
         game.current_visible_tiles = visible_tiles
         game.player.update_illumination(game.dungeon.braziers, game.dungeon.room_lights, game.objects, player_open_tiles)
 
-        game.particles = [pt for pt in game.particles if pt.update(dt)]
-        game.popups = [p for p in game.popups if p.update(dt)]
+        game.particles = [pt for pt in game.particles if pt is not None and pt.update(dt)]
+        game.popups = [p for p in game.popups if p is not None and p.update(dt)]
         for vfx in list(game.visual_fx):
             if vfx["kind"] in ("blood_pentagram", "mana_shard") and (game.inv_open or game.levelup_choices or dev_open):
                 continue
@@ -2264,6 +2453,13 @@ def main():
             lx_w, ly_w = rl["x"] * TILE_W + 8, rl["y"] * TILE_H + 8
             foot_w = (rl["y"] + 0.5) * TILE_H
             rad = rl["radius"]
+            # Дискотечные прожекторы и стробоскоп: строго экранируются стенами танцпола!
+            if rl.get("is_disco_strobe") or "disco_idx" in rl:
+                l_open = game.dungeon.get_light_open_tiles(37, 17, 125.0)
+                allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
+                if allowed is not None:
+                    register_world_and_hud_light(lx_w, ly_w, foot_w, 24.0, rad, rl["color"], allowed, ignore_d=False)
+                continue
             l_open = game.dungeon.get_light_open_tiles(rl["x"], rl["y"], rad)
             allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
             if allowed is not None:

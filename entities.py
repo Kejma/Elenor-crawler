@@ -7,20 +7,65 @@ from config import (
 
 
 class Item:
-    def __init__(self, item_id, data):
+    RARITY_ORDER = ("common", "uncommon", "rare", "epic", "legendary")
+    RARITY_ROMAN = ("", " [II]", " [III]", " [IV]", " [V]")
+
+    def __init__(self, item_id, data, rarity_override=None):
         self.id = item_id
-        self.name = data["name"]
+        self.base_name = data["name"]
         self.type = data["type"]
         self.slot = data.get("slot", None)
+        self.is_torch = data.get("is_torch", False)
         self.two_handed = data.get("two_handed", False)
         self.weap_style = data.get("weap_style", "fist")
-        self.atk_cd = float(data.get("atk_cd", 0.36))
+
+        # Определяем редкость экземпляра (для оружия она динамическая!)
+        is_weapon = (self.type == "equipment" and self.slot == "right_hand" and not self.is_torch)
+        if rarity_override in self.RARITY_ORDER:
+            self.rarity = rarity_override
+        else:
+            self.rarity = data.get("rarity", "common")
+        if self.rarity not in self.RARITY_ORDER:
+            self.rarity = "common"
+
+        self.tier_idx = self.RARITY_ORDER.index(self.rarity)
+        self.rarity_color = RARITY_COLORS.get(self.rarity, (215, 215, 220))
+        self.name = f"{self.base_name}{self.RARITY_ROMAN[self.tier_idx]}" if is_weapon else self.base_name
+
+        base_cd = float(data.get("atk_cd", 0.36))
+        self.atk_cd = round(max(0.16, base_cd * (1.0 - 0.04 * self.tier_idx)), 2) if is_weapon else base_cd
         self.reach = float(data.get("reach", 1.55))
         self.arc_deg = float(data.get("arc_deg", 55.0))
         self.max_targets = int(data.get("max_targets", 99 if data.get("cleave", False) else 1))
-        self.armor_pierce = int(data.get("armor_pierce", 0))
+
+        base_ap = int(data.get("armor_pierce", 0))
+        ap_bonus = (2 if self.tier_idx == 4 else (1 if self.tier_idx >= 2 else 0)) if is_weapon else 0
+        self.armor_pierce = base_ap + ap_bonus
         self.cleave = data.get("cleave", False) or (self.max_targets > 1)
-        self.life_steal = data.get("life_steal", 0)
+
+        base_ls = int(data.get("life_steal", 0))
+        self.life_steal = (base_ls + (2 if self.tier_idx == 4 else (1 if self.tier_idx >= 2 else 0))) if (is_weapon and base_ls > 0) else base_ls
+
+        # Исторические фишечки оружия с масштабированием от редкости экземпляра
+        base_crit = float(data.get("crit_bonus", 0.0))
+        self.crit_bonus = round(base_crit + (0.02 * self.tier_idx if is_weapon else 0.0), 2)
+
+        base_bs = float(data.get("backstab_bonus", 0.0))
+        self.backstab_bonus = round(base_bs + (0.25 * self.tier_idx if (is_weapon and base_bs > 0) else 0.0), 2)
+
+        self.lunge_dist = float(data.get("lunge_dist", 0.0))
+        self.sweet_spot = bool(data.get("sweet_spot", False))
+        self.close_penalty = bool(data.get("close_penalty", False))
+        self.hook_pull = bool(data.get("hook_pull", False))
+
+        base_shatter = int(data.get("shatter_armor", 0))
+        self.shatter_armor = (base_shatter + (1 if self.tier_idx >= 3 else 0)) if (is_weapon and base_shatter > 0) else base_shatter
+
+        self.multi_hit = int(data.get("multi_hit", 1))
+        self.reset_cd_on_kill = bool(data.get("reset_cd_on_kill", False))
+        self.proj_visual = data.get("proj_visual", "spinning_dagger")
+        self.feature_tag = data.get("feature_tag", "")
+
         self.cooldown = float(data.get("cooldown", 1.5))
         self.skill_kind = data.get("skill_kind", "spell")
         self.god = data.get("god", "")
@@ -30,9 +75,20 @@ class Item:
         self.proj_speed = float(data.get("proj_speed", 9.2))
         self.aoe_radius = float(data.get("aoe_radius", 2.0))
         self.duration = float(data.get("duration", 0.0))
-        self.bounces = int(data.get("bounces", 1))
+
+        base_bounces = int(data.get("bounces", 0 if self.weap_style == "thrown" else 1))
+        if is_weapon and self.weap_style == "thrown" and base_bounces > 0 and self.tier_idx >= 3:
+            self.bounces = base_bounces + 1
+        else:
+            self.bounces = base_bounces
+
         self.status = data.get("status", None)
-        self.status_dur = float(data.get("status_dur", 0.0))
+        base_sd = float(data.get("status_dur", 0.0))
+        self.status_dur = round(base_sd * (1.0 + 0.10 * self.tier_idx), 2) if (is_weapon and base_sd > 0) else base_sd
+
+        base_sc = float(data.get("status_chance", 1.0 if self.status else 0.0))
+        self.status_chance = min(1.0, round(base_sc + (0.08 * self.tier_idx if is_weapon else 0.0), 2)) if self.status else 0.0
+
         self.upgradable_stats = list(data.get("upgradable_stats", ["power", "cooldown"]))
         self.base_stats = {
             "power": float(data.get("power", 0)),
@@ -44,22 +100,35 @@ class Item:
         }
         self.stat_bonuses_pct = {k: 0.0 for k in self.base_stats}
 
-        self.rarity = data.get("rarity", "common")
-        self.rarity_color = RARITY_COLORS.get(self.rarity, (215, 215, 220))
         self.icon = data["icon"]
         raw_desc = data.get("desc", "")
         self.desc = random.choice(raw_desc) if isinstance(raw_desc, list) and raw_desc else str(raw_desc)
         self.copper_value = int(data.get("copper_value", 0))
 
-        self.is_torch = data.get("is_torch", False)
         self.max_fuel = float(data.get("max_fuel", 100.0))
         self.fuel = self.max_fuel
 
         self.power = data.get("power", 0)
         self.heal_hp = int(data.get("heal_hp", self.power if item_id.startswith("potion_hp") else 0))
         self.mp_cost = data.get("mp_cost", 0)
-        self.phys_bonus = data.get("phys_bonus", 0)
-        self.mag_bonus = data.get("mag_bonus", 0)
+
+        base_dmin = int(data.get("dmg_min", 2 if is_weapon else 0))
+        base_dmax = int(data.get("dmg_max", 4 if is_weapon else 0))
+        if is_weapon:
+            tier_mult = (0.0, 0.35, 0.75, 1.25, 1.85)
+            bonus_min = int(round(base_dmin * tier_mult[self.tier_idx]))
+            bonus_max = max(bonus_min + self.tier_idx, int(round(base_dmax * tier_mult[self.tier_idx])))
+            self.dmg_min = base_dmin + bonus_min
+            self.dmg_max = base_dmax + bonus_max
+        else:
+            self.dmg_min = base_dmin
+            self.dmg_max = base_dmax
+
+        self.phys_bonus = int(data.get("phys_bonus", 0))
+
+        base_mag = int(data.get("mag_bonus", 0))
+        self.mag_bonus = (base_mag + self.tier_idx) if (is_weapon and base_mag > 0) else base_mag
+
         self.phys_def = data.get("phys_def", 0)
         self.mag_def = data.get("mag_def", 0)
         self.noise_mod = data.get("noise_mod", 0.0)
@@ -91,9 +160,16 @@ class Particle:
 
 
 class Projectile:
-    def __init__(self, wx, wy, dir_x, dir_y, speed, mag_dmg, color, from_player=True, status=None, status_dur=0.0, knockback=0.0, visual_kind="orb", emits_light=True):
+    def __init__(
+        self, wx, wy, dir_x, dir_y, speed, mag_dmg, color,
+        from_player=True, status=None, status_dur=0.0, knockback=0.0,
+        visual_kind="orb", emits_light=True, is_weapon_proj=False,
+        armor_pierce=0, shatter_armor=0, bounces=0, crit_chance=0.0,
+        status_chance=1.0, life_steal=0, max_dist=None
+    ):
         self.wx = wx
         self.wy = wy
+        self.speed = speed
         self.vx = dir_x * speed
         self.vy = dir_y * speed
         self.mag_dmg = mag_dmg
@@ -101,11 +177,19 @@ class Projectile:
         self.from_player = from_player
         self.status = status
         self.status_dur = status_dur
+        self.status_chance = status_chance
         self.knockback = knockback
         self.visual_kind = visual_kind
         self.emits_light = emits_light
+        self.is_weapon_proj = is_weapon_proj
+        self.armor_pierce = armor_pierce
+        self.shatter_armor = shatter_armor
+        self.bounces = bounces
+        self.crit_chance = crit_chance
+        self.life_steal = life_steal
+        self.hit_mobs = set()
         self.angle = math.atan2(dir_y, dir_x)
-        self.life = 4.5
+        self.life = (max_dist / max(1.0, speed)) if max_dist else 4.5
         self.spawn_timer = 0.0
 
     def update(self, dt, dungeon, particles):
@@ -114,8 +198,13 @@ class Projectile:
         self.life -= dt
         self.spawn_timer += dt
 
-        if self.visual_kind == "spinning_dagger":
+        spinning_kinds = ("spinning_dagger", "thrown_axe", "thrown_chakram", "thrown_bolas")
+        physical_kinds = spinning_kinds + ("thrown_javelin", "sling_stone")
+
+        if self.visual_kind in spinning_kinds:
             self.angle += 24.0 * dt
+        elif self.visual_kind in ("thrown_javelin", "sling_stone"):
+            self.angle = math.atan2(self.vy, self.vx)
         elif self.spawn_timer >= 0.025:
             self.spawn_timer = 0.0
             for _ in range(2):
@@ -130,8 +219,8 @@ class Projectile:
 
         tx, ty = int(self.wx), int(self.wy)
         if dungeon.is_blocking_move(tx, ty):
-            spark_col = (200, 205, 215) if self.visual_kind == "spinning_dagger" else self.color
-            spark_cnt = 5 if self.visual_kind == "spinning_dagger" else 10
+            spark_col = (200, 205, 215) if self.visual_kind in physical_kinds else self.color
+            spark_cnt = 5 if self.visual_kind in physical_kinds else 10
             for _ in range(spark_cnt):
                 ang = random.uniform(0, 6.28)
                 spd = random.uniform(1.0, 3.2)
@@ -140,13 +229,15 @@ class Projectile:
 
         return self.life > 0
 
-
 class Player:
     def __init__(self, x, y, adj_key, adj_data, noun_key, noun_data, items_db, appearance=None):
         self.x = float(x) + 0.5
         self.y = float(y) + 0.5
         self.bump_x = 0.0
         self.bump_y = 0.0
+        self.lunge_vx = 0.0
+        self.lunge_vy = 0.0
+        self.throw_slowdown_timer = 0.0
         self.facing = -1
         self.is_moving = False
         self.anim_timer = 0.0
@@ -320,7 +411,7 @@ class Player:
 
     @property
     def crit_chance(self):
-        return min(0.65, self.cunning * 0.05 + self.perk_crit)
+        return min(0.75, self.cunning * 0.05 + self.perk_crit + self._sum_equip("crit_bonus"))
 
     def gain_xp(self, amount):
         self.xp += amount
@@ -356,8 +447,27 @@ class Player:
         return bonus
 
     def record_build_action(self, branch, amount=0.25):
-        if branch in self.action_affinity:
-            self.action_affinity[branch] += amount
+        """
+        Механика «Трёхплечевых весов»:
+        - Чем сильнее плечо X оторвалось от двух других, тем сильнее противовес гасит дальнейший рост (сопротивление).
+        - Если плечо отстаёт, сопротивления нет и оно догоняет быстрее.
+        - Общее затухание по мере роста (dampener) исключает бесконечный разгон цифр.
+        """
+        if branch not in self.action_affinity:
+            return
+        cur_score = self.action_affinity[branch]
+        other_scores = [v for k, v in self.action_affinity.items() if k != branch]
+        avg_other = sum(other_scores) / max(1, len(other_scores))
+        delta_lead = cur_score - avg_other
+
+        if delta_lead > 0.0:
+            scale_friction = 1.0 / (1.0 + delta_lead * 0.22)
+        else:
+            scale_friction = 1.0 + min(0.85, abs(delta_lead) * 0.12)
+
+        global_damp = 25.0 / (25.0 + cur_score)
+        effective_gain = amount * scale_friction * global_damp
+        self.action_affinity[branch] += effective_gain
 
     def get_build_affinities(self):
         """Computes cumulative player build leanings: {'body': float, 'cunning': float, 'mind': float}."""
@@ -370,9 +480,9 @@ class Player:
         for itm in self.equipment.values():
             if not itm or itm.is_torch:
                 continue
-            if itm.armor_class == "plate" or itm.two_handed or itm.weap_style in ("mace", "cleaver", "axe"):
+            if itm.armor_class == "plate" or itm.two_handed or itm.weap_style in ("mace", "cleaver", "axe", "halberd"):
                 scores["body"] += 2.5
-            if itm.armor_class == "leather" or itm.weap_style in ("dagger", "spear") or itm.noise_mod < 0:
+            if itm.armor_class == "leather" or itm.weap_style in ("dagger", "spear", "thrown", "curved") or itm.noise_mod < 0:
                 scores["cunning"] += 2.5
             if itm.armor_class == "cloth" or itm.mag_bonus > 0 or itm.mp_regen > 0:
                 scores["mind"] += 2.8
@@ -649,6 +759,8 @@ class Player:
         spd_mult = 0.75 if cur_tile == 2 else 1.0
         if self.quirk == "nyctophobe" and not self.has_lit_torch:
             spd_mult *= 1.15
+        if self.throw_slowdown_timer > 0.0:
+            spd_mult *= 0.50
         step = PLAYER_BASE_SPEED * spd_mult * dt
 
         rad = 0.28
@@ -710,10 +822,17 @@ class Player:
                 self.ability_slots[a] = None
 
     def roll_melee_damage(self):
-        base = random.randint(1, 3) + self.phys_attack
+        weap = self.equipment.get("right_hand")
+        w_min = getattr(weap, "dmg_min", 1) if weap else 1
+        w_max = getattr(weap, "dmg_max", 3) if weap else 3
+        # Двуручники получают повышенную отдачу от вложенной Силы!
+        stat_scale = 1.35 if (weap and weap.two_handed) else 1.0
+        stat_add = int(round(self.phys_attack * stat_scale))
+        base = random.randint(w_min, w_max) + stat_add
         is_crit = random.random() < self.crit_chance
+        crit_mult = 1.75 + (getattr(weap, "crit_bonus", 0.0) * 1.5)
         if is_crit:
-            return int(base * 1.75), True
+            return int(base * crit_mult), True
         return base, False
 
     def trigger_bump(self, dx, dy):
@@ -721,6 +840,49 @@ class Player:
             self.facing = 1 if dx > 0 else -1
         self.bump_x = dx * 0.35
         self.bump_y = dy * 0.35
+
+    def trigger_lunge(self, nx, ny, dist):
+        if abs(nx) > 0.05:
+            self.facing = 1 if nx > 0 else -1
+        # Начальный импульс расходуется с затуханием 14.0*dt и плавно провозит ровно на dist тайлов
+        self.lunge_vx = nx * dist * 11.5
+        self.lunge_vy = ny * dist * 11.5
+
+    def update_lunge(self, dt, dungeon):
+        if math.hypot(self.lunge_vx, self.lunge_vy) <= 0.12:
+            self.lunge_vx = 0.0
+            self.lunge_vy = 0.0
+            return
+        rad = 0.28
+        # Разбиваем смещение на микрошаги со строгой проверкой всех 4 углов хитбокса
+        steps = 2
+        sub_dt = dt / steps
+        for _ in range(steps):
+            tx = self.x + self.lunge_vx * sub_dt
+            if not (
+                dungeon.is_blocking_move(int(tx - rad), int(self.y - rad))
+                or dungeon.is_blocking_move(int(tx + rad), int(self.y - rad))
+                or dungeon.is_blocking_move(int(tx - rad), int(self.y + rad))
+                or dungeon.is_blocking_move(int(tx + rad), int(self.y + rad))
+            ):
+                self.x = tx
+            else:
+                self.lunge_vx = 0.0
+
+            ty = self.y + self.lunge_vy * sub_dt
+            if not (
+                dungeon.is_blocking_move(int(self.x - rad), int(ty - rad))
+                or dungeon.is_blocking_move(int(self.x + rad), int(ty - rad))
+                or dungeon.is_blocking_move(int(self.x - rad), int(ty + rad))
+                or dungeon.is_blocking_move(int(self.x + rad), int(ty + rad))
+            ):
+                self.y = ty
+            else:
+                self.lunge_vy = 0.0
+
+        decay = max(0.0, 1.0 - 14.0 * dt)
+        self.lunge_vx *= decay
+        self.lunge_vy *= decay
 
     def update_timers(self, dt):
         self.anim_timer += dt
@@ -730,6 +892,7 @@ class Player:
             self.anim_frame = (self.anim_frame + 1) % 4
         self.attack_cd = max(0.0, self.attack_cd - dt)
         self.step_sound_cd = max(0.0, self.step_sound_cd - dt)
+        self.throw_slowdown_timer = max(0.0, self.throw_slowdown_timer - dt)
         self.shine_timer = max(0.0, self.shine_timer - dt)
         for k in list(self.cooldowns.keys()):
             self.cooldowns[k] = max(0.0, self.cooldowns[k] - dt)

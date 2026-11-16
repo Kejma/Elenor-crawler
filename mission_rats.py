@@ -386,8 +386,7 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
         game.emit_noise(obj.x + 0.5, obj.y + 0.5, 5.8)
         roll = random.random()
         if roll < 0.26:
-            weap_id = random.choice(["rusty_dagger", "wooden_club"])
-            itm = game.make_item(weap_id)
+            itm = game.roll_weapon_drop()
             game.objects.append(InteractableCls(obj.x, obj.y, "loot", itm))
             game.trigger_event_thought("barrel_weapon", item=itm.name)
             game.add_popup(obj.x + 0.5, obj.y + 0.5, f"Выпало: {itm.name}", itm.rarity_color)

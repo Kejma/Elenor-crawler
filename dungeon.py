@@ -493,16 +493,17 @@ class Dungeon:
         return path
 
     def get_light_open_tiles(self, tile_x, tile_y, radius_px):
-        key = (int(tile_x), int(tile_y), int(radius_px))
+        itx, ity = int(tile_x), int(tile_y)
+        key = (itx, ity, int(radius_px))
         if key in self._light_cache:
             return self._light_cache[key]
 
         open_tiles = set()
         r_tiles = int(math.ceil(radius_px / TILE_W)) + 1
-        ox, oy = tile_x + 0.5, tile_y + 0.5
+        ox, oy = itx + 0.5, ity + 0.5
 
-        for ty in range(max(0, tile_y - r_tiles), min(MAP_ROWS, tile_y + r_tiles + 1)):
-            for tx in range(max(0, tile_x - r_tiles), min(MAP_COLS, tile_x + r_tiles + 1)):
+        for ty in range(max(0, ity - r_tiles), min(MAP_ROWS, ity + r_tiles + 1)):
+            for tx in range(max(0, itx - r_tiles), min(MAP_COLS, itx + r_tiles + 1)):
                 if not self.is_blocking_sight(tx, ty):
                     dist = math.hypot((tx + 0.5) - ox, (ty + 0.5) - oy)
                     if dist <= r_tiles:

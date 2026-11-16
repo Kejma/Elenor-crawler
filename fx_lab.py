@@ -44,6 +44,9 @@ class FXManager:
 
         self.toggle_rects = {}
         self.action_rects = {}
+        self.disco_active = False
+        self.disco_center = (37.5, 17.5)
+        self.disco_time = 0.0
 
     def _spawn_dust_in_zones(self, dungeon, count=55):
         self.dust_motes = []
@@ -223,6 +226,47 @@ class FXManager:
                     dm["wx"] = random.uniform(zr.left + 0.3, zr.right - 0.3)
                     dm["wy"] = random.uniform(zr.top + 0.3, zr.bottom - 0.3)
 
+        # Анимация дискотеки: вращение цветных лучей, пульсация стробоскопа и пространственный звук
+        if self.disco_active:
+            self.disco_time += dt
+            cx, cy = self.disco_center
+            bpm = 128.0
+            beat_phase = (self.disco_time * (bpm / 60.0)) % 1.0
+
+            # 1. Центральный стробоскоп вспыхивает на каждый бит
+            strobe_flash = max(0.0, 1.0 - beat_phase * 3.5)
+            # 2. Вращение 4 цветных прожекторов по эллиптической орбите вокруг диско-шара
+            orbit_r = 2.4
+
+            for rl in dungeon.room_lights:
+                if rl.get("is_disco_strobe", False):
+                    rl["radius"] = 95.0 + strobe_flash * 40.0
+                    int_s = 0.4 + strobe_flash * 1.4
+                    rl["color"] = (1.4 * int_s, 1.1 * int_s, 1.8 * int_s)
+                elif "disco_idx" in rl:
+                    idx = rl["disco_idx"]
+                    ang = self.disco_time * 2.2 + idx * (math.pi * 0.5)
+                    rl["x"] = cx + math.cos(ang) * orbit_r
+                    rl["y"] = cy + math.sin(ang) * (orbit_r * 0.75)
+                    rl["radius"] = 78.0 + math.sin(self.disco_time * 4.0 + idx) * 14.0
+
+            # 3. Обновляем пространственную музыку с физикой слоёв стен и мягким сглаживанием
+            self.game.sfx.update_disco_spatial(player.x, player.y, cx, cy, dungeon=dungeon, max_dist=30.0, dt=dt)
+
+            # 4. Цветные искры-конфетти на танцполе
+            if random.random() < 0.35:
+                spark_c = random.choice([
+                    (255, 60, 180), (60, 230, 255), (140, 255, 70), (255, 215, 60)
+                ])
+                from entities import Particle
+                self.game.particles.append(Particle(
+                    cx + random.uniform(-2.8, 2.8),
+                    cy + random.uniform(-2.2, 2.2),
+                    random.uniform(-0.4, 0.4),
+                    random.uniform(-0.6, -0.1),
+                    spark_c, size=random.uniform(1.8, 3.0), life=0.45
+                ))
+
     # --- ГЕНЕРАТОР ТЕСТОВОЙ КОМНАТЫ (FX-ПОЛИГОН, ЭТАЖ 99) ---
     def enter_test_polygon(self, EnemyCls, InteractableCls):
         g = self.game
@@ -239,39 +283,93 @@ class FXManager:
         d.invalidate_light_cache()
 
         d.grid = [[1 for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
-        lab_rect = pygame.Rect(18, 12, 24, 16)
+
+        # 1. Главный зал лабы (x=18..40, y=12..25)
+        lab_rect = pygame.Rect(18, 12, 23, 14)
         for ry in range(lab_rect.top, lab_rect.bottom):
             for rx in range(lab_rect.left, lab_rect.right):
                 if rx < 25:
                     d.grid[ry][rx] = 4
-                elif rx > 34:
+                elif rx > 33:
                     d.grid[ry][rx] = 8
                 else:
                     d.grid[ry][rx] = 0
 
+        # Бассейн с водой слева
         for ry in range(18, 23):
-            for rx in range(27, 33):
-                if 28 <= rx <= 31 and 19 <= ry <= 21:
+            for rx in range(26, 32):
+                if 27 <= rx <= 30 and 19 <= ry <= 21:
                     d.grid[ry][rx] = 2
                 else:
                     d.grid[ry][rx] = 3
 
-        for px_c, py_c in ((23, 15), (23, 24), (36, 15), (36, 24)):
+        # Опорные колонны стоят строго в левой зоне, ковёр танцпола свободен
+        for px_c, py_c in ((22, 15), (22, 22), (29, 15), (29, 22)):
             d.grid[py_c][px_c] = 1
 
-        d.rooms = [lab_rect]
-        d.atmo_zones = [{"rect": lab_rect, "kind": "spores"}]
+        # 2. АКУСТИЧЕСКОЕ КРЫЛО СПРАВА (x=41..60, y=14..25)
+        # Южный коридор-галерея (y=22..24, x=37..60)
+        for ry in (22, 23, 24):
+            for rx in range(37, 60):
+                d.grid[ry][rx] = 0
+        d.grid[21][37] = 0
+        d.grid[21][38] = 0
+
+        # Комната I (за 1 стеной от диско): x=43..46, y=14..20
+        for ry in range(14, 21):
+            for rx in range(43, 47):
+                d.grid[ry][rx] = 0
+        d.grid[21][44] = 0  # вход из коридора
+
+        # Комната II (за 2 стенами от диско): x=49..52, y=14..20
+        for ry in range(14, 21):
+            for rx in range(49, 53):
+                d.grid[ry][rx] = 0
+        d.grid[21][50] = 0  # вход из коридора
+
+        # Комната III (бункер за 3 стенами): x=55..58, y=14..20
+        for ry in range(14, 21):
+            for rx in range(55, 59):
+                d.grid[ry][rx] = 0
+        d.grid[21][56] = 0  # вход из коридора
+
+        poly_rect = pygame.Rect(18, 12, 42, 14)
+        d.rooms = [poly_rect]
+        d.atmo_zones = [{"rect": poly_rect, "kind": "spores"}]
         d.fog_zones = [
-            {"wx": 30.0, "wy": 20.5, "radius": 3.2, "color": (0.48, 0.75, 0.90), "density": 0.50, "kind": "mist"}
+            {"wx": 28.5, "wy": 20.5, "radius": 3.0, "color": (0.48, 0.75, 0.90), "density": 0.45, "kind": "mist"}
         ]
         d.start_pos = (25, 20)
         g.player.x, g.player.y = 25.5, 20.5
         g.player.hp = float(g.player.max_hp)
         g.player.mp = float(g.player.max_mp)
 
+        # Танцпол дискотеки (x=35..40, y=14..20) — ровный ковер
+        d.carpets = set()
+        for cy in range(14, 21):
+            for cx in range(35, 41):
+                d.carpets.add((cx, cy))
+
         d.braziers.append({"x": 22, "y": 14, "color": (1.25, 0.72, 0.28), "radius": 105.0})
-        d.braziers.append({"x": 37, "y": 14, "color": (0.55, 0.95, 1.35), "radius": 105.0})
-        d.room_lights.append({"x": 30, "y": 20, "color": (0.85, 0.75, 0.95), "radius": 135.0})
+        d.braziers.append({"x": 45, "y": 23, "color": (1.10, 0.65, 0.30), "radius": 75.0})
+        d.braziers.append({"x": 51, "y": 23, "color": (1.10, 0.65, 0.30), "radius": 75.0})
+        d.braziers.append({"x": 57, "y": 23, "color": (1.10, 0.65, 0.30), "radius": 75.0})
+        d.room_lights.append({"x": 26, "y": 18, "color": (0.85, 0.75, 0.95), "radius": 120.0})
+
+        # Источники света дискотеки
+        self.disco_active = True
+        self.disco_center = (37.5, 17.5)
+        self.disco_time = 0.0
+
+        d.room_lights.append({"x": 37.5, "y": 17.5, "color": (1.4, 1.2, 1.8), "radius": 110.0, "is_disco_strobe": True})
+        disco_spot_colors = [
+            (1.5, 0.2, 0.8),  # Hot Magenta
+            (0.2, 1.3, 1.5),  # Electric Cyan
+            (0.3, 1.5, 0.2),  # Acid Lime
+            (1.5, 0.9, 0.1),  # Vivid Amber
+        ]
+        for i, sc in enumerate(disco_spot_colors):
+            d.room_lights.append({"x": 37.5, "y": 17.5, "color": sc, "radius": 85.0, "disco_idx": i})
 
         g.popups = []
         g.projectiles = []
@@ -285,27 +383,38 @@ class FXManager:
         g.objects.append(InteractableCls(20, 20, "campfire"))
         g.objects.append(InteractableCls(20, 14, "bed"))
         g.objects.append(InteractableCls(20, 25, "rack"))
-        g.objects.append(InteractableCls(39, 20, "npc_merchant"))
+        g.objects.append(InteractableCls(26, 14, "npc_merchant"))
         for by_b in (16, 18, 22, 24):
-            g.objects.append(InteractableCls(34, by_b, "barrel"))
+            g.objects.append(InteractableCls(33, by_b, "barrel"))
 
-        dummy_rat = EnemyCls(29, 15, kind="rat", state="sleeping")
+        # «Диско-шар» на пьедестале в центре танцпола
+        g.objects.append(InteractableCls(37, 17, "idol"))
+
+        # Предметы в акустических комнатах для ориентира
+        g.objects.append(InteractableCls(44, 15, "chair_bench"))
+        g.objects.append(InteractableCls(50, 15, "armor_stand"))
+        g.objects.append(InteractableCls(56, 15, "chest"))
+
+        dummy_rat = EnemyCls(27, 15, kind="rat", state="sleeping")
         dummy_rat.max_hp = 9999
         dummy_rat.hp = 9999
         dummy_rat.speed = 0.0
 
-        dummy_cult = EnemyCls(32, 15, kind="rat_cultist", state="sleeping")
-        dummy_cult.max_hp = 9999
-        dummy_cult.hp = 9999
-        dummy_cult.speed = 0.0
-        g.mobs.extend([dummy_rat, dummy_cult])
+        # Танцующий скелет на танцполе
+        disco_skel = EnemyCls(39, 18, kind="skeleton", state="sleeping")
+        disco_skel.max_hp = 9999
+        disco_skel.hp = 9999
+        disco_skel.speed = 0.0
+        g.mobs.extend([dummy_rat, disco_skel])
 
         solid_kinds = {"tavern_table", "bar_counter", "wine_cask", "bed", "fireplace", "shelf_bottles", "cauldron", "crate_stack"}
         d.solid_props = {(obj.x, obj.y) for obj in g.objects if obj.kind in solid_kinds}
 
         g.cam_x = g.player.x * TILE_W - VIEW_W * 0.5
         g.cam_y = g.player.y * TILE_H - VIEW_H * 0.5
-        g.set_thought("FX-Полигон! Проверь мягкие тени колонн, круги под ногами в бассейне и 2.5D-туман!")
+
+        g.sfx.start_disco_track()
+        g.set_thought("Акустическое крыло готово! Проверь звук на танцполе и в 3 комнатах справа (за 1, 2 и 3 стенами)!")
         g.sfx.play("levelup")
 
     def handle_event(self, event, EnemyCls, InteractableCls):
@@ -358,6 +467,10 @@ class FXManager:
                     if act_k == "tp_lab":
                         self.enter_test_polygon(EnemyCls, InteractableCls)
                     elif act_k == "tp_floor1":
+                        self.disco_active = False
+                        self.game.sfx.stop_disco_track()
+                        self.game.sfx.disco_cur_dry = [0.0, 0.0]
+                        self.game.sfx.disco_cur_muff = [0.0, 0.0]
                         self.game.reset_run()
                     elif act_k == "spawn_poison":
                         self.add_gas_cloud(px + 2.0, py, radius=2.4, duration=7.0, kind="poison", dmg=4)

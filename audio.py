@@ -1,5 +1,6 @@
 import numpy as np
 import pygame
+import math
 
 
 class SoundSynth:
@@ -10,8 +11,13 @@ class SoundSynth:
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            pygame.mixer.set_num_channels(16)
             self.freq, _, self.channels = pygame.mixer.get_init()
             self.enabled = True
+            self.disco_channel = None
+            self.disco_sound = None
+            self.disco_cur_dry = [0.0, 0.0]
+            self.disco_cur_muff = [0.0, 0.0]
             self._build_bank()
         except Exception:
             self.enabled = False
@@ -207,3 +213,236 @@ class SoundSynth:
             snd = self.sounds[name]
             snd.set_volume(self.volume)
             snd.play()
+
+    def _synth_sax_note(self, freq, dur, sr, bend_from=None):
+        """Синтез тёплого аналогового саксофона с формантами, вибрато и дыханием."""
+        n_samples = int(sr * dur)
+        t = np.linspace(0, dur, n_samples, False)
+
+        # Подтяжка высоты тона на атаке (характерный джазовый scoop)
+        if bend_from:
+            pitch_env = np.ones(n_samples)
+            scoop_len = min(n_samples, int(sr * 0.045))
+            pitch_env[:scoop_len] = np.linspace(bend_from / freq, 1.0, scoop_len)
+        else:
+            pitch_env = 1.0
+
+        # Вибрато, плавно нарастающее после атаки ноты
+        vibrato_lfo = np.sin(2 * np.pi * 5.2 * t)
+        vibrato_depth = np.clip((t - 0.08) / 0.15, 0.0, 1.0) * 0.022
+        inst_freq = freq * pitch_env * (1.0 + vibrato_lfo * vibrato_depth)
+        phase = 2 * np.pi * np.cumsum(inst_freq) / sr
+
+        # Богатые нечётные и чётные гармоники трости саксофона
+        wave = (
+            np.sin(phase) * 0.65
+            + np.sin(phase * 2.0) * 0.40
+            + np.sin(phase * 3.0) * 0.50
+            + np.sin(phase * 4.0) * 0.22
+            + np.sin(phase * 5.0) * 0.28
+        )
+        # Шум выдоха через трость (дыхание инструмента)
+        breath = np.random.uniform(-0.12, 0.12, n_samples)
+        wave = wave * 0.90 + breath * 0.10
+
+        # Огибающая громкости с мягким спадом
+        att = min(n_samples, int(sr * 0.025))
+        rel = min(n_samples, int(sr * 0.065))
+        env = np.ones(n_samples, dtype=np.float32)
+        env[:att] = np.linspace(0.0, 1.0, att)
+        env[-rel:] = np.linspace(1.0, 0.0, rel)
+        return wave * env * 0.42
+
+    def _generate_disco_loop(self):
+        """Процедурный бесшовный 4-тактовый луп с саксофоном и физическим Low-Pass фильтром (128 BPM)."""
+        sr = self.freq
+        bpm = 128.0
+        beat_len = 60.0 / bpm
+        total_beats = 8
+        total_dur = beat_len * total_beats
+        n_samples = int(sr * total_dur)
+        mix = np.zeros(n_samples, dtype=np.float32)
+
+        # 1. Прямая бочка (4-on-the-floor kick) со сглаженной атакой щелчка
+        kick_dur = 0.16
+        n_k = int(sr * kick_dur)
+        t_k = np.linspace(0, kick_dur, n_k, False)
+        f_k = np.linspace(155.0, 42.0, n_k)
+        kick_wave = np.sin(2 * np.pi * f_k * t_k) * np.exp(-t_k * 24.0)
+
+        # Мягкая микро-рампа на щелчок (сэмпл 0 строго равен 0.0, убирает щелчок при цикле)
+        n_click = min(n_k, int(sr * 0.015))
+        click_env = np.sin(np.linspace(0.0, np.pi, n_click)) ** 1.5
+        click_noise = np.random.uniform(-0.30, 0.30, n_click) * click_env
+        kick_wave[:n_click] += click_noise
+
+        for b in range(total_beats):
+            idx0 = int(b * beat_len * sr)
+            idx1 = min(n_samples, idx0 + n_k)
+            mix[idx0:idx1] += kick_wave[: idx1 - idx0] * 0.65
+
+        # 2. Синкопированный открытый хэт (Offbeat Hi-Hat)
+        hat_dur = 0.09
+        n_h = int(sr * hat_dur)
+        t_h = np.linspace(0, hat_dur, n_h, False)
+        noise = np.random.uniform(-1.0, 1.0, n_h)
+        hat_wave = noise * np.sin(2 * np.pi * 7500.0 * t_h) * np.exp(-t_h * 42.0)
+        for b in range(total_beats):
+            idx0 = int((b + 0.5) * beat_len * sr)
+            idx1 = min(n_samples, idx0 + n_h)
+            mix[idx0:idx1] += hat_wave[: idx1 - idx0] * 0.28
+
+        # 3. Аналоговый фанк-бас (D-минорный кач)
+        bass_notes = [73.42, 73.42, 87.31, 98.0, 73.42, 110.0, 98.0, 87.31]
+        for i, freq in enumerate(bass_notes):
+            t_b0 = i * beat_len
+            idx0 = int(t_b0 * sr)
+            dur_b = beat_len * 0.82
+            n_b = int(dur_b * sr)
+            idx1 = min(n_samples, idx0 + n_b)
+            t_b = np.linspace(0, dur_b, n_b, False)
+            b_synth = (
+                np.sin(2 * np.pi * freq * t_b) * 0.70
+                + np.sin(2 * np.pi * freq * 2.0 * t_b) * 0.35
+                + np.sin(2 * np.pi * freq * 3.0 * t_b) * 0.15
+            )
+            env_b = np.sin(np.pi * (t_b / dur_b) ** 0.5) * np.exp(-t_b * 3.8)
+            mix[idx0:idx1] += (b_synth * env_b)[: idx1 - idx0] * 0.45
+
+        # 4. СОЛЬНЫЙ ЗАПИЛ НА САКСОФОНЕ (80s D-Minor Riff)
+        sax_riff = [
+            (0.00, 293.66, 0.40, 261.63),  # D4
+            (0.50, 349.23, 0.40, None),    # F4
+            (1.00, 392.00, 0.35, None),    # G4
+            (1.50, 440.00, 0.85, 392.00),  # A4 (протяжная нота с вибрато)
+            (2.50, 523.25, 0.42, None),    # C5
+            (3.00, 440.00, 0.40, None),    # A4
+            (3.50, 392.00, 0.40, None),    # G4
+            (4.00, 349.23, 0.75, 293.66),  # F4
+            (5.00, 392.00, 0.38, None),    # G4
+            (5.50, 440.00, 0.85, None),    # A4
+            (6.50, 349.23, 0.38, None),    # F4
+            (7.00, 293.66, 0.80, 261.63),  # D4
+        ]
+        for start_beat, n_freq, n_len, b_from in sax_riff:
+            s_wave = self._synth_sax_note(n_freq, n_len * beat_len, sr, bend_from=b_from)
+            i0 = int(start_beat * beat_len * sr)
+            i1 = min(n_samples, i0 + len(s_wave))
+            mix[i0:i1] += s_wave[: i1 - i0] * 0.78
+
+        # 5. ТРЮК ТРОЙНОГО ТАЙЛИНГА (Бесшовный переход хвоста трека в начало)
+        tiled_mix = np.concatenate([mix, mix, mix])
+        mastered_dry_tiled = np.tanh(tiled_mix * 1.30) * 0.75
+
+        # Глухой Low-Pass фильтр через тройной массив (срез выше ~220 Гц)
+        kernel_sz = max(7, int(sr / 220.0))
+        box_kernel = np.ones(kernel_sz, dtype=np.float32) / kernel_sz
+        muff_tiled = mastered_dry_tiled.copy()
+        for _ in range(4):
+            muff_tiled = np.convolve(muff_tiled, box_kernel, mode="same")
+        mastered_muff_tiled = np.tanh(muff_tiled * 2.8) * 0.95
+
+        # Вырезаем центральный 4-тактовый фрагмент
+        dry_loop = mastered_dry_tiled[n_samples : 2 * n_samples].copy()
+        muff_loop = mastered_muff_tiled[n_samples : 2 * n_samples].copy()
+
+        # 6. Микро-кроссфейд шва (4 миллисекунды) для 100% бесшумного цикла
+        xf_len = int(sr * 0.005)
+        t_xf = np.linspace(0.0, 1.0, xf_len)
+        for loop in (dry_loop, muff_loop):
+            loop[:xf_len] = loop[:xf_len] * t_xf + loop[-xf_len:] * (1.0 - t_xf)
+            loop[-xf_len:] = loop[:xf_len]
+
+        return self._make_sound(dry_loop), self._make_sound(muff_loop)
+
+    def start_disco_track(self):
+        if not self.enabled:
+            return
+        if not hasattr(self, "disco_sound_dry") or self.disco_sound_dry is None:
+            self.disco_sound_dry, self.disco_sound_muff = self._generate_disco_loop()
+        if not hasattr(self, "disco_ch_dry") or self.disco_ch_dry is None:
+            self.disco_ch_dry = pygame.mixer.Channel(14)
+            self.disco_ch_muff = pygame.mixer.Channel(15)
+
+        if not self.disco_ch_dry.get_busy():
+            self.disco_ch_dry.set_volume(0.0, 0.0)
+            self.disco_ch_muff.set_volume(0.0, 0.0)
+            self.disco_ch_dry.play(self.disco_sound_dry, loops=-1)
+            self.disco_ch_muff.play(self.disco_sound_muff, loops=-1)
+
+    def stop_disco_track(self):
+        if hasattr(self, "disco_ch_dry") and self.disco_ch_dry is not None:
+            self.disco_ch_dry.stop()
+        if hasattr(self, "disco_ch_muff") and self.disco_ch_muff is not None:
+            self.disco_ch_muff.stop()
+
+    def update_disco_spatial(self, px, py, disco_x, disco_y, dungeon=None, max_dist=32.0, dt=0.016):
+        """Пространственный кроссфейд с плавным сглаживанием громкости без щелчков и хрипа."""
+        if not self.enabled or not hasattr(self, "disco_ch_dry") or self.disco_ch_dry is None:
+            return
+        dist = math.hypot(disco_x - px, disco_y - py)
+
+        if dist >= max_dist:
+            target_vl_dry = target_vr_dry = 0.0
+            target_vl_muff = target_vr_muff = 0.0
+        else:
+            # 1. Затухание по воздуху
+            atten = ((max_dist - dist) / max_dist) ** 1.15
+
+            # 2. Физический акустический луч: слои стен (переходы пол -> стена -> пол)
+            wall_layers = 0
+            if dungeon is not None:
+                steps = int(dist * 3.5) + 1
+                in_wall = False
+                for step_i in range(1, steps):
+                    t_step = step_i / float(steps)
+                    cx_t = int(px + (disco_x - px) * t_step)
+                    cy_t = int(py + (disco_y - py) * t_step)
+                    is_w = dungeon.is_blocking_sight(cx_t, cy_t)
+                    if is_w and not in_wall:
+                        wall_layers += 1
+                        in_wall = True
+                    elif not is_w:
+                        in_wall = False
+
+            # 3. Баланс частот в зависимости от препятствий
+            if wall_layers == 0:
+                dry_factor = 1.0
+                muff_factor = 0.0
+            elif wall_layers == 1:
+                dry_factor = 0.05
+                muff_factor = 0.88
+            elif wall_layers == 2:
+                dry_factor = 0.0
+                muff_factor = 0.58
+            else:
+                dry_factor = 0.0
+                muff_factor = max(0.06, 0.32 * (0.70 ** (wall_layers - 3)))
+
+            # 4. Стерео-панорама по X
+            pan = max(-1.0, min(1.0, (disco_x - px) / 8.0))
+            left_pan = 1.0 - max(0.0, pan * 0.75)
+            right_pan = 1.0 - max(0.0, -pan * 0.75)
+
+            base_master = self.volume * 0.75
+            target_vl_dry = max(0.0, min(1.0, atten * dry_factor * left_pan * base_master))
+            target_vr_dry = max(0.0, min(1.0, atten * dry_factor * right_pan * base_master))
+            target_vl_muff = max(0.0, min(1.0, atten * muff_factor * left_pan * base_master))
+            target_vr_muff = max(0.0, min(1.0, atten * muff_factor * right_pan * base_master))
+
+        # 5. Мягкое аналоговое сглаживание громкости (Slew Limiter): убирает щелчки и треск
+        lerp_speed = 7.5  # Время адаптации ~130 мс
+        alpha = min(1.0, max(0.01, lerp_speed * max(0.001, dt)))
+
+        self.disco_cur_dry[0] += (target_vl_dry - self.disco_cur_dry[0]) * alpha
+        self.disco_cur_dry[1] += (target_vr_dry - self.disco_cur_dry[1]) * alpha
+        self.disco_cur_muff[0] += (target_vl_muff - self.disco_cur_muff[0]) * alpha
+        self.disco_cur_muff[1] += (target_vr_muff - self.disco_cur_muff[1]) * alpha
+
+        # Отсекаем микро-шумы около нуля
+        for arr in (self.disco_cur_dry, self.disco_cur_muff):
+            if arr[0] < 0.0005: arr[0] = 0.0
+            if arr[1] < 0.0005: arr[1] = 0.0
+
+        self.disco_ch_dry.set_volume(self.disco_cur_dry[0], self.disco_cur_dry[1])
+        self.disco_ch_muff.set_volume(self.disco_cur_muff[0], self.disco_cur_muff[1])
