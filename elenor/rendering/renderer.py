@@ -529,33 +529,70 @@ class Renderer(UIRendererMixin):
         r1 = min(MAP_ROWS, (int(cam_y) + VIEW_H) // TILE_H + 2)
 
         tall_trees_to_draw = []
+        TILE_ROLE_MAP = {
+            1: "wall",
+            6: "wall_wood",
+            7: "wall_cave",
+            8: "floor_5",
+            9: "floor_6",
+            10: "floor_jungle_grass",
+            11: "floor_jungle_mud",
+            12: "floor_jungle_soil",
+            13: "floor_tribal_wood",
+            14: "floor_marble_white",
+            15: "floor_marble_dark",
+            16: "floor_marble_mosaic",
+            17: "wall_mud_rock",
+            18: "wall_tribal_wood",
+            19: "wall_marble_temple",
+            20: "wall_marble_ruined",
+            23: "floor_jungle_swamp",
+            24: "floor_jungle_cobble",
+            25: "floor_river_sand",
+            26: "floor_cave_basalt",
+            27: "floor_tribal_mat",
+            28: "floor_marble_checker",
+            29: "floor_marble_rose",
+            30: "floor_marble_jade",
+            31: "floor_temple_gold",
+            32: "floor_temple_water",
+            33: "wall_bamboo_weave",
+            34: "wall_cave_crystal",
+            35: "wall_marble_obsidian",
+            36: "wall_temple_relief",
+        }
+        TALL_TREE_MAP = {
+            5: ("floor_3", "tall_tree"),
+            21: ("floor_jungle_grass", "tall_jungle_tree"),
+            22: ("floor_jungle_grass", "tall_palm_tree"),
+        }
+
+        tall_trees_to_draw = []
         for r in range(r0, r1):
             for c in range(c0, c1):
                 sx = int(c * TILE_W - cam_x)
                 sy = int(r * TILE_H - cam_y)
                 t_val = dungeon.grid[r][c]
-                if t_val == 1:
-                    key = "wall"
-                elif t_val == 6:
-                    key = "wall_wood"
-                elif t_val == 7:
-                    key = "wall_cave"
-                elif t_val == 8:
-                    key = "floor_5"
-                elif t_val == 9:
-                    key = "floor_6"
-                elif t_val == 5:
-                    # Draw seamless forest grass underneath tall pine trees!
-                    key = "floor_3"
+                if t_val in TALL_TREE_MAP:
+                    key, tree_asset_key = TALL_TREE_MAP[t_val]
                     if (c, r) in visible_tiles:
-                        tall_trees_to_draw.append((c, r))
+                        tall_trees_to_draw.append((c, r, tree_asset_key))
                 else:
-                    key = f"floor_{t_val}"
+                    key = TILE_ROLE_MAP.get(t_val, f"floor_{t_val}")
                 d_surf, n_surf = self.get_tile_pair(key, c, r)
                 self.diff_canvas.blit(d_surf, (sx, sy))
                 self.norm_canvas.blit(n_surf, (sx, sy))
 
-                # Накладываем полупрозрачный оверлей (камушки, мох, трещины, потёртости) со случайным поворотом!
+                # Автотайлинг мха (13 базовых форм + 3 узкие полосы) поверх любого пола!
+                if hasattr(dungeon, "moss_tiles") and (c, r) in dungeon.moss_tiles:
+                    from elenor.rendering.jungle import get_moss_autotile_key
+                    m_key = get_moss_autotile_key(dungeon.moss_tiles, c, r)
+                    if m_key in self.assets:
+                        m_diff, m_norm = self.assets[m_key]
+                        self.diff_canvas.blit(m_diff, (sx, sy))
+                        self.norm_canvas.blit(m_norm, (sx, sy))
+
+                # Накладываем полупрозрачный оверлей (камушки, мох, папоротники, цветы, трещины) со случайным поворотом!
                 ov_key = getattr(dungeon, "overlays", {}).get((c, r))
                 if ov_key and ov_key in self.assets:
                     ov_d, ov_n = self.get_tile_pair(ov_key, c, r, salt=77)
@@ -605,13 +642,13 @@ class Renderer(UIRendererMixin):
             "alpha": 255
         }]
 
-        for (tc, tr) in tall_trees_to_draw:
+        for (tc, tr, tree_asset_key) in tall_trees_to_draw:
             behind_canopy = (tr - 1.8 <= player.y <= tr + 0.35) and (abs(player.x - (tc + 0.5)) <= 1.05)
             t_alpha = 105 if behind_canopy else 255
             render_list.append({
                 "wx": float(tc), "wy": float(tr),
                 "is_tree": True,
-                "pair": self.assets["tall_tree"],
+                "pair": self.assets.get(tree_asset_key, self.assets["tall_tree"]),
                 "alpha": t_alpha
             })
 

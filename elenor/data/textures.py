@@ -15,10 +15,37 @@ ASSET_CATALOG = {
             "floor_4": ("Дощатый настил таверны", (16, 16)),
             "floor_5": ("Пещерный грунт", (16, 16)),
             "floor_6": ("Лесная дорога", (16, 16)),
+            "floor_jungle_grass": ("Джунгли: Густая трава", (16, 16)),
+            "floor_jungle_mud": ("Джунгли: Влажная грязь", (16, 16)),
+            "floor_jungle_soil": ("Джунгли: Подстилка и корни", (16, 16)),
+            "floor_jungle_swamp": ("Джунгли: Болото с ряской", (16, 16)),
+            "floor_jungle_cobble": ("Джунгли: Древняя брусчатка", (16, 16)),
+            "floor_river_sand": ("Джунгли: Речной песок", (16, 16)),
+            "floor_cave_basalt": ("Пещера: Тёмный базальт", (16, 16)),
+            "floor_tribal_wood": ("Хижина: Бамбуковый пол", (16, 16)),
+            "floor_tribal_mat": ("Хижина: Тростниковая циновка", (16, 16)),
+            "floor_marble_white": ("Храм: Белый мрамор", (16, 16)),
+            "floor_marble_dark": ("Храм: Тёмный мрамор", (16, 16)),
+            "floor_marble_mosaic": ("Храм: Солнечная мозаика", (16, 16)),
+            "floor_marble_checker": ("Храм: Шахматный мрамор", (16, 16)),
+            "floor_marble_rose": ("Храм: Розовый кварц", (16, 16)),
+            "floor_marble_jade": ("Храм: Полированный нефрит", (16, 16)),
+            "floor_temple_gold": ("Храм: Золотая дорожка", (16, 16)),
+            "floor_temple_water": ("Храм: Вода сенота (3 кадра)", (16, 16)),
             "wall": ("Каменная стена подвала", (16, 16)),
             "wall_wood": ("Бревенчатая стена", (16, 16)),
             "wall_cave": ("Скальный свод пещеры", (16, 16)),
+            "wall_cave_crystal": ("Пещера: Стена с кристаллами", (16, 16)),
+            "wall_mud_rock": ("Джунгли: Грязь и валуны", (16, 16)),
+            "wall_tribal_wood": ("Хижина: Стена аборигенов", (16, 16)),
+            "wall_bamboo_weave": ("Хижина: Плетёный тростник", (16, 16)),
+            "wall_marble_temple": ("Храм: Мраморная стена", (16, 16)),
+            "wall_marble_ruined": ("Храм: Мрамор в лианах", (16, 16)),
+            "wall_marble_obsidian": ("Храм: Обсидиан и золото", (16, 16)),
+            "wall_temple_relief": ("Храм: Барельеф Змея", (16, 16)),
             "tree": ("Вековая ель", (16, 16)),
+            "tree_jungle": ("Дерево джунглей (иконка)", (16, 16)),
+            "tree_palm": ("Кокосовая пальма (иконка)", (16, 16)),
             "door_closed": ("Дверь (Закрыта)", (16, 16)),
             "door_open": ("Дверь (Открыта)", (16, 16)),
             "door_locked": ("Кованая решётка", (16, 16)),
@@ -34,6 +61,28 @@ ASSET_CATALOG = {
             "carpet_h": ("Ковёр: Полоса гор.", (16, 16)),
             "carpet_v": ("Ковёр: Полоса верт.", (16, 16)),
             "carpet_single": ("Ковёр: Одиночный", (16, 16)),
+            "moss_c": ("Мох-автотайл: Центр", (16, 16)),
+            "moss_n": ("Мох-автотайл: Верх", (16, 16)),
+            "moss_s": ("Мох-автотайл: Низ", (16, 16)),
+            "moss_w": ("Мох-автотайл: Лево", (16, 16)),
+            "moss_e": ("Мох-автотайл: Право", (16, 16)),
+            "moss_nw": ("Мох-автотайл: Внеш. С-З", (16, 16)),
+            "moss_ne": ("Мох-автотайл: Внеш. С-В", (16, 16)),
+            "moss_sw": ("Мох-автотайл: Внеш. Ю-З", (16, 16)),
+            "moss_se": ("Мох-автотайл: Внеш. Ю-В", (16, 16)),
+            "moss_in_nw": ("Мох-автотайл: Внутр. С-З", (16, 16)),
+            "moss_in_ne": ("Мох-автотайл: Внутр. С-В", (16, 16)),
+            "moss_in_sw": ("Мох-автотайл: Внутр. Ю-З", (16, 16)),
+            "moss_in_se": ("Мох-автотайл: Внутр. Ю-В", (16, 16)),
+            "moss_h": ("Мох-автотайл: Полоса гор.", (16, 16)),
+            "moss_v": ("Мох-автотайл: Полоса верт.", (16, 16)),
+            "moss_single": ("Мох-автотайл: Островок", (16, 16)),
+            "floor_lake_shallow": ("Озеро: Мелководье (3 кадра)", (16, 16)),
+            "floor_lake_deep": ("Озеро: Глубокая вода (3 кадра)", (16, 16)),
+            "floor_wet_sand": ("Берег: Мокрый песок", (16, 16)),
+            "floor_pebble_shore": ("Берег: Речная галька", (16, 16)),
+            "floor_reed_mud": ("Берег: Ил и корни камыша", (16, 16)),
+            "floor_wooden_pier": ("Берег: Доски рыбацкого пирса", (16, 16)),
         }
     },
     "overlays": {
@@ -43,6 +92,25 @@ ASSET_CATALOG = {
             "ov_moss": ("Пятна мха", (16, 16)),
             "ov_cracks": ("Трещины и сколы", (16, 16)),
             "ov_planks_wear": ("Щепки и потёртости", (16, 16)),
+            "ov_fern": ("Джунгли: Розетка папоротника", (16, 16)),
+            "ov_flowers_red": ("Джунгли: Алые гибискусы", (16, 16)),
+            "ov_flowers_blue": ("Джунгли: Лазурные орхидеи", (16, 16)),
+            "ov_jungle_vines": ("Джунгли: Ползучие лианы", (16, 16)),
+            "ov_fallen_leaves": ("Джунгли: Опавшие листья", (16, 16)),
+            "ov_marble_cracks": ("Храм: Трещины в мраморе", (16, 16)),
+            "ov_water_lily": ("Вода: Кувшинки и лотос", (16, 16)),
+            "ov_glow_shrooms": ("Пещера: Неоновые грибы", (16, 16)),
+            "ov_petals_gold": ("Храм: Золотые лепестки", (16, 16)),
+            "ov_bamboo_leaves": ("Джунгли: Листья бамбука", (16, 16)),
+            "ov_mangrove_roots": ("Джунгли: Корни мангров", (16, 16)),
+            "ov_bones": ("Джунгли: Череп и кости", (16, 16)),
+            "ov_mud_puddle": ("Джунгли: Дождевая лужа", (16, 16)),
+            "ov_gold_filigree": ("Храм: Золотая филигрань", (16, 16)),
+            "ov_shore_foam": ("Озеро: Пена прибоя", (16, 16)),
+            "ov_shells_starfish": ("Берег: Ракушки на песке", (16, 16)),
+            "ov_duckweed": ("Озеро: Пятна ряски", (16, 16)),
+            "ov_fish_shadows": ("Озеро: Тени косяка рыб", (16, 16)),
+            "ov_bobber_ripples": ("Озеро: Поплавок на воде", (16, 16)),
         }
     },
     "mobs": {
@@ -60,8 +128,63 @@ ASSET_CATALOG = {
         }
     },
     "props": {
-        "title": "Объекты данжа и Таверны (16x20)",
+        "title": "Объекты данжа, Джунглей и Храмов",
         "items": {
+            "jungle_bush": ("Джунгли: Густой куст", (16, 20)),
+            "jungle_bush_flowers": ("Джунгли: Цветущий куст", (16, 20)),
+            "giant_fern": ("Джунгли: Высокий папоротник", (16, 20)),
+            "venus_flytrap": ("Джунгли: Венерина мухоловка", (16, 20)),
+            "bamboo_clump": ("Джунгли: Побеги бамбука", (16, 20)),
+            "rafflesia_flower": ("Джунгли: Цветок раффлезии", (16, 20)),
+            "banana_plant": ("Джунгли: Банановая пальма", (16, 20)),
+            "termite_mound": ("Джунгли: Высокий термитник", (16, 20)),
+            "tree_stump": ("Джунгли: Пень с грибами", (16, 20)),
+            "hollow_log": ("Джунгли: Бревно во мху", (16, 20)),
+            "jungle_boulder": ("Джунгли: Замшелый валун", (16, 20)),
+            "crystal_cluster": ("Пещера: Светящиеся кристаллы", (16, 20)),
+            "cave_stalagmite": ("Пещера: Каменный сталагмит", (16, 20)),
+            "ancient_waystone": ("Джунгли: Рунный камень", (16, 20)),
+            "giant_stone_head": ("Джунгли: Голова колосса", (16, 20)),
+            "snake_shed_skin": ("Джунгли: Змеиная выползка", (16, 20)),
+            "tall_jungle_tree": ("Джунгли: Высокое дерево (24x38)", (24, 38)),
+            "tall_palm_tree": ("Джунгли: Высокая пальма (24x38)", (24, 38)),
+            "tribal_totem": ("Аборигены: Тотем духов", (16, 20)),
+            "tribal_table": ("Аборигены: Плетёный стол", (16, 20)),
+            "tribal_stool": ("Аборигены: Табурет со шкурой", (16, 20)),
+            "tribal_bed": ("Аборигены: Циновка для сна", (16, 20)),
+            "tribal_hammock": ("Аборигены: Подвесной гамак", (16, 20)),
+            "tribal_rack": ("Аборигены: Стойка копий", (16, 20)),
+            "tribal_bow_stand": ("Аборигены: Стойка луков", (16, 20)),
+            "tribal_drum": ("Аборигены: Боевой барабан", (16, 20)),
+            "tribal_pot": ("Аборигены: Глиняная амфора", (16, 20)),
+            "tribal_skull_pole": ("Аборигены: Шест с черепом", (16, 20)),
+            "tribal_chest": ("Аборигены: Плетёный ларь", (16, 20)),
+            "shaman_cauldron": ("Аборигены: Котёл шамана", (16, 20)),
+            "fish_drying_rack": ("Аборигены: Сушилка рыбы", (16, 20)),
+            "skull_brazier": ("Аборигены: Череп-жаровня", (16, 20)),
+            "blowgun_trap": ("Аборигены: Духовая ловушка", (16, 20)),
+            "bamboo_cage": ("Аборигены: Бамбуковая клетка", (16, 20)),
+            "fruit_basket": ("Аборигены: Корзина фруктов", (16, 20)),
+            "tribal_mask_shield": ("Аборигены: Маска вождя", (16, 20)),
+            "shaman_gong": ("Аборигены: Бубен духов", (16, 20)),
+            "marble_pillar": ("Храм: Мраморная колонна", (16, 20)),
+            "marble_pillar_broken": ("Храм: Разбитая колонна", (16, 20)),
+            "marble_altar": ("Храм: Солнечный алтарь", (16, 20)),
+            "marble_brazier": ("Храм: Золотая жаровня", (16, 20)),
+            "marble_statue": ("Храм: Статуя стража", (16, 20)),
+            "serpent_statue": ("Храм: Пернатый Змей", (16, 20)),
+            "sun_gong": ("Храм: Солнечный гонг", (16, 20)),
+            "marble_bench": ("Храм: Мраморная скамья", (16, 20)),
+            "marble_lectern": ("Храм: Пюпитр со скрижалью", (16, 20)),
+            "incense_burner": ("Храм: Золотая курильница", (16, 20)),
+            "marble_obelisk": ("Храм: Рунный обелиск", (16, 20)),
+            "marble_chest": ("Храм: Мраморный ковчег", (16, 20)),
+            "temple_sundial": ("Храм: Солнечные часы", (16, 20)),
+            "holy_fire_bowl": ("Храм: Чаша святого огня", (16, 20)),
+            "fallen_colossus": ("Храм: Обломки колосса", (16, 20)),
+            "marble_fountain": ("Храм: Купель с лотосом", (16, 20)),
+            "marble_sarcophagus": ("Храм: Мраморный саркофаг", (16, 20)),
+            "marble_urn": ("Храм: Золочёная ваза", (16, 20)),
             "tavern_table": ("Трактирный стол", (16, 20)),
             "bar_counter": ("Барная стойка", (16, 20)),
             "wine_cask": ("Большая винная бочка", (16, 20)),
@@ -109,8 +232,33 @@ ASSET_CATALOG = {
     }
 }
 
+from elenor.rendering.fishing import FISH_CATALOG_SPECS
+
+ASSET_CATALOG["fishing"] = {
+    "title": "Рыбалка, Снасти и Улов (47 видов)",
+    "items": {
+        "prop_reeds_tall": ("Берег: Высокий камыш с рогозом", (16, 20)),
+        "prop_fishing_rod_stand": ("Берег: Удочка на рогатине", (16, 20)),
+        "prop_tackle_box": ("Берег: Ящик со снастями", (16, 20)),
+        "prop_fish_trap_net": ("Берег: Плетёная верша", (16, 20)),
+        "prop_bait_bucket": ("Берег: Ведро с уловом", (16, 20)),
+        "prop_fish_drying_line": ("Берег: Вяленая рыба на вешалах", (16, 20)),
+        "prop_fisherman_stool": ("Берег: Складной стульчик", (16, 20)),
+        "prop_wooden_rowboat": ("Берег: Рыбацкая лодка (2x1)", (32, 20)),
+        **{k: (ru_title, sz) for k, (ru_title, sz, _) in FISH_CATALOG_SPECS.items()},
+    },
+}
+
 DEFAULT_RANDOM_ROT_ROLES = {
-    "floor_3", "floor_5", "ov_pebbles", "ov_moss", "ov_cracks", "ov_planks_wear"
+    "floor_3", "floor_5",
+    "floor_jungle_grass", "floor_jungle_mud", "floor_jungle_soil",
+    "floor_jungle_swamp", "floor_river_sand", "floor_cave_basalt",
+    "ov_pebbles", "ov_moss", "ov_cracks", "ov_planks_wear",
+    "ov_fern", "ov_flowers_red", "ov_flowers_blue", "ov_jungle_vines",
+    "ov_fallen_leaves", "ov_marble_cracks", "ov_water_lily", "ov_glow_shrooms",
+    "ov_petals_gold", "ov_bamboo_leaves", "ov_mangrove_roots", "ov_bones",
+    "ov_mud_puddle", "ov_gold_filigree", "floor_wet_sand", "floor_pebble_shore", "floor_reed_mud",
+    "ov_shells_starfish", "ov_duckweed",
 }
 
 
@@ -272,6 +420,17 @@ def load_dtex_frames(filepath):
     return data, masked_frames, fps
 
 
+def _is_dtex_empty_blank(filepath):
+    """Проверяет, не является ли .dtex файл пустой прозрачной заглушкой из одних точек '.'."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        pal = data.get("diffuse_palette", {})
+        return len(pal) <= 1 and "." in pal
+    except Exception:
+        return True
+
+
 def bootstrap_assets_if_needed(procedural_assets, hero_builder_fn=None):
     root = get_assets_root()
     os.makedirs(root, exist_ok=True)
@@ -316,12 +475,30 @@ def bootstrap_assets_if_needed(procedural_assets, hero_builder_fn=None):
                 changed = True
                 continue
 
-            if not os.path.isfile(dtex_path):
+            # Если файла нет ИЛИ он оказался пустой заглушкой из точек "." — запекаем реальную процедурную текстуру!
+            need_bake = (not os.path.isfile(dtex_path)) or (
+                role_id in procedural_assets and _is_dtex_empty_blank(dtex_path)
+            )
+            if need_bake:
                 if role_id == "floor_2" and "_water_frames" in procedural_assets:
                     save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_water_frames"], fps=4, random_rot=rrot_flag)
+                    changed = True
+                    continue
+                elif role_id == "floor_lake_shallow" and "_lake_shallow_frames" in procedural_assets:
+                    save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_lake_shallow_frames"], fps=4, random_rot=rrot_flag)
+                    changed = True
+                    continue
+                elif role_id == "floor_lake_deep" and "_lake_deep_frames" in procedural_assets:
+                    save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_lake_deep_frames"], fps=4, random_rot=rrot_flag)
+                    changed = True
+                    continue
+                elif role_id == "floor_temple_water" and "_temple_water_frames" in procedural_assets:
+                    save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_temple_water_frames"], fps=4, random_rot=rrot_flag)
+                    changed = True
                     continue
                 elif role_id == "campfire" and "_campfire_frames" in procedural_assets:
                     save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_campfire_frames"], fps=6, random_rot=rrot_flag)
+                    changed = True
                     continue
                 elif role_id in procedural_assets:
                     d_s, n_s = procedural_assets[role_id]
@@ -332,6 +509,7 @@ def bootstrap_assets_if_needed(procedural_assets, hero_builder_fn=None):
                     n_s = pygame.Surface(sz, pygame.SRCALPHA)
                     n_s.fill((128, 128, 255, 0))
                 save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, [(d_s, n_s)], fps=4, random_rot=rrot_flag)
+                changed = True
 
     if not manifest.get("_normals_10_strict", False):
         for cat_key, cat_data in ASSET_CATALOG.items():

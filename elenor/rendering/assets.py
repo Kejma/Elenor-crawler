@@ -1242,7 +1242,14 @@ def create_placeholder_assets():
     from elenor.rendering.mirrors import register_mirror_puzzle_assets
     register_mirror_puzzle_assets(assets)
 
+    from elenor.rendering.jungle import register_jungle_assets
+    register_jungle_assets(assets)
+
+    from elenor.rendering.fishing import register_fishing_assets
+    register_fishing_assets(assets)
+
     from elenor.data.textures import bootstrap_assets_if_needed, load_custom_dtex_animations
+
     bootstrap_assets_if_needed(assets, build_hero_sprite)
     anim_bank = load_custom_dtex_animations(assets)
 

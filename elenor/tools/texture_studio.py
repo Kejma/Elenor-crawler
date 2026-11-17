@@ -320,7 +320,8 @@ class TextureStudio:
 
                 elif event.type == pygame.MOUSEWHEEL:
                     if mx < 290:
-                        self.scroll_y = max(-520, min(0, self.scroll_y + event.y * 28))
+                        max_scroll = max(520, len(self.tree_items) * 32 - (WIN_H - 140))
+                        self.scroll_y = max(-max_scroll, min(0, self.scroll_y + event.y * 28))
 
                 elif event.type == pygame.KEYDOWN:
                     mods = pygame.key.get_mods()
