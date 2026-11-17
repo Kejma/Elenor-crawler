@@ -581,10 +581,17 @@ class CombatMixin:
         # 1. БОГ ПИРО: Воспламенение (бафф на себя + огненный след + поджог атакующих)
         if c_type == "self_ignite":
             self.sfx.play("torch")
+            if hasattr(self, "fx") and self.fx:
+                self.fx.trigger_shake(1.5, 0.14)
             dur = max(1.5, float(getattr(item, "duration", 5.0)))
             self.player.ignite_timer = dur
             self.player.ignite_growth_credit = growth_credit
             self.player.ignite_burn_dmg = max(1, int(math.floor(item.power + self.player.mag_attack * 0.45)))
+            self.visual_fx.append({
+                "kind": "aoe_ring",
+                "x": px, "y": py, "radius": 1.65,
+                "color": (255, 135, 40), "timer": 0.28, "max_timer": 0.28
+            })
             self.visual_fx.append({
                 "kind": "fire_trail",
                 "growth_credit": growth_credit,
@@ -592,18 +599,35 @@ class CombatMixin:
                 "dmg": self.player.ignite_burn_dmg,
                 "color": (255, 110, 35), "timer": 2.6, "max_timer": 2.6
             })
+            for _ in range(18):
+                ang = random.uniform(0.0, 6.28)
+                spd = random.uniform(1.2, 3.4)
+                self.particles.append(Particle(
+                    px, py - 0.2, math.cos(ang) * spd, math.sin(ang) * spd - 1.2,
+                    random.choice([(255, 110, 30), (255, 220, 90), (235, 60, 25)]), 2.9, 0.34
+                ))
             return
 
         # 2. БОГ СТРАТОС: Кольцо холода (мгновенная ледяная волна вокруг героя, игнорирует мебель, но не стены; root -> slow)
         if c_type == "frost_nova":
             self.sfx.play("magic")
+            if hasattr(self, "fx") and self.fx:
+                self.fx.trigger_shake(1.6, 0.14)
             rad = float(getattr(item, "aoe_radius", 2.4))
             root_d = float(getattr(item, "status_dur", 1.2))
             self.visual_fx.append({
                 "kind": "frost_nova",
                 "x": px, "y": py, "radius": rad,
-                "color": item.color, "timer": 0.40, "max_timer": 0.40
+                "color": item.color, "timer": 0.42, "max_timer": 0.42
             })
+            for _ in range(20):
+                ang = random.uniform(0.0, 6.28)
+                spd = random.uniform(1.8, 4.2)
+                self.particles.append(Particle(
+                    px + math.cos(ang) * 0.25, py + math.sin(ang) * 0.25,
+                    math.cos(ang) * spd, math.sin(ang) * spd,
+                    random.choice([(95, 215, 255), (215, 250, 255), (65, 165, 235)]), 2.8, 0.32
+                ))
             for m in list(self.mobs):
                 if math.hypot(m.x - px, m.y - py) <= rad and self.dungeon.has_line_of_sight(px, py, m.x, m.y, rad + 0.5):
                     m.alert_to_combat(self.sfx, self.add_popup)
@@ -637,6 +661,8 @@ class CombatMixin:
                 return
 
             self.sfx.play("crit")
+            if hasattr(self, "fx") and self.fx:
+                self.fx.trigger_shake(1.7, 0.14)
             max_bounces = int(getattr(item, "bounces", 1))
             jump_range = float(getattr(item, "aoe_radius", 4.5))
             hit_sequence = [target_mob]
@@ -644,7 +670,6 @@ class CombatMixin:
             curr_m = target_mob
 
             for _ in range(max_bounces):
-                # Ищем ближайшего ещё не поражённого в этом круге врага в прямой видимости без препятствий
                 unvisited = [
                     m for m in self.mobs
                     if m is not curr_m and m not in visited_in_round and m.hp > 0
@@ -652,7 +677,6 @@ class CombatMixin:
                     and self._has_clear_shot(curr_m.x, curr_m.y, m.x, m.y)
                 ]
                 if not unvisited:
-                    # Все доступные цели поражены по разу — начинаем новый круг по живым соседям (если цель не одна!)
                     visited_in_round = {curr_m}
                     unvisited = [
                         m for m in self.mobs
@@ -672,7 +696,7 @@ class CombatMixin:
                 "kind": "chain_lightning",
                 "points": chain_pts,
                 "color": item.color,
-                "timer": 0.36, "max_timer": 0.36
+                "timer": 0.38, "max_timer": 0.38
             })
             for m in hit_sequence:
                 if m in self.mobs:
@@ -681,6 +705,13 @@ class CombatMixin:
                     m.hp -= dmg
                     m.glow_timer = 0.85
                     m.glow_color = (150, 240, 255)
+                    for _ in range(9):
+                        ang = random.uniform(0.0, 6.28)
+                        spd = random.uniform(1.4, 3.8)
+                        self.particles.append(Particle(
+                            m.x, m.y - 0.3, math.cos(ang) * spd, math.sin(ang) * spd,
+                            random.choice([(115, 225, 255), (235, 255, 255)]), 2.6, 0.24
+                        ))
                     self.add_popup(m.x, m.y, f"-{dmg}", item.color)
                     self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
@@ -697,6 +728,13 @@ class CombatMixin:
             self.player.hp = min(float(self.player.max_hp), self.player.hp + instant_heal)
             self.player.rejuv_timer = dur
             self.player.rejuv_rate = rem_heal / dur
+            for _ in range(14):
+                ang = random.uniform(0.0, 6.28)
+                self.particles.append(Particle(
+                    px + math.cos(ang) * 0.45, py + math.sin(ang) * 0.35,
+                    math.cos(ang) * 0.6, -random.uniform(1.2, 2.6),
+                    random.choice([(95, 245, 140), (215, 255, 195), (245, 225, 110)]), 2.7, 0.42
+                ))
             self.add_popup(px, py, f"+{instant_heal}", (115, 245, 145), "heart")
             return
 
@@ -708,8 +746,16 @@ class CombatMixin:
             self.visual_fx.append({
                 "kind": "entangle_zone",
                 "x": target_wx, "y": target_wy, "radius": rad,
-                "color": item.color, "timer": 0.45, "max_timer": 0.45
+                "color": item.color, "timer": 0.50, "max_timer": 0.50
             })
+            for _ in range(14):
+                ang = random.uniform(0.0, 6.28)
+                dist_p = random.uniform(0.1, rad * 0.85)
+                self.particles.append(Particle(
+                    target_wx + math.cos(ang) * dist_p, target_wy + math.sin(ang) * dist_p,
+                    math.cos(ang) * 0.8, -random.uniform(1.0, 2.4),
+                    random.choice([(95, 225, 115), (145, 95, 50), (185, 255, 175)]), 2.6, 0.35
+                ))
             for m in list(self.mobs):
                 if math.hypot(m.x - target_wx, (m.y - 0.2) - target_wy) <= rad:
                     m.alert_to_combat(self.sfx, self.add_popup)

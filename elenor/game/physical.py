@@ -1,12 +1,34 @@
 """Physical actions, finite-speed throws and persistent single-use traps."""
 
 import math
+import random
+from elenor.entities import Particle
 
 
 def effects(game):
     if not hasattr(game, "physical_effects"):
         game.physical_effects = []
     return game.physical_effects
+
+
+def _spawn_particles(game, wx, wy, count, colors, spd_range=(1.0, 3.0), size=2.6, life=0.28, base_vx=0.0, base_vy=0.0):
+    plist = getattr(game, "particles", None)
+    if not isinstance(plist, list):
+        return
+    for _ in range(count):
+        ang = random.uniform(0.0, math.tau)
+        spd = random.uniform(*spd_range)
+        plist.append(
+            Particle(
+                wx + random.uniform(-0.12, 0.12),
+                wy + random.uniform(-0.12, 0.12),
+                base_vx + math.cos(ang) * spd,
+                base_vy + math.sin(ang) * spd,
+                random.choice(colors),
+                size=size,
+                life=life,
+            )
+        )
 
 
 def hit(game, mob, item, power, credit, nx, ny):
@@ -18,6 +40,21 @@ def hit(game, mob, item, power, credit, nx, ny):
         item.status, item.status_dur, game.add_popup, dmg_val=max(1, int(power) // 4)
     )
     mob.hit_flash_timer = 0.12
+    fx = getattr(game, "fx", None)
+    if fx is not None:
+        fx.add_blood_splatter(mob.x, mob.y, count=4, is_kill=False)
+    _spawn_particles(
+        game,
+        mob.x,
+        mob.y - 0.25,
+        7,
+        [tuple(item.color), (255, 240, 190), (225, 70, 70)],
+        spd_range=(1.2, 3.2),
+        size=2.7,
+        life=0.24,
+        base_vx=nx * 1.2,
+        base_vy=ny * 1.2,
+    )
     game.add_popup(mob.x, mob.y, f"-{damage}", item.color)
     game.record_combat_growth(mob, credit)
     game._check_mob_death(mob)
@@ -46,6 +83,7 @@ def execute_physical(game, item, power, tx, ty, credit):
     length = math.hypot(dx, dy)
     nx, ny = (dx / length, dy / length) if length > 0.001 else (p.facing, 0)
     shape = item.shape
+    fx = getattr(game, "fx", None)
     state = dict(
         kind=shape,
         x=p.x,
@@ -61,6 +99,9 @@ def execute_physical(game, item, power, tx, ty, credit):
     if shape == "guard":
         p.guard_timer = item.duration
         state.update(timer=item.duration, max_timer=item.duration)
+        _spawn_particles(
+            game, p.x, p.y - 0.2, 12, [(245, 195, 80), (255, 240, 180), (200, 210, 225)], (0.8, 2.2), 2.6, 0.35, 0.0, -0.8
+        )
     elif shape == "stealth":
         p.stealth_timer = item.duration
         for mob in game.mobs:
@@ -70,6 +111,9 @@ def execute_physical(game, item, power, tx, ty, credit):
             mob.awareness = 0
             mob.path = []
         state.update(timer=item.duration, max_timer=item.duration)
+        _spawn_particles(
+            game, p.x, p.y - 0.2, 14, [(75, 95, 155), (110, 165, 215), (45, 50, 85)], (0.6, 2.0), 2.8, 0.38, 0.0, -0.6
+        )
     elif shape in ("evade", "charge"):
         state.update(
             timer=0.22,
@@ -79,9 +123,19 @@ def execute_physical(game, item, power, tx, ty, credit):
         )
         if shape == "evade":
             p.evade_timer = item.duration
+            _spawn_particles(
+                game, p.x, p.y, 10, [(110, 235, 180), (210, 255, 235)], (1.0, 2.6), 2.4, 0.25, -nx * 1.5, -ny * 1.5
+            )
+        else:
+            if fx is not None:
+                fx.trigger_shake(1.4, 0.14)
+            _spawn_particles(
+                game, p.x, p.y, 12, [(245, 155, 65), (255, 225, 130)], (1.2, 3.0), 2.8, 0.28, -nx * 1.8, -ny * 1.8
+            )
     elif shape == "trap":
         effects(game)[:] = [v for v in effects(game) if v["kind"] != "trap"]
         state.update(timer=item.duration, max_timer=item.duration, armed=0.4)
+        _spawn_particles(game, p.x, p.y, 6, [(190, 200, 215), (110, 225, 165)], (0.5, 1.4), 2.2, 0.22)
     elif shape in ("knife", "flask"):
         state.update(
             timer=2,
@@ -91,6 +145,32 @@ def execute_physical(game, item, power, tx, ty, credit):
             total_distance=min(6, length) if shape == "flask" else 7,
         )
     else:
+        if item.id == "earth_slam":
+            if fx is not None:
+                fx.trigger_shake(2.2, 0.18)
+                fx.add_scorch_mark(p.x + nx * 1.1, p.y + ny * 1.1, 0.65)
+            _spawn_particles(
+                game, p.x + nx * 1.2, p.y + ny * 1.2, 16, [(245, 140, 50), (255, 225, 120), (155, 125, 95)], (1.4, 3.6), 3.0, 0.34, nx * 1.5, ny * 1.5
+            )
+        elif shape == "sweep":
+            if fx is not None:
+                fx.trigger_shake(1.4, 0.12)
+            _spawn_particles(game, p.x, p.y - 0.2, 16, [(245, 160, 70), (255, 235, 175)], (2.0, 4.0), 2.7, 0.24)
+        elif shape == "target":
+            if fx is not None:
+                fx.trigger_shake(1.8, 0.15)
+            _spawn_particles(
+                game, p.x + nx * 1.1, p.y + ny * 1.1 - 0.2, 14, [(255, 180, 75), (255, 245, 195), (235, 85, 55)], (1.5, 3.5), 2.9, 0.26
+            )
+        elif shape == "execute":
+            _spawn_particles(
+                game, p.x + nx * 1.1, p.y + ny * 1.1 - 0.2, 12, [(235, 55, 75), (110, 240, 180), (255, 240, 240)], (1.5, 3.4), 2.6, 0.24
+            )
+        else:
+            _spawn_particles(
+                game, p.x + nx * 1.0, p.y + ny * 1.0 - 0.2, 12, [(245, 155, 65), (255, 235, 175)], (1.4, 3.2), 2.6, 0.22, nx * 1.2, ny * 1.2
+            )
+
         targets = []
         for mob in game.mobs:
             vx, vy = mob.x - p.x, mob.y - p.y
@@ -131,6 +211,16 @@ def burst(game, state):
         and game.fx.active_clouds
     ):
         game.fx.active_clouds[-1]["growth_credit"] = state["credit"]
+    _spawn_particles(
+        game,
+        state["x"],
+        state["y"],
+        16,
+        [(95, 240, 115), (175, 255, 185), (215, 245, 255)],
+        spd_range=(1.0, 3.4),
+        size=2.7,
+        life=0.34,
+    )
     game.sfx.play("hit")
 
 
@@ -149,6 +239,8 @@ def update_physical(game, dt):
                 x, y = state["x"] + state["nx"] * step, state["y"] + state["ny"] * step
                 if game.dungeon.is_blocking_move(int(x), int(y)):
                     state["timer"] = 0
+                    if kind == "knife":
+                        _spawn_particles(game, x, y, 6, [(210, 220, 235), (255, 225, 130)], (1.0, 2.6), 2.2, 0.2)
                     break
                 state["x"], state["y"] = x, y
                 state["remaining"] -= step
@@ -216,6 +308,9 @@ def update_physical(game, dt):
                     None,
                 )
                 if target:
+                    _spawn_particles(
+                        game, state["x"], state["y"], 12, [(220, 230, 245), (95, 240, 135), (235, 70, 70)], (1.2, 3.0), 2.6, 0.28
+                    )
                     hit(game, target, item, state["power"], state["credit"], 0, 0)
                     state["timer"] = 0
         if state["timer"] <= 0:

@@ -969,8 +969,19 @@ class Renderer(UIRendererMixin):
                     pygame.draw.circle(screen, (30, 28, 36), (sx, sy), 6)
                     pygame.draw.circle(screen, (190, 198, 210), (sx, sy), 4)
                 else:
-                    pygame.draw.circle(screen, (255, 255, 255), (sx, sy), 7)
-                    pygame.draw.circle(screen, pr.color, (sx, sy), 11, 3)
+                    # Огненная / магическая комета с пламенным хвостом и пульсирующим ядром
+                    c_r, c_g, c_b = pr.color
+                    dark_tail = (max(0, c_r - 70), max(0, c_g // 2), max(0, c_b // 2))
+                    tail_tip = (int(sx - cos_a * 26), int(sy - sin_a * 26))
+                    tail_mid = (int(sx - cos_a * 16), int(sy - sin_a * 16))
+                    w1 = (int(sx - cos_a * 4 + perp_x * 9), int(sy - sin_a * 4 + perp_y * 9))
+                    w2 = (int(sx - cos_a * 4 - perp_x * 9), int(sy - sin_a * 4 - perp_y * 9))
+                    pygame.draw.polygon(screen, dark_tail, [tail_tip, w1, w2])
+                    pygame.draw.polygon(screen, pr.color, [tail_mid, (int(sx + perp_x * 6), int(sy + perp_y * 6)), (int(sx - perp_x * 6), int(sy - perp_y * 6))])
+                    pygame.draw.circle(screen, dark_tail, (sx, sy), 11)
+                    pygame.draw.circle(screen, pr.color, (sx, sy), 8)
+                    pygame.draw.circle(screen, (255, 240, 155), (sx, sy), 5)
+                    pygame.draw.circle(screen, (255, 255, 245), (int(sx + cos_a * 2), int(sy + sin_a * 2)), 3)
 
         # Enemy Awareness, HP, Ground Roots & Chattering Speech Bubbles (with Darkness Camouflage!)
         for m in mobs:
@@ -1125,20 +1136,33 @@ class Renderer(UIRendererMixin):
         # Active Player Buff Visuals: Persephone Rejuvenation Fireflies & Pyro Ignite Flames!
         p_sx_scr = int((player.x * TILE_W - cam_x) * SCALE)
         p_sy_scr = int(((player.y - 0.35) * TILE_H - cam_y) * SCALE)
+        p_foot_scr = int(((player.y + 0.05) * TILE_H - cam_y) * SCALE)
         if getattr(player, "rejuv_timer", 0.0) > 0.0:
-            for ff_i in range(4):
-                ang = now_sec * 3.6 + ff_i * (math.pi * 0.5)
-                fx_s = p_sx_scr + int(math.cos(ang) * 22)
+            pygame.draw.ellipse(screen, (45, 165, 85), (p_sx_scr - 24, p_foot_scr - 8, 48, 16), 2)
+            for ff_i in range(5):
+                ang = now_sec * 3.4 + ff_i * (math.tau / 5.0)
+                fx_s = p_sx_scr + int(math.cos(ang) * 23)
                 fy_s = p_sy_scr + int(math.sin(ang * 1.5) * 14)
-                pygame.draw.circle(screen, (95, 245, 130), (fx_s, fy_s), 4)
-                pygame.draw.circle(screen, (220, 255, 225), (fx_s, fy_s), 2)
+                pygame.draw.circle(screen, (55, 195, 95), (fx_s, fy_s), 6)
+                pygame.draw.circle(screen, (115, 250, 145), (fx_s, fy_s), 4)
+                pygame.draw.circle(screen, (235, 255, 235), (fx_s, fy_s), 2)
+                # Восходящие изумрудные крестики исцеления
+                rise = (now_sec * 1.8 + ff_i * 0.37) % 1.0
+                cx_h = p_sx_scr + int(math.sin(ff_i * 2.1 + now_sec * 2.0) * 16)
+                cy_h = int(p_foot_scr - 4 - rise * 38)
+                pygame.draw.line(screen, (150, 255, 175), (cx_h - 3, cy_h), (cx_h + 3, cy_h), 2)
+                pygame.draw.line(screen, (150, 255, 175), (cx_h, cy_h - 3), (cx_h, cy_h + 3), 2)
         if getattr(player, "ignite_timer", 0.0) > 0.0:
-            for fl_i in range(5):
-                ang = now_sec * 5.2 + fl_i * (2.0 * math.pi / 5.0)
-                fx_s = p_sx_scr + int(math.cos(ang) * 18)
-                fy_s = p_sy_scr + 6 + int(math.sin(ang) * 10)
-                pygame.draw.circle(screen, (255, 105, 30), (fx_s, fy_s), 5)
-                pygame.draw.circle(screen, (255, 230, 95), (fx_s, fy_s), 2)
+            pygame.draw.ellipse(screen, (215, 65, 20), (p_sx_scr - 24, p_foot_scr - 8, 48, 16), 3)
+            pygame.draw.ellipse(screen, (255, 195, 70), (p_sx_scr - 20, p_foot_scr - 6, 40, 12), 1)
+            for fl_i in range(6):
+                ang = now_sec * 5.0 + fl_i * (math.tau / 6.0)
+                fx_s = p_sx_scr + int(math.cos(ang) * 20)
+                fy_s = p_sy_scr + 8 + int(math.sin(ang) * 10)
+                h_fl = 10 + int(math.sin(now_sec * 14.0 + fl_i * 1.7) * 4)
+                pygame.draw.polygon(screen, (220, 55, 20), [(fx_s - 5, fy_s), (fx_s, fy_s - h_fl - 4), (fx_s + 5, fy_s)])
+                pygame.draw.polygon(screen, (255, 145, 35), [(fx_s - 3, fy_s), (fx_s, fy_s - h_fl), (fx_s + 3, fy_s)])
+                pygame.draw.polygon(screen, (255, 240, 125), [(fx_s - 2, fy_s), (fx_s, fy_s - h_fl // 2), (fx_s + 2, fy_s)])
 
         for p in popups:
             sx = int((p.wx * TILE_W - cam_x) * SCALE)
@@ -1207,31 +1231,38 @@ class Renderer(UIRendererMixin):
                 cy_s = int((vfx["y"] * TILE_H - cam_y) * SCALE)
                 if 0 <= cy_s < VIEW_H * SCALE:
                     fade = max(0.2, 1.0 - prog)
-                    # Небольшие пиксельные язычки пламени и тлеющие угли на полу вместо огромных кругов!
+                    pygame.draw.ellipse(screen, (95, 25, 15), (cx_s - 15, cy_s - 6, 30, 14))
+                    pygame.draw.ellipse(screen, (185, 55, 20), (cx_s - 11, cy_s - 4, 22, 10), 2)
                     seed_v = int((vfx["x"] * 37 + vfx["y"] * 73) * 10)
-                    for f_i in range(4):
-                        ox = ((seed_v + f_i * 11) % 19) - 9
+                    for f_i in range(5):
+                        ox = ((seed_v + f_i * 11) % 21) - 10
                         oy = ((seed_v + f_i * 7) % 11) - 5
-                        flick = int(math.sin(now_sec * 14.0 + f_i * 2.1 + vfx["x"] * 5.0) * 3 * fade)
+                        flick = int(math.sin(now_sec * 16.0 + f_i * 2.1 + vfx["x"] * 5.0) * 4 * fade)
                         fx_p = cx_s + ox
                         fy_p = cy_s + oy
-                        h_flame = max(3, int(7 * fade) + flick)
-                        # Тлеющий уголёк у основания + маленький язычок огня (3px шириной)
-                        pygame.draw.rect(screen, (195, 55, 20), (fx_p - 2, fy_p, 5, 3))
-                        pygame.draw.rect(screen, (255, 130, 30), (fx_p - 1, fy_p - h_flame, 3, h_flame))
-                        pygame.draw.rect(screen, (255, 235, 105), (fx_p - 1, fy_p - max(2, h_flame // 2), 3, max(2, h_flame // 2)))
+                        h_flame = max(4, int(11 * fade) + flick)
+                        pygame.draw.polygon(screen, (205, 50, 20), [(fx_p - 4, fy_p + 2), (fx_p, fy_p - h_flame - 3), (fx_p + 4, fy_p + 2)])
+                        pygame.draw.polygon(screen, (255, 140, 30), [(fx_p - 3, fy_p + 1), (fx_p, fy_p - h_flame), (fx_p + 3, fy_p + 1)])
+                        pygame.draw.polygon(screen, (255, 240, 115), [(fx_p - 2, fy_p + 1), (fx_p, fy_p - max(2, h_flame // 2)), (fx_p + 2, fy_p + 1)])
 
             elif vfx["kind"] == "frost_nova":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
                 cy_s = int((vfx["y"] * TILE_H - cam_y) * SCALE)
-                r_px = max(6, int(vfx["radius"] * TILE_W * SCALE * (0.25 + prog * 0.75)))
-                pygame.draw.circle(screen, (80, 195, 255), (cx_s, cy_s), r_px, 5)
-                pygame.draw.circle(screen, (225, 250, 255), (cx_s, cy_s), max(4, r_px - 6), 2)
-                for sp_i in range(8):
-                    a = sp_i * (math.pi * 0.25) + prog * 0.4
-                    p1 = (int(cx_s + math.cos(a) * (r_px * 0.65)), int(cy_s + math.sin(a) * (r_px * 0.65)))
-                    p2 = (int(cx_s + math.cos(a) * (r_px * 1.05)), int(cy_s + math.sin(a) * (r_px * 1.05)))
-                    pygame.draw.line(screen, (210, 245, 255), p1, p2, 3)
+                r_px = max(8, int(vfx["radius"] * TILE_W * SCALE * (0.20 + prog * 0.80)))
+                # Зубчатая корона из 12 ледяных пик по внешнему фронту
+                star_pts = []
+                for i_pt in range(24):
+                    a_pt = i_pt * (math.tau / 24.0) + prog * 0.25
+                    rad_pt = r_px * (1.06 if i_pt % 2 == 0 else 0.82)
+                    star_pts.append((int(cx_s + math.cos(a_pt) * rad_pt), int(cy_s + math.sin(a_pt) * rad_pt)))
+                pygame.draw.polygon(screen, (45, 140, 215), star_pts, 5)
+                pygame.draw.polygon(screen, (115, 220, 255), star_pts, 3)
+                pygame.draw.circle(screen, (225, 250, 255), (cx_s, cy_s), max(4, int(r_px * 0.72)), 2)
+                for sp_i in range(6):
+                    a = sp_i * (math.pi / 3.0)
+                    p1 = (int(cx_s + math.cos(a) * (r_px * 0.25)), int(cy_s + math.sin(a) * (r_px * 0.25)))
+                    p2 = (int(cx_s + math.cos(a) * (r_px * 1.08)), int(cy_s + math.sin(a) * (r_px * 1.08)))
+                    pygame.draw.line(screen, (215, 248, 255), p1, p2, 3)
 
             elif vfx["kind"] == "chain_lightning":
                 pts = vfx["points"]
@@ -1241,28 +1272,49 @@ class Renderer(UIRendererMixin):
                     x1_s = int((pts[i + 1][0] * TILE_W - cam_x) * SCALE)
                     y1_s = int((pts[i + 1][1] * TILE_H - cam_y) * SCALE)
                     zig = [(x0_s, y0_s)]
-                    for seg in range(1, 5):
-                        frac = seg / 5.0
-                        jx = int(x0_s + (x1_s - x0_s) * frac + math.sin(now_sec * 40.0 + seg * 3 + i) * 8)
-                        jy = int(y0_s + (y1_s - y0_s) * frac + math.cos(now_sec * 35.0 + seg * 5 + i) * 8)
+                    for seg in range(1, 6):
+                        frac = seg / 6.0
+                        jx = int(x0_s + (x1_s - x0_s) * frac + math.sin(now_sec * 48.0 + seg * 3.1 + i) * 10)
+                        jy = int(y0_s + (y1_s - y0_s) * frac + math.cos(now_sec * 42.0 + seg * 4.7 + i) * 10)
                         zig.append((jx, jy))
+                        # Боковое ответвление молнии из середины дуги
+                        if seg in (2, 4):
+                            bx = jx + int(math.cos(now_sec * 30.0 + seg + i) * 18)
+                            by = jy + int(math.sin(now_sec * 30.0 + seg + i) * 18)
+                            pygame.draw.line(screen, (75, 195, 255), (jx, jy), (bx, by), 3)
+                            pygame.draw.line(screen, (235, 255, 255), (jx, jy), (bx, by), 1)
                     zig.append((x1_s, y1_s))
-                    pygame.draw.lines(screen, (75, 195, 255), False, zig, 6)
-                    pygame.draw.lines(screen, (240, 255, 255), False, zig, 2)
-                    pygame.draw.circle(screen, (200, 245, 255), (x1_s, y1_s), 8)
+                    pygame.draw.lines(screen, (40, 125, 220), False, zig, 9)
+                    pygame.draw.lines(screen, (105, 215, 255), False, zig, 5)
+                    pygame.draw.lines(screen, (245, 255, 255), False, zig, 2)
+                    # Электрическая звезда в узле попадания
+                    pygame.draw.circle(screen, (95, 215, 255), (x1_s, y1_s), 12, 2)
+                    pygame.draw.circle(screen, (245, 255, 255), (x1_s, y1_s), 6)
 
             elif vfx["kind"] == "entangle_zone":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
                 cy_s = int((vfx["y"] * TILE_H - cam_y) * SCALE)
                 r_px = max(6, int(vfx["radius"] * TILE_W * SCALE))
-                pygame.draw.circle(screen, (55, 145, 65), (cx_s, cy_s), r_px, 2)
-                for v_i in range(7):
-                    ang = v_i * (2.0 * math.pi / 7.0)
-                    vx_b = cx_s + int(math.cos(ang) * (r_px * 0.65))
-                    vy_b = cy_s + int(math.sin(ang) * (r_px * 0.65))
-                    h_vine = int(26 * (1.0 - abs(prog - 0.5)))
-                    pygame.draw.line(screen, (65, 45, 25), (vx_b, vy_b), (vx_b, vy_b - h_vine), 4)
-                    pygame.draw.line(screen, (95, 215, 105), (vx_b, vy_b), (vx_b + 4, vy_b - h_vine), 2)
+                pygame.draw.circle(screen, (45, 95, 45), (cx_s, cy_s), r_px, 4)
+                pygame.draw.circle(screen, (105, 225, 115), (cx_s, cy_s), max(4, r_px - 6), 2)
+                grow = 1.0 - abs(prog - 0.45) * 1.4
+                for v_i in range(9):
+                    ang = v_i * (math.tau / 9.0)
+                    rad_v = r_px * (0.35 if v_i % 2 == 0 else 0.72)
+                    vx_b = cx_s + int(math.cos(ang) * rad_v)
+                    vy_b = cy_s + int(math.sin(ang) * rad_v)
+                    h_vine = max(6, int(32 * grow))
+                    sway = int(math.sin(now_sec * 9.0 + v_i) * 6)
+                    v_pts = [
+                        (vx_b, vy_b),
+                        (vx_b + sway, vy_b - h_vine // 2),
+                        (vx_b - sway // 2, vy_b - h_vine),
+                    ]
+                    pygame.draw.lines(screen, (65, 42, 24), False, v_pts, 5)
+                    pygame.draw.lines(screen, (85, 185, 75), False, v_pts, 2)
+                    # Листок на верхушке лозы
+                    tx_v, ty_v = v_pts[-1]
+                    pygame.draw.polygon(screen, (145, 245, 130), [(tx_v, ty_v - 4), (tx_v + 4, ty_v), (tx_v, ty_v + 3), (tx_v - 4, ty_v)])
 
             elif vfx["kind"] == "beam":
                 x1_s = int((vfx["x0"] * TILE_W - cam_x) * SCALE)
