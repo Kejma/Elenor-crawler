@@ -169,6 +169,12 @@ def generate_moss_autotile_pair(variant):
 
 
 def register_jungle_assets(assets):
+    _register_jungle_base(assets)
+    _register_jungle_variants(assets)
+    _register_bone_jungle_and_caves(assets)
+
+
+def _register_jungle_base(assets):
     # =========================================================================
     # 1. ПОЛЫ И ПОВЕРХНОСТИ (16x16, opaque=True)
     # =========================================================================
@@ -840,7 +846,7 @@ def register_jungle_assets(assets):
     assets["tribal_drum"] = enforce_crisp_rim_normals(tdr_d, tdr_n)
 
     # 6.7 Расписная глиняная амфора аборигенов (tribal_pot)
-    tpt_d, tpt_n = make_pair(16, 20)
+    pot_diffuse, pot_normal = make_pair(16, 20)
     for y in range(6, 19):
         rad_p = 2 if y in (6, 7, 18) else (3 if y in (8, 17) else 5)
         for x in range(8 - rad_p, 8 + rad_p):
@@ -849,9 +855,9 @@ def register_jungle_assets(assets):
             else:
                 col = (186, 86, 52) if x < 8 else (142, 62, 36)
             nc = N_UP if y <= 8 else (N_LEFT if x < 7 else (N_RIGHT if x > 8 else N_FLAT))
-            tpt_d.set_at((x, y), col)
-            tpt_n.set_at((x, y), nc)
-    assets["tribal_pot"] = enforce_crisp_rim_normals(tpt_d, tpt_n)
+            pot_diffuse.set_at((x, y), col)
+            pot_normal.set_at((x, y), nc)
+    assets["tribal_pot"] = enforce_crisp_rim_normals(pot_diffuse, pot_normal)
 
     # 6.8 Костяной фетиш-шест с рогатым черепом (tribal_skull_pole)
     tsp_d, tsp_n = make_pair(16, 20)
@@ -1034,6 +1040,8 @@ def register_jungle_assets(assets):
             mu_n.set_at((x, y), nc)
     assets["marble_urn"] = enforce_crisp_rim_normals(mu_d, mu_n)
 
+
+def _register_jungle_variants(assets):
     # =========================================================================
     # 8. РАСШИРЕННЫЙ ПАК ПОВЕРХНОСТЕЙ И СТЕН (ВОДА СЕНОТОВ, МРАМОР, БОЛОТО)
     # =========================================================================
@@ -1807,7 +1815,9 @@ def register_jungle_assets(assets):
                 fc_n.set_at((x, y), nc)
     assets["fallen_colossus"] = enforce_crisp_rim_normals(fc_d, fc_n)
 
-# =========================================================================
+
+def _register_bone_jungle_and_caves(assets):
+    # =========================================================================
     # 13. КОСТЯНЫЕ ДЖУНГЛИ И ГЛУБОКИЕ ПЕЩЕРЫ: ПОЛЫ, ЖИДКОСТИ, СТЕНЫ, ДЕРЕВЬЯ
     # =========================================================================
     tau_b = 2.0 * math.pi / 16.0
@@ -2336,16 +2346,14 @@ def register_jungle_assets(assets):
 
     # 15.6 Подвесная клетка из рёбер на костяной балке (bone_cage_hanging)
     bch_d, bch_n = make_pair(16, 20)
-    for y in range(1, 19):
-        if y <= 3 or x == 3:
-            for bx in range(3, 13):
-                bch_d.set_at((bx, 2), (168, 156, 134))
-                bch_n.set_at((bx, 2), N_UP)
-        if 6 <= y <= 17:
-            for x in range(4, 12):
-                if y in (6, 17) or x in (4, 6, 9, 11):
-                    bch_d.set_at((x, y), (225, 215, 192))
-                    bch_n.set_at((x, y), N_UP if y == 6 else N_FLAT)
+    for x in range(3, 13):
+        bch_d.set_at((x, 2), (168, 156, 134))
+        bch_n.set_at((x, 2), N_UP)
+    for y in range(6, 18):
+        for x in range(4, 12):
+            if y in (6, 17) or x in (4, 6, 9, 11):
+                bch_d.set_at((x, y), (225, 215, 192))
+                bch_n.set_at((x, y), N_UP if y == 6 else N_FLAT)
     bch_d.set_at((7, 4), (145, 135, 115))
     bch_d.set_at((7, 5), (145, 135, 115))
     assets["bone_cage_hanging"] = enforce_crisp_rim_normals(bch_d, bch_n)

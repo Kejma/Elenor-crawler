@@ -1,3 +1,4 @@
+from elenor.config import SHALLOW_WATER
 from elenor.data.abilities import perk_branch
 import math
 import random
@@ -540,7 +541,7 @@ class Player:
         nx, ny = dx / length, dy / length
 
         cur_tile = dungeon.grid[int(self.y)][int(self.x)]
-        spd_mult = 0.75 if cur_tile == 2 else 1.0
+        spd_mult = 0.75 if cur_tile in (2, SHALLOW_WATER) else 1.0
         if self.quirk == "nyctophobe" and not self.has_lit_torch:
             spd_mult *= 1.15
         if self.throw_slowdown_timer > 0.0:

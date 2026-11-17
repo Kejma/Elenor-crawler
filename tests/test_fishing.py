@@ -1,12 +1,22 @@
 import unittest
 
-from elenor.minigames.fishing import FINISHED, POOLS, PROFILES, FishingCast, cast_route
+from elenor.minigames.fishing import (
+    FINISHED,
+    POOLS,
+    PROFILES,
+    FishingCast,
+    cast_route,
+    press_fishing,
+    update_fishing,
+)
+from test_mirror_puzzles import HeadlessGame, Interactable
 from elenor.missions.jungle import (
     DEEP_WATER,
     SHALLOW_WATER,
     PIER,
     SPOTS,
     shoreline,
+    populate_jungle_bank,
 )
 from elenor.rendering.fishing import FISH_CATALOG_SPECS
 from elenor.world.dungeon import Dungeon
@@ -92,25 +102,57 @@ class FishingTests(unittest.TestCase):
                     )
         self.assertTrue(dungeon.is_blocking_move(30, 28))
 
-    def test_daylight_keeps_range_and_canopy_shadows(self):
+    def test_player_can_wade_but_cannot_enter_deep_water(self):
         dungeon = Dungeon()
         dungeon.generate(campaign="jungle")
-        self.assertLess(dungeon.sunlight.min(), 0.30)
-        self.assertEqual(dungeon.sunlight.max(), 1)
-        # Water gives a clear view across the river. The outer view still fades
-        # while the same world pixel remains geometrically visible.
-        wx, wy = 500, 320
-        cam_x, cam_y = wx - 240, wy - 100
-        raw, _, _ = dungeon.compute_nox_fov(wx, wy, cam_x, cam_y)
-        self.assertEqual(raw[420, 100], 1)
-        mask, visible, _ = dungeon.compute_nox_fov(
-            wx, wy, cam_x, cam_y, daylight_sight=200
-        )
-        self.assertEqual(mask[240, 100], 1)
-        self.assertTrue(0 < mask[420, 100] < 0.25)
-        self.assertEqual(mask[450, 100], 0)
-        self.assertNotIn(((450 + cam_x) // 16, wy // 16), visible)
-        dungeon.generate()
-        self.assertIsNone(dungeon.sunlight)
-        self.assertFalse(dungeon.fishing_edges)
-        self.assertEqual(dungeon.ambient_light, (0, 0, 0))
+        game = HeadlessGame(dungeon)
+        x = SPOTS[0][0]
+        boundary = shoreline(x) + 3
+        game.player.x, game.player.y = x + 0.5, boundary - 0.6
+        self.assertFalse(dungeon.is_blocking_move(x, boundary - 1))
+        self.assertTrue(dungeon.is_blocking_move(x, boundary))
+        self.assertFalse(dungeon.is_blocking_sight(x, boundary))
+        for _ in range(20):
+            game.player.move_realtime(0, 1, 0.05, dungeon)
+        self.assertGreater(game.player.y, boundary - 0.6)
+        self.assertLess(game.player.y, boundary)
+        self.assertEqual(len(dungeon.braziers), len(SPOTS))
+
+    def test_clicking_scenery_leaves_it_in_place(self):
+        dungeon = Dungeon()
+        dungeon.generate(campaign="jungle")
+        game = HeadlessGame(dungeon)
+        populate_jungle_bank(game, Interactable)
+        game.inv_open = False
+        for kind in (
+            "prop_reeds_tall",
+            "prop_wooden_rowboat",
+            "prop_fishing_rod_stand",
+        ):
+            obj = next(obj for obj in game.objects if obj.kind == kind)
+            game.player.x, game.player.y = obj.x + 0.5, obj.y - 0.5
+            game.try_interact_or_melee(obj.x + 0.5, obj.y + 0.5, via_mouse=True)
+            self.assertFalse(obj.used)
+
+    def test_results_release_controls_and_use_the_thought_channel(self):
+        game = HeadlessGame(Dungeon())
+        game.fishing_catches = {}
+        for result in ("early", "missed", "snapped", "escaped", "caught"):
+            with self.subTest(result=result):
+                cast = game.fishing_cast = make_cast("shoal")
+                if result == "early":
+                    cast.phase = "wait"
+                    press_fishing(game)
+                else:
+                    cast.phase = "bite" if result == "missed" else "reel"
+                    cast.elapsed = {"missed": 2, "escaped": 20}.get(result, 0)
+                    cast.tension = 1.1 if result == "snapped" else 0.2
+                    cast.progress = 1.0 if result == "caught" else 0.1
+                    update_fishing(game, 0.01)
+                self.assertIsNone(game.fishing_cast)
+                (thought,) = game.set_thought.call_args.args
+                self.assertEqual(game.set_thought.call_args.kwargs, {"important": True})
+                self.assertEqual(
+                    thought, game.loc["fishing"][result].format(fish="Горчак Стайный")
+                )
+        self.assertEqual(game.fishing_catches, {"fish_bitterling": 1})

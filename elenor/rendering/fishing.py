@@ -468,53 +468,37 @@ FISH_CATALOG_SPECS = {
 }
 
 
+def _lake_water_frames(base_color, color_delta):
+    frames = []
+    tau = math.tau / 16
+    palette = [
+        tuple(round(base + level * delta / 12) for base, delta in zip(base_color, color_delta))
+        for level in range(13)
+    ]
+    for frame_index in range(3):
+        phase = frame_index * math.tau / 3
+        diffuse, normal = make_pair(16, 16, opaque=True)
+        normal.fill(N_FLAT)
+        for y in range(16):
+            for x in range(16):
+                swell = math.sin(y * tau + phase + 0.6 * math.sin(x * tau - phase))
+                ripple = math.sin(2 * x * tau - 2 * y * tau + phase)
+                light = 0.5 + 0.3 * swell + 0.2 * ripple
+                diffuse.set_at((x, y), palette[round(light * 12)])
+        frames.append((diffuse, normal))
+    return frames
+
+
 def register_fishing_assets(assets):
     # =========================================================================
     # 1. ОЗЁРНАЯ ВОДА И БЕРЕГОВЫЕ ПОВЕРХНОСТИ (16x16, opaque=True)
     # =========================================================================
-    tau = 2.0 * math.pi / 16.0
 
-    # 1.1 Мелководье озера с прозрачным песчаным дном (3 кадра анимации)
-    shallow_frames = []
-    for fi in range(3):
-        ph = fi * (2.0 * math.pi / 3.0)
-        sd, sn = make_pair(16, 16, opaque=True)
-        for y in range(16):
-            for x in range(16):
-                w1 = math.sin(x * tau + y * tau + ph)
-                w2 = math.cos(x * tau - y * tau * 2.0 - ph)
-                wv = (w1 + w2) * 0.5
-                cr = int(58 + (wv + 1.0) * 18)
-                cg = int(128 + (wv + 1.0) * 24)
-                cb = int(142 + (wv + 1.0) * 26)
-                if wv > 0.60:
-                    cr, cg, cb = 185, 235, 240
-                nc = N_UP if w1 > 0.35 else (N_DOWN if w1 < -0.35 else N_FLAT)
-                sd.set_at((x, y), (cr, cg, cb, 255))
-                sn.set_at((x, y), nc)
-        shallow_frames.append((sd, sn))
+    # Мелководье и глубина используют один рисунок волн и разную палитру.
+    shallow_frames = _lake_water_frames((72, 115, 105), (34, 31, 31))
+    deep_frames = _lake_water_frames((24, 64, 91), (22, 23, 26))
     assets["floor_lake_shallow"] = shallow_frames[0]
     assets["_lake_shallow_frames"] = shallow_frames
-
-    # 1.2 Глубокая озёрная вода (3 кадра анимации)
-    deep_frames = []
-    for fi in range(3):
-        ph = fi * (2.0 * math.pi / 3.0)
-        dd, dn = make_pair(16, 16, opaque=True)
-        for y in range(16):
-            for x in range(16):
-                w1 = math.sin(x * tau + y * tau + ph)
-                w2 = math.cos(x * tau - y * tau * 2.0 - ph)
-                wv = (w1 + w2) * 0.5
-                cr = int(16 + (wv + 1.0) * 10)
-                cg = int(54 + (wv + 1.0) * 20)
-                cb = int(98 + (wv + 1.0) * 26)
-                if wv > 0.62:
-                    cr, cg, cb = 92, 168, 215
-                nc = N_UP if w1 > 0.35 else (N_DOWN if w1 < -0.35 else N_FLAT)
-                dd.set_at((x, y), (cr, cg, cb, 255))
-                dn.set_at((x, y), nc)
-        deep_frames.append((dd, dn))
     assets["floor_lake_deep"] = deep_frames[0]
     assets["_lake_deep_frames"] = deep_frames
 

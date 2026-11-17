@@ -4,8 +4,9 @@ from dataclasses import dataclass
 import math
 import random
 
-from elenor.config import MAP_COLS, MAP_ROWS
-from elenor.missions.jungle import PIER, WATER_TILES
+from elenor.config import DEEP_WATER, MAP_COLS, MAP_ROWS, PIER, SHALLOW_WATER
+
+WATER_TILES = frozenset((SHALLOW_WATER, DEEP_WATER))
 
 
 @dataclass(frozen=True)
@@ -228,7 +229,7 @@ def press_fishing(game):
     if previous == "bite":
         game.sfx.play("fishing_hook")
     elif cast.phase == "early":
-        game.sfx.play("fishing_empty")
+        finish_cast(game, cast)
 
 
 def update_fishing(game, dt):
@@ -247,16 +248,24 @@ def update_fishing(game, dt):
         game.play_spatial("fishing_land", *cast.target)
     elif cast.phase == "bite":
         game.play_spatial("fishing_bite", *cast.target)
-    elif cast.phase == "caught":
+    elif cast.phase in FINISHED:
+        finish_cast(game, cast)
+
+
+def finish_cast(game, cast):
+    game.fishing_cast = None
+    thought = game.loc["fishing"][cast.phase]
+    if cast.phase == "caught":
         game.fishing_catches[cast.fish_id] = (
             game.fishing_catches.get(cast.fish_id, 0) + 1
         )
         from elenor.rendering.fishing import FISH_CATALOG_SPECS
 
         name = FISH_CATALOG_SPECS[cast.fish_id][0].removeprefix("Улов: ")
-        game.add_log("event", game.loc["fishing"]["catch_log"].format(fish=name))
+        thought = thought.format(fish=name)
         game.sfx.play("fishing_catch")
     elif cast.phase == "snapped":
         game.sfx.play("fishing_snap")
-    elif cast.phase in ("missed", "escaped"):
+    else:
         game.play_spatial("fishing_empty", *cast.float_position)
+    game.set_thought(thought, important=True)

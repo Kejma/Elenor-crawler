@@ -5,11 +5,15 @@ import random
 
 import pygame
 
-from elenor.config import MAP_COLS, MAP_ROWS
-from elenor.rendering.daylight import canopy_light
+from elenor.config import (
+    DEEP_WATER,
+    MAP_COLS,
+    MAP_ROWS,
+    PEBBLE_SHORE,
+    PIER,
+    SHALLOW_WATER,
+)
 
-SHALLOW_WATER, DEEP_WATER, PIER, PEBBLE_SHORE = range(37, 41)
-WATER_TILES = frozenset((SHALLOW_WATER, DEEP_WATER))
 SPOTS = ((13, "eddy"), (32, "snag"), (51, "current"))
 
 
@@ -20,7 +24,6 @@ def shoreline(x):
 def generate_jungle_bank(dungeon):
     # Called after Dungeon has reset all floor-owned state.
     rng = random.Random(206)
-    dungeon.ambient_light = (0.16, 0.23, 0.26)
     dungeon.grid = []
     for y in range(MAP_ROWS):
         row = []
@@ -62,6 +65,9 @@ def generate_jungle_bank(dungeon):
                 dungeon.overlays.pop((tx, y), None)
         for tx in (x - 1, x, x + 1):
             dungeon.fishing_edges[tx, bank + 1] = spot
+        dungeon.braziers.append(
+            {"x": x + 1, "y": bank, "radius": 142.0, "color": (1.15, 0.80, 0.43)}
+        )
 
     # Readably distinct water around the three approaches.
     for x, y_offset in ((10, 1), (11, 2), (15, 1), (16, 2), (17, 0)):
@@ -70,8 +76,6 @@ def generate_jungle_bank(dungeon):
         if 50 <= x <= 52:
             continue
         dungeon.overlays[x, shoreline(x) + 1] = "ov_shore_foam"
-
-    dungeon.sunlight = canopy_light(dungeon.grid)
 
     first_x = SPOTS[0][0]
     dungeon.start_pos = first_x, shoreline(first_x) - 2
@@ -84,6 +88,7 @@ def populate_jungle_bank(game, Interactable):
         for tx, ty, kind in (
             (x - 1, bank - 1, "prop_bait_bucket"),
             (x + 1, bank - 1, "prop_fisherman_stool"),
+            (x - 1, bank, "prop_fishing_rod_stand"),
             (x - 2, bank, "prop_reeds_tall"),
             (x + 2, bank, "prop_reeds_tall"),
         ):

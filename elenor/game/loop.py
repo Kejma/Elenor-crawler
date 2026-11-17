@@ -3,7 +3,7 @@ import os
 import random
 import pygame
 
-from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT
+from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, SHALLOW_WATER
 from elenor.entities import Enemy, Interactable, Particle
 from elenor.missions.rats import update_mission_audio
 from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas
@@ -12,7 +12,7 @@ from elenor.profile import apply_display_mode, map_window_to_logical, present_lo
 from elenor.game.controller import GameController
 from elenor.game.targeting import is_cursor_on_mob
 
-from elenor.minigames.fishing import FINISHED, press_fishing, start_fishing, update_fishing
+from elenor.minigames.fishing import press_fishing, start_fishing, update_fishing
 from elenor.ui.fishing import draw_fishing
 
 
@@ -74,8 +74,6 @@ def main():
             if cast is not None:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     game.fishing_cast = None
-                elif cast.phase in FINISHED and (press_space or click_world):
-                    start_fishing(game, *aim)
                 elif press_space:
                     press_fishing(game)
                 elif event.type == pygame.KEYUP and event.key == pygame.K_SPACE:
@@ -281,7 +279,8 @@ def main():
         if game.fishing_cast is not None:
             if pygame.key.get_focused():
                 update_fishing(game, dt)
-            dt = 0.0
+            if game.fishing_cast is not None:
+                dt = 0.0
 
         # --- REALTIME UPDATE ---
         game.update_typewriter(dt)
@@ -318,13 +317,13 @@ def main():
                 if game.player.step_sound_cd <= 0.0:
                     game.player.step_sound_cd = 0.28
                     t_step = game.dungeon.grid[int(game.player.y)][int(game.player.x)]
-                    if t_step == 2:
+                    if t_step in (2, SHALLOW_WATER):
                         game.sfx.play("step_water")
                         game.fx.add_water_ripple(game.player.x, game.player.y)
                         for _ in range(3):
                             ang = random.uniform(0, 6.28)
                             game.particles.append(Particle(game.player.x, game.player.y, math.cos(ang) * 1.4, math.sin(ang) * 1.4 - 0.8, (115, 200, 245), 2.2, 0.22))
-                    elif t_step == 4:
+                    elif t_step in (4, PIER):
                         game.sfx.play("step_wood")
                     elif t_step == 0:
                         game.sfx.play("step_stone")
@@ -540,19 +539,14 @@ def main():
 
         world_ox = game.player.x * TILE_W
         world_oy = game.player.y * TILE_H
-        sun = game.dungeon.sunlight
-        daylight_sight = max(152, min(250, 220 + (game.player.dark_vision_radius - 68))) if sun is not None else None
         fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(
-            world_ox, world_oy, game.cam_x, game.cam_y, daylight_sight=daylight_sight
+            world_ox, world_oy, game.cam_x, game.cam_y
         )
         game.current_visible_tiles = visible_tiles
         if (game.world_active and not game.inv_open and not game.levelup_choices
                 and not dev_open and game.player.hp > 0):
             update_mirror_puzzles(game, dt)
         game.player.update_illumination(game.dungeon.braziers, game.dungeon.room_lights, game.objects, player_open_tiles)
-        if sun is not None:
-            game.player.illumination = max(game.player.illumination,
-                                           .23 + .66 * sun[int(world_ox), int(world_oy)])
 
         game.particles = [pt for pt in game.particles if pt is not None and pt.update(dt)]
         game.popups = [p for p in game.popups if p is not None and p.update(dt)]
@@ -616,8 +610,6 @@ def main():
                 "color": (0.38, 0.48, 0.72)
             }
         ]
-        if sun is not None:
-            lights[0]["color"] = (.08, .12, .15)
         if game.player.has_lit_torch:
             lights.append({
                 "pos": (p_sx + 4, p_sy - 2, TORCH_Z_HEIGHT),

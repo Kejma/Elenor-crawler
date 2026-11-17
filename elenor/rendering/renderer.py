@@ -1,8 +1,8 @@
-from elenor.rendering.daylight import apply_daylight, visible_sun
 import math
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, HUD_HEIGHT, MAP_COLS, MAP_ROWS, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
+from elenor.config import DEEP_WATER, PEBBLE_SHORE, PIER, SHALLOW_WATER
 
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
@@ -15,7 +15,6 @@ class Renderer(UIRendererMixin):
         self.anim_bank = self.assets.pop("_anim_bank", {})
         self.hero_cache = {}
         self.rot_cache = {}
-        self.water_normals = {}
         self.flip_cache = {}
         self.chill_cache = {}
         self.emissive_cache = {}
@@ -566,10 +565,10 @@ class Renderer(UIRendererMixin):
             35: "wall_marble_obsidian",
             36: "wall_temple_relief",
             # Озеро и Рыбалка (37..42)
-            37: "floor_lake_shallow",
-            38: "floor_lake_deep",
-            39: "floor_wooden_pier",
-            40: "floor_pebble_shore",
+            SHALLOW_WATER: "floor_lake_shallow",
+            DEEP_WATER: "floor_lake_deep",
+            PIER: "floor_wooden_pier",
+            PEBBLE_SHORE: "floor_pebble_shore",
             41: "floor_wet_sand",
             42: "floor_reed_mud",
             # Костяные Джунгли и Глубокие Пещеры (43..55)
@@ -608,20 +607,6 @@ class Renderer(UIRendererMixin):
                 else:
                     key = TILE_ROLE_MAP.get(t_val, f"floor_{t_val}")
                 d_surf, n_surf = self.get_tile_pair(key, c, r)
-                if key in ("floor_lake_shallow", "floor_lake_deep"):
-                    animation = self.anim_bank.get(key)
-                    if animation and animation["frames"]:
-                        frames = animation["frames"]
-                        phase = (c * 11 + r * 7 + (c * r) % 5) % len(frames)
-                        d_surf, n_surf = frames[(int(now_sec * animation["fps"]) + phase) % len(frames)]
-                    # Lower the angular contrast of the authored waves in
-                    # sunlight so a whole river does not read as diagonal bars.
-                    cache_key = (key, n_surf)
-                    if cache_key not in self.water_normals:
-                        original = pygame.surfarray.array3d(n_surf)
-                        softened = original * .43 + np.array((128, 128, 255)) * .57
-                        self.water_normals[cache_key] = pygame.surfarray.make_surface(softened.astype(np.uint8))
-                    n_surf = self.water_normals[cache_key]
                 self.diff_canvas.blit(d_surf, (sx, sy))
                 self.norm_canvas.blit(n_surf, (sx, sy))
 
@@ -837,8 +822,6 @@ class Renderer(UIRendererMixin):
         self.diff_canvas.blit(tz_diff, (0, VIEW_H))
         self.norm_canvas.blit(tz_norm, (0, VIEW_H))
 
-        ambient_light = getattr(dungeon, "ambient_light", (0.0, 0.0, 0.0))
-        sunlight = visible_sun(getattr(dungeon, "sunlight", None), cam_x, cam_y)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
@@ -850,8 +833,7 @@ class Renderer(UIRendererMixin):
                 fov_mask, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
-                enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec,
-                ambient_light=ambient_light, sunlight=sunlight
+                enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -876,9 +858,6 @@ class Renderer(UIRendererMixin):
             ty_screen = np.clip(((self.py[0, :VIEW_H] + cam_y) // TILE_H).astype(np.int32), 0, MAP_ROWS - 1)
 
 
-            for channel, ambient in zip((r_mult, g_mult, b_mult), ambient_light):
-                channel[:, :VIEW_H] = ambient
-            apply_daylight((r_mult, g_mult, b_mult), (nx, ny, nz), sunlight)
             r_mult[:, VIEW_H:] = 0.74
             g_mult[:, VIEW_H:] = 0.74
             b_mult[:, VIEW_H:] = 0.80

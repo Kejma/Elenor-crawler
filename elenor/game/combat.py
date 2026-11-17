@@ -211,7 +211,6 @@ class CombatMixin:
         if obj.kind == "loot":
             return self._pickup_loot_object(obj)
 
-        obj.used = True
         ox_c, oy_c = obj.x + 0.5, obj.y + 0.5
 
         if obj.kind == "barrel":
@@ -311,6 +310,11 @@ class CombatMixin:
             else:
                 self.play_spatial("step", ox_c, oy_c)
                 self.trigger_event_thought("idol_dumb")
+        else:
+            # Consume the interaction, leaving scenery intact.
+            return True
+
+        obj.used = True
         return True
 
 

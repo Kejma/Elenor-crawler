@@ -1,4 +1,3 @@
-from elenor.rendering.daylight import SUN_X, SUN_Y, SUN_Z, SUN_COLOR
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS
@@ -18,7 +17,6 @@ class GPULightShader:
         self.tex_diff = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
         self.tex_norm = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
         self.tex_ent_y = self.ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
-        self.tex_sunlight = self.ctx.texture((VIEW_W, VIEW_H), 1, dtype="f4")
         self.tex_fov = self.ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.tex_masks = self.ctx.texture((MAP_COLS, MAP_ROWS * self.MAX_LIGHTS), 1, dtype="f4")
         self.tex_walls = self.ctx.texture((MAP_COLS, MAP_ROWS), 1, dtype="f4")
@@ -49,9 +47,6 @@ class GPULightShader:
             uniform sampler2D u_emissive;
 
             uniform vec2 u_cam;
-            uniform vec3 u_ambient_light;
-            uniform sampler2D u_sunlight;
-            uniform bool u_daylight;
             uniform float u_time;
             uniform vec3 u_fx_flags; // x = enable_ao, y = enable_bloom, z = enable_fog
             uniform int u_num_lights;
@@ -146,12 +141,7 @@ class GPULightShader:
                         ao_mult = 1.0 - occ;
                     }}
 
-                    vec3 mult = u_ambient_light;
-                    if (u_daylight) {{
-                        float sun = texelFetch(u_sunlight, p, 0).r;
-                        float facing = max(0.0, dot(N, vec3({SUN_X}, {SUN_Y}, {SUN_Z})));
-                        mult += sun * facing * vec3({SUN_COLOR[0]}, {SUN_COLOR[1]}, {SUN_COLOR[2]});
-                    }}
+                    vec3 mult = vec3(0.0);
                     vec3 rim_add = vec3(0.0);
 
                     for (int i = 0; i < u_num_lights; ++i) {{
@@ -313,7 +303,6 @@ class GPULightShader:
         self.prog["u_light_masks"].value = 4
         self.prog["u_walls"].value = 5
         self.prog["u_emissive"].value = 6
-        self.prog["u_sunlight"].value = 7
 
         quad = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self.vbo = self.ctx.buffer(quad.tobytes())
@@ -330,7 +319,7 @@ class GPULightShader:
         self.hud_pos_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
         self.hud_col_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, enable_fog=True, active_clouds=None, now_sec=0.0, ambient_light=(0.0, 0.0, 0.0), sunlight=None):
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, enable_fog=True, active_clouds=None, now_sec=0.0):
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
@@ -388,10 +377,6 @@ class GPULightShader:
             self.hud_pos_buf[j] = (hx, hy, hz, hl["radius"])
             self.hud_col_buf[j] = (hcr, hcg, hcb, 1.0)
 
-        self.prog["u_daylight"].value = sunlight is not None
-        if sunlight is not None:
-            self.tex_sunlight.write(np.ascontiguousarray(sunlight.T, dtype=np.float32).tobytes())
-        self.prog["u_ambient_light"].value = tuple(ambient_light)
         self.prog["u_cam"].value = (float(cam_x), float(cam_y))
         self.prog["u_time"].value = float(now_sec)
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0, 1.0 if enable_fog else 0.0)
@@ -416,7 +401,6 @@ class GPULightShader:
         self.tex_masks.use(4)
         self.tex_walls.use(5)
         self.tex_emissive.use(6)
-        self.tex_sunlight.use(7)
         self.vao.render(self.moderngl.TRIANGLE_STRIP)
 
         raw_rgb = self.fbo.read(components=3, alignment=1)

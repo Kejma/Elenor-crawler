@@ -10,6 +10,9 @@ VIEW_ROWS = 13                       # 13 tiles * 16 px = 208 px
 MAP_COLS = 66
 MAP_ROWS = 42
 
+# River tiles shared by terrain generation, movement and fishing.
+SHALLOW_WATER, DEEP_WATER, PIER, PEBBLE_SHORE = range(37, 41)
+
 VIEW_W = VIEW_COLS * TILE_W          # 480 px native viewport width (16:9)
 VIEW_H = VIEW_ROWS * TILE_H          # 208 px native viewport height
 
