@@ -1,3 +1,4 @@
+from elenor.paths import PROJECT_ROOT
 import numpy as np
 import pygame
 import math
@@ -248,11 +249,11 @@ class SoundSynth:
             try:
                 import json
                 import os
-                from music_engine import SongData, MusicLoopCompiler
+                from elenor.audio.music import SongData, MusicLoopCompiler
                 # Проверяем файл сначала в подпапке music/, а затем в корне
-                fpath = os.path.join(os.path.dirname(__file__), "music", track_filename)
+                fpath = os.path.join(str(PROJECT_ROOT), "music", track_filename)
                 if not os.path.isfile(fpath):
-                    fpath = os.path.join(os.path.dirname(__file__), track_filename)
+                    fpath = os.path.join(str(PROJECT_ROOT), track_filename)
                 if not os.path.isfile(fpath):
                     print(f"[Audio] Файл трека не найден: {track_filename}")
                     return

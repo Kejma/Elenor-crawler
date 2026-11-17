@@ -1,3 +1,4 @@
+from elenor.paths import PROJECT_ROOT
 import json
 import os
 import pygame
@@ -110,7 +111,7 @@ DEFAULT_RANDOM_ROT_ROLES = {
 
 
 def get_assets_root():
-    return os.path.join(os.path.dirname(__file__), "assets")
+    return os.path.join(str(PROJECT_ROOT), "assets")
 
 
 def get_manifest_path():
@@ -155,7 +156,7 @@ def surface_to_encoded_grid(surf, is_normal=False):
             if not is_normal and c[3] == 0:
                 c = (0, 0, 0, 0)
             elif is_normal:
-                from studio_core import snap_normal_rgb
+                from elenor.rendering.normals import snap_normal_rgb
                 sr, sg, sb = snap_normal_rgb(c[0], c[1], c[2])
                 c = (sr, sg, sb, 255)
 
@@ -250,7 +251,7 @@ def load_dtex_frames(filepath):
         frames_out.append((d_s, n_s))
 
     # Mask normal alpha with diffuse alpha AND snap all normal pixels strictly to the 10-color compass!
-    from studio_core import snap_normal_rgb
+    from elenor.rendering.normals import snap_normal_rgb
     masked_frames = []
     for d_s, n_s in frames_out:
         w, h = d_s.get_size()

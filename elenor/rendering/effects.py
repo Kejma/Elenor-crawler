@@ -2,11 +2,7 @@ import math
 import random
 import pygame
 import numpy as np
-from config import (
-    MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCALE,
-    SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD,
-    UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
-)
+from elenor.config import MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
 
 
 class FXManager:
@@ -258,7 +254,7 @@ class FXManager:
                 spark_c = random.choice([
                     (255, 60, 180), (60, 230, 255), (140, 255, 70), (255, 215, 60)
                 ])
-                from entities import Particle
+                from elenor.entities import Particle
                 self.game.particles.append(Particle(
                     cx + random.uniform(-2.8, 2.8),
                     cy + random.uniform(-2.2, 2.2),
@@ -574,7 +570,7 @@ class FXManager:
 
     def _render_f3_telemetry(self, screen, mouse_pos):
         """Отрисовывает панель [F3] с детальным раскладом Вектора Билда (Силач/Ловкач/Маг) и внутренних переменных."""
-        from config import get_rarity_weights
+        from elenor.config import get_rarity_weights
         r = self.game.renderer
         g = self.game
         p = g.player

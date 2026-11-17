@@ -4,10 +4,7 @@ import math
 import random
 import pygame
 import numpy as np
-from config import (
-    MAP_COLS, MAP_ROWS, TILE_W, TILE_H,
-    VIEW_W, VIEW_H, CANVAS_H, RAY_COUNT, LOS_MAX_RADIUS
-)
+from elenor.config import MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, RAY_COUNT, LOS_MAX_RADIUS
 
 
 class Door:
@@ -65,6 +62,7 @@ class Dungeon:
         return False
 
     def invalidate_light_cache(self):
+        self.geometry_revision = getattr(self, "geometry_revision", 0) + 1
         self._light_cache = {}
         self._base_block_grid = None
 

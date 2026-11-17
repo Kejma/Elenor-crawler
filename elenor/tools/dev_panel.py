@@ -1,10 +1,6 @@
 import pygame
-from config import (
-    SCREEN_W, SCREEN_H, SCALE, TILE_W, TILE_H, RARITY_COLORS,
-    UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD,
-    UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
-)
-from entities import Enemy, Interactable
+from elenor.config import SCREEN_W, RARITY_COLORS, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
+from elenor.entities import Enemy, Interactable
 
 
 class DevPanel:
@@ -66,7 +62,7 @@ class DevPanel:
                 ep = game.balance_data.get("enemies", {}).get(kind)
                 if ep:
                     m.apply_balance_profile(ep, floor_num=game.dungeon.floor_num)
-                from mission_rats import attach_mob_dialogues
+                from elenor.missions.rats import attach_mob_dialogues
                 attach_mob_dialogues(m, game.loc)
                 game.mobs.append(m)
                 game.sfx.play("alert")

@@ -1,0 +1,476 @@
+import math
+import random
+
+
+from elenor.entities.effects import Projectile
+
+
+MOB_PROFILES = {
+    "rat": {
+        "sprite": "rat", "hp": 15, "speed": 3.20, "dmg_min": 4, "dmg_max": 7,
+        "phys_def": 1, "mag_def": 0, "detect_range": 5.2, "perception": 1.05,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 14,
+    },
+    "rat_cultist": {
+        "sprite": "rat_cultist", "hp": 28, "speed": 2.65, "dmg_min": 6, "dmg_max": 10,
+        "phys_def": 2, "mag_def": 3, "detect_range": 6.4, "perception": 1.15,
+        "is_ranged": True, "proj_color": (235, 50, 70), "is_boss": False, "size_tiles": 1, "xp": 24,
+    },
+    "rat_king": {
+        "sprite": "rat_king", "hp": 240, "speed": 2.35, "dmg_min": 11, "dmg_max": 16,
+        "phys_def": 5, "mag_def": 5, "detect_range": 8.5, "perception": 1.45,
+        "is_ranged": True, "proj_color": (255, 40, 60), "is_boss": True, "size_tiles": 2, "xp": 160,
+    },
+    "wolf": {
+        "sprite": "wolf", "hp": 14, "speed": 2.95, "dmg_min": 3, "dmg_max": 6,
+        "phys_def": 0, "mag_def": 0, "detect_range": 5.2, "perception": 1.05,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 12,
+    },
+    "skeleton": {
+        "sprite": "skeleton", "hp": 22, "speed": 2.50, "dmg_min": 5, "dmg_max": 8,
+        "phys_def": 2, "mag_def": 0, "detect_range": 5.2, "perception": 0.95,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 16,
+    },
+    "cultist": {
+        "sprite": "cultist", "hp": 20, "speed": 2.30, "dmg_min": 5, "dmg_max": 9,
+        "phys_def": 1, "mag_def": 3, "detect_range": 6.0, "perception": 1.10,
+        "is_ranged": True, "proj_color": (215, 75, 255), "is_boss": False, "size_tiles": 1, "xp": 18,
+    },
+    "necromancer": {
+        "sprite": "necromancer", "hp": 28, "speed": 2.00, "dmg_min": 6, "dmg_max": 10,
+        "phys_def": 2, "mag_def": 5, "detect_range": 6.5, "perception": 1.20,
+        "is_ranged": True, "proj_color": (85, 255, 130), "is_boss": False, "size_tiles": 1, "xp": 26,
+    },
+    "brute": {
+        "sprite": "brute", "hp": 36, "speed": 1.85, "dmg_min": 7, "dmg_max": 11,
+        "phys_def": 4, "mag_def": 1, "detect_range": 4.8, "perception": 0.85,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 24,
+    },
+}
+
+
+class Enemy:
+    def __init__(self, x, y, kind="rat", state="patrolling", chat_lines=None):
+        self.x = float(x) + 0.5
+        self.y = float(y) + 0.5
+        self.bump_x = 0.0
+        self.bump_y = 0.0
+        self.kind = kind
+        self.state = state
+
+        prof = MOB_PROFILES.get(kind, MOB_PROFILES["rat"])
+        self.sprite = prof["sprite"]
+        self.max_hp = prof["hp"]
+        self.hp = self.max_hp
+        self.speed = prof["speed"]
+        self.dmg_min = prof["dmg_min"]
+        self.dmg_max = prof["dmg_max"]
+        self.phys_def = prof["phys_def"]
+        self.mag_def = prof["mag_def"]
+        self.detect_range = prof["detect_range"]
+        self.perception = prof["perception"]
+        self.is_ranged = prof["is_ranged"]
+        self.proj_color = prof.get("proj_color", (215, 75, 255))
+        self.is_boss = prof.get("is_boss", False)
+        self.size_tiles = prof.get("size_tiles", 2 if self.is_boss else 1)
+        self.xp_value = prof["xp"]
+
+        self.awareness = 0.0
+        self.facing = -1
+        self.alert_bang_timer = 0.0
+        self.attack_cd = 0.0
+        self.cast_windup_timer = 0.0
+        self.cast_windup_max = 0.65
+        self.pending_pentagram = False
+        self.patrol_dir = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
+        self.patrol_timer = random.uniform(1.2, 2.8)
+
+        self.chat_lines = chat_lines or []
+        self.chat_partner = None
+        self.chat_timer = random.uniform(1.0, 3.0)
+        self.chat_index = 0
+        self.current_speech = None
+
+        self.solo_lines = []
+        self.solo_timer = random.uniform(1.8, 4.0)
+        self.solo_show_timer = 0.0
+
+        self.path = []
+        self.path_timer = 0.0
+        self.kb_vx = 0.0
+        self.kb_vy = 0.0
+        self.poison_timer = 0.0
+        self.poison_tick = 0.0
+        self.poison_dmg = 2
+        self.burn_timer = 0.0
+        self.burn_tick = 0.0
+        self.burn_dmg = 3
+        self.slow_timer = 0.0
+        self.stun_timer = 0.0
+        self.root_timer = 0.0
+        self.chill_after_root = 0.0
+        self.glow_timer = 0.0
+        self.glow_color = (255, 255, 255)
+        self.hit_flash_timer = 0.0
+        self.hit_flash_crit = False
+        self.last_lit_pos = None
+
+    def apply_balance_profile(self, profile, floor_num=1):
+        if not profile:
+            return
+        fl_mult_hp = 1.0 + (floor_num - 1) * profile.get("floor_hp_growth", 0.22)
+        fl_mult_dmg = 1.0 + (floor_num - 1) * profile.get("floor_dmg_growth", 0.18)
+        self.max_hp = max(1, int(round(profile["hp"] * fl_mult_hp)))
+        self.hp = self.max_hp
+        self.phys_def = int(round(profile["phys_def"] + (floor_num - 1) * 0.5))
+        self.mag_def = int(round(profile["mag_def"] + (floor_num - 1) * 0.5))
+        self.dmg_min = max(1, int(round(profile["dmg_min"] * fl_mult_dmg)))
+        self.dmg_max = max(self.dmg_min, int(round(profile["dmg_max"] * fl_mult_dmg)))
+        self.xp_value = int(round(profile["xp"] * (1.0 + (floor_num - 1) * 0.20)))
+
+    def trigger_bump(self, dx, dy):
+        self.bump_x = dx * 0.35
+        self.bump_y = dy * 0.35
+
+    def apply_knockback(self, dir_x, dir_y, force):
+        if force <= 0.0:
+            return
+        resist = 0.45 if (self.kind == "brute" or self.is_boss) else 1.0
+        self.kb_vx = dir_x * force * 6.5 * resist
+        self.kb_vy = dir_y * force * 6.5 * resist
+
+    def apply_status(self, status_name, duration, add_popup, dmg_val=3):
+        if not status_name or duration <= 0.0:
+            return
+        if status_name == "poison":
+            self.poison_timer = max(self.poison_timer, duration)
+            self.poison_dmg = max(1, int(math.floor(dmg_val)))
+        elif status_name == "burn":
+            self.burn_timer = max(self.burn_timer, duration)
+            self.burn_dmg = max(1, int(math.floor(dmg_val)))
+            self.glow_timer = max(self.glow_timer, duration)
+            self.glow_color = (255, 115, 35)
+        elif status_name == "slow":
+            self.slow_timer = max(self.slow_timer, duration)
+        elif status_name == "stun":
+            self.stun_timer = max(self.stun_timer, duration)
+        elif status_name == "root":
+            self.root_timer = max(self.root_timer, duration)
+
+    def alert_to_combat(self, sfx, add_popup, player=None, dungeon=None):
+        if self.state != "combat":
+            self.state = "combat"
+            self.awareness = 100.0
+            self.alert_bang_timer = 0.38
+            self.current_speech = None
+            self.path_timer = 0.0
+            self.attack_cd = max(self.attack_cd, random.uniform(0.12, 0.45))
+            if hasattr(sfx, "play_spatial") and player is not None:
+                sfx.play_spatial("alert", self.x, self.y, player.x, player.y, dungeon, max_dist=16.0)
+            else:
+                sfx.play("alert")
+            if self.chat_partner and self.chat_partner.state != "combat":
+                self.chat_partner.state = "combat"
+                self.chat_partner.awareness = 100.0
+                self.chat_partner.alert_bang_timer = 0.38
+                self.chat_partner.current_speech = None
+                self.chat_partner.path_timer = 0.0
+                self.chat_partner.attack_cd = max(self.chat_partner.attack_cd, random.uniform(0.35, 0.75))
+
+    def update_ai(self, dt, player, dungeon, all_mobs, projectiles, sfx, add_popup, on_player_hit):
+        self.bump_x *= max(0.0, 1.0 - 14.0 * dt)
+        self.bump_y *= max(0.0, 1.0 - 14.0 * dt)
+        self.attack_cd = max(0.0, self.attack_cd - dt)
+        self.path_timer = max(0.0, self.path_timer - dt)
+        self.alert_bang_timer = max(0.0, self.alert_bang_timer - dt)
+
+        # 1. Process Smooth Knockback Displacement
+        if math.hypot(self.kb_vx, self.kb_vy) > 0.15:
+            rad = 0.25
+            ktx = self.x + self.kb_vx * dt
+            if not (dungeon.is_blocking_move(int(ktx - rad), int(self.y - rad)) or dungeon.is_blocking_move(int(ktx + rad), int(self.y + rad))):
+                self.x = ktx
+            kty = self.y + self.kb_vy * dt
+            if not (dungeon.is_blocking_move(int(self.x - rad), int(kty - rad)) or dungeon.is_blocking_move(int(self.x + rad), int(kty + rad))):
+                self.y = kty
+            self.kb_vx *= max(0.0, 1.0 - 10.0 * dt)
+            self.kb_vy *= max(0.0, 1.0 - 10.0 * dt)
+
+        # 2. Process Status Effects
+        self.glow_timer = max(0.0, self.glow_timer - dt)
+        self.hit_flash_timer = max(0.0, self.hit_flash_timer - dt)
+        if self.poison_timer > 0.0:
+            self.poison_timer = max(0.0, self.poison_timer - dt)
+            self.poison_tick += dt
+            if self.poison_tick >= 0.65:
+                self.poison_tick = 0.0
+                self.hp -= self.poison_dmg
+                add_popup(self.x, self.y, f"-{int(self.poison_dmg)}", (110, 245, 95))
+
+        if self.burn_timer > 0.0:
+            self.burn_timer = max(0.0, self.burn_timer - dt)
+            self.burn_tick += dt
+            if self.burn_tick >= 0.55:
+                self.burn_tick = 0.0
+                self.hp -= self.burn_dmg
+                add_popup(self.x, self.y, f"-{int(self.burn_dmg)}", (255, 135, 45))
+
+        if self.slow_timer > 0.0:
+            self.slow_timer = max(0.0, self.slow_timer - dt)
+        if self.root_timer > 0.0:
+            self.root_timer = max(0.0, self.root_timer - dt)
+            if self.root_timer <= 0.0 and self.chill_after_root > 0.0:
+                self.slow_timer = max(self.slow_timer, self.chill_after_root)
+                self.chill_after_root = 0.0
+        if self.stun_timer > 0.0:
+            self.stun_timer = max(0.0, self.stun_timer - dt)
+            self.cast_windup_timer = 0.0
+            return
+
+        dx = player.x - self.x
+        dy = player.y - self.y
+        dist = math.hypot(dx, dy)
+
+        if self.state != "combat":
+            state_mult = {
+                "sleeping": 0.28,
+                "eating": 0.60,
+                "chatting": 0.70,
+                "patrolling": 1.15
+            }.get(self.state, 1.0)
+
+            p_tile = dungeon.grid[int(player.y)][int(player.x)]
+            surface_noise = 1.5 if p_tile == 2 else (0.55 if p_tile == 3 else 1.0)
+
+            eff_range = self.detect_range * (0.45 + player.illumination * 0.85) * state_mult
+            can_sense = False
+
+            hear_range = 2.8 * player.noise_factor * surface_noise
+            if dist <= hear_range:
+                can_sense = True
+            elif dist <= eff_range and dungeon.has_line_of_sight(self.x, self.y, player.x, player.y, eff_range):
+                can_sense = True
+
+            if can_sense:
+                prox = max(0.25, (max(eff_range, hear_range) - dist) / max(1.0, eff_range))
+                gain = (62.0 * self.perception * state_mult * (0.40 + player.illumination * 1.2) * player.noise_factor * surface_noise * (prox ** 1.1))
+                if dist < 1.85:
+                    gain += 130.0
+                self.awareness = min(100.0, self.awareness + gain * dt)
+                if self.awareness >= 100.0:
+                    self.alert_to_combat(sfx, add_popup, player=player, dungeon=dungeon)
+            else:
+                self.awareness = max(0.0, self.awareness - 12.0 * dt)
+
+            if self.state == "chatting" and self.chat_lines:
+                self.chat_timer -= dt
+                if self.chat_timer <= 0.0:
+                    if self.chat_index < len(self.chat_lines):
+                        self.chat_timer = 3.4
+                        line = self.chat_lines[self.chat_index]
+                        if self.chat_index % 2 == 0:
+                            self.current_speech = line
+                            if self.chat_partner:
+                                self.chat_partner.current_speech = None
+                        else:
+                            self.current_speech = None
+                            if self.chat_partner:
+                                self.chat_partner.current_speech = line
+                        self.chat_index += 1
+                        if hasattr(sfx, "play_spatial"):
+                            sfx.play_spatial("mob_talk", self.x, self.y, player.x, player.y, dungeon, max_dist=14.0)
+                        elif dist <= 7.5:
+                            sfx.play("mob_talk")
+                    else:
+                        self.current_speech = None
+                        self.state = "patrolling"
+                        if self.chat_partner and self.chat_partner.state == "chatting":
+                            self.chat_partner.current_speech = None
+                            self.chat_partner.state = "eating"
+
+            if self.state != "chatting" and self.solo_lines:
+                if self.solo_show_timer > 0.0:
+                    self.solo_show_timer -= dt
+                    if self.solo_show_timer <= 0.0:
+                        self.current_speech = None
+                else:
+                    self.solo_timer -= dt
+                    if self.solo_timer <= 0.0:
+                        self.solo_timer = random.uniform(4.5, 8.0)
+                        self.solo_show_timer = 4.0
+                        self.current_speech = random.choice(self.solo_lines)
+                        if hasattr(sfx, "play_spatial"):
+                            sfx.play_spatial("mob_talk", self.x, self.y, player.x, player.y, dungeon, max_dist=14.0)
+                        elif dist <= 8.5:
+                            sfx.play("mob_talk")
+
+            if self.state == "patrolling":
+                self.patrol_timer -= dt
+                if self.patrol_timer <= 0.0:
+                    self.patrol_dir = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)])
+                    self.patrol_timer = random.uniform(1.5, 3.2)
+                if self.patrol_dir != (0, 0):
+                    if self.patrol_dir[0] != 0:
+                        self.facing = 1 if self.patrol_dir[0] > 0 else -1
+                    old_x, old_y = self.x, self.y
+                    self._step_with_collision(self.patrol_dir[0], self.patrol_dir[1], dt * 0.45, dungeon, all_mobs)
+                    if math.hypot(self.x - old_x, self.y - old_y) < 0.001:
+                        self.patrol_dir = (-self.patrol_dir[0], -self.patrol_dir[1])
+            return
+
+        # --- COMBAT AI WITH FULL A* PATHFINDING, PENTAGRAM CASTING & BOSS CRIES ---
+        if self.is_boss and self.solo_lines:
+            if self.solo_show_timer > 0.0:
+                self.solo_show_timer -= dt
+                if self.solo_show_timer <= 0.0:
+                    self.current_speech = None
+            else:
+                self.solo_timer -= dt
+                if self.solo_timer <= 0.0:
+                    self.solo_timer = random.uniform(5.0, 8.5)
+                    self.solo_show_timer = 3.2
+                    self.current_speech = random.choice(self.solo_lines)
+                    sfx.play("mob_talk")
+
+        if abs(dx) > 0.08:
+            self.facing = 1 if dx > 0 else -1
+
+        # 1. If currently channeling a dark spell (windup before pentagram appears!)
+        if self.cast_windup_timer > 0.0:
+            self.cast_windup_timer -= dt
+            if self.cast_windup_timer <= 0.0:
+                self.cast_windup_timer = 0.0
+                self.pending_pentagram = True
+                if dist > 0.001:
+                    self.trigger_bump((dx / dist) * 0.35, (dy / dist) * 0.35)
+            return
+
+        if dist < 0.001:
+            return
+        nx, ny = dx / dist, dy / dist
+
+        if self.is_ranged:
+            has_los = dungeon.has_line_of_sight(self.x, self.y, player.x, player.y, 9.5)
+            melee_engage_dist = 1.75 if self.size_tiles >= 2 else 2.0
+            melee_hit_reach = 1.75 if self.size_tiles >= 2 else 1.25
+
+            # 1. Движение: если игрок подошёл вплотную (<= 2.0 тайла), культист идёт на сближение в рукопашную!
+            if dist <= melee_engage_dist:
+                if dist > melee_hit_reach * 0.88:
+                    self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)
+            elif dist > 5.8 or not has_los:
+                self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)
+            elif dist < 2.8 and not self.is_boss:
+                self._step_with_collision(-nx, -ny, dt, dungeon, all_mobs)
+            elif self.is_boss and dist > 1.35:
+                self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)
+
+            # 2. Атака: удар в ближнем бою ИЛИ дистанционный каст с небольшим разбросом КД
+            if dist <= melee_hit_reach and self.attack_cd <= 0.0:
+                self.attack_cd = 0.95 if self.is_boss else 1.05
+                self.trigger_bump(nx, ny)
+                sfx.play("hit")
+                on_player_hit(random.randint(self.dmg_min, self.dmg_max), is_magic=False)
+            elif dist > melee_engage_dist and has_los and dist <= 8.2 and self.attack_cd <= 0.0:
+                cd_jitter = random.uniform(-0.15, 0.30)
+                if self.kind in ("rat_cultist", "rat_king"):
+                    self.cast_windup_max = 0.58 if self.is_boss else 0.68
+                    self.cast_windup_timer = self.cast_windup_max
+                    self.attack_cd = (1.85 if self.is_boss else 2.55) + cd_jitter
+                    if hasattr(sfx, "play_spatial"):
+                        sfx.play_spatial("spell_windup", self.x, self.y, player.x, player.y, dungeon, max_dist=18.0)
+                    else:
+                        sfx.play("spell_windup")
+                else:
+                    self.attack_cd = 1.55 + cd_jitter
+                    self.trigger_bump(nx * 0.5, ny * 0.5)
+                    if hasattr(sfx, "play_spatial"):
+                        sfx.play_spatial("magic", self.x, self.y, player.x, player.y, dungeon, max_dist=18.0)
+                    else:
+                        sfx.play("magic")
+                    dmg = random.randint(self.dmg_min, self.dmg_max)
+                    projectiles.append(Projectile(
+                        self.x, self.y, nx, ny,
+                        speed=6.5, mag_dmg=dmg,
+                        color=self.proj_color, from_player=False
+                    ))
+                    projectiles[-1].source = self
+        else:
+            if dist > 1.05:
+                self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)
+            elif self.attack_cd <= 0.0:
+                self.attack_cd = 0.80 if self.kind in ("rat", "wolf") else (1.05 if self.kind == "skeleton" else 1.35)
+                self.trigger_bump(nx, ny)
+                raw_phys = random.randint(self.dmg_min, self.dmg_max)
+                on_player_hit(raw_phys, is_magic=False)
+
+    def _follow_astar_path(self, target_x, target_y, dt, dungeon, all_mobs):
+        if self.path_timer <= 0.0 or not self.path:
+            self.path_timer = random.uniform(0.24, 0.36)
+            self.path = dungeon.find_path((int(self.x), int(self.y)), (int(target_x), int(target_y)))
+
+        while self.path and math.hypot(self.path[0][0] - self.x, self.path[0][1] - self.y) < 0.22:
+            self.path.pop(0)
+
+        if self.path:
+            wx, wy = self.path[0]
+            dx, dy = wx - self.x, wy - self.y
+        else:
+            dx, dy = target_x - self.x, target_y - self.y
+
+        d = math.hypot(dx, dy)
+        if d > 0.001:
+            self._step_with_collision(dx / d, dy / d, dt, dungeon, all_mobs)
+
+    def _step_with_collision(self, dir_x, dir_y, dt, dungeon, all_mobs):
+        if abs(dir_x) > 0.15:
+            self.facing = 1 if dir_x > 0 else -1
+        sep_x, sep_y = 0.0, 0.0
+        for other in all_mobs:
+            if other is not self:
+                odx = self.x - other.x
+                ody = self.y - other.y
+                od = math.hypot(odx, ody)
+                if 0.001 < od < 0.65:
+                    push = (0.65 - od) / 0.65
+                    sep_x += (odx / od) * push * 0.8
+                    sep_y += (ody / od) * push * 0.8
+
+        vx = dir_x + sep_x
+        vy = dir_y + sep_y
+        v_len = math.hypot(vx, vy)
+        if v_len > 0.001:
+            vx /= v_len
+            vy /= v_len
+
+        if self.root_timer > 0.0:
+            return
+        spd_mult = 0.45 if self.slow_timer > 0.0 else 1.0
+        step = self.speed * spd_mult * dt
+        rad = 0.25
+
+        moved_any = False
+        tx = self.x + vx * step
+        if not (
+            dungeon.is_blocking_move(int(tx - rad), int(self.y - rad))
+            or dungeon.is_blocking_move(int(tx + rad), int(self.y - rad))
+            or dungeon.is_blocking_move(int(tx - rad), int(self.y + rad))
+            or dungeon.is_blocking_move(int(tx + rad), int(self.y + rad))
+        ):
+            self.x = tx
+            moved_any = True
+
+        ty = self.y + vy * step
+        if not (
+            dungeon.is_blocking_move(int(self.x - rad), int(ty - rad))
+            or dungeon.is_blocking_move(int(self.x + rad), int(ty - rad))
+            or dungeon.is_blocking_move(int(self.x - rad), int(ty + rad))
+            or dungeon.is_blocking_move(int(self.x + rad), int(ty + rad))
+        ):
+            self.y = ty
+            moved_any = True
+
+        if not moved_any:
+            cx, cy = int(self.x) + 0.5, int(self.y) + 0.5
+            self.x += (cx - self.x) * min(1.0, 8.0 * dt)
+            self.y += (cy - self.y) * min(1.0, 8.0 * dt)

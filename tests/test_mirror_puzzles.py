@@ -12,13 +12,14 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
 
-from config import MAP_COLS, MAP_ROWS, TILE_W, TILE_H
-from dungeon import Door, Dungeon
-from entities import Enemy, Interactable, Player
-from items_data import BASE_ITEMS_DB
-from main import GameController, load_modular_locales
-from mission_rats import populate_mission_floor
-import puzzle_mirrors as puzzles
+from elenor.config import MAP_COLS, MAP_ROWS, TILE_W, TILE_H
+from elenor.world.dungeon import Door, Dungeon
+from elenor.entities import Enemy, Interactable, Player
+from elenor.data.items import BASE_ITEMS_DB
+from elenor.game.controller import GameController
+from elenor.localization import load_modular_locales
+from elenor.missions.rats import populate_mission_floor
+import elenor.puzzles.mirrors as puzzles
 
 
 class HeadlessGame(GameController):
@@ -76,7 +77,7 @@ class MirrorPuzzleTests(unittest.TestCase):
         # Even the no-matching-rarity fallback must exclude quest keys.
         g.loc["items"] = {key: value for key, value in g.loc["items"].items()
                           if key in ("focusing_lens", "potion_hp")}
-        with patch("main.random.choices", return_value=["legendary"]):
+        with patch("elenor.game.inventory.random.choices", return_value=["legendary"]):
             self.assertNotEqual(g.roll_item_by_rarity(allowed_types=["consumable"]).type, "quest_key")
 
     def test_campaign_keeps_its_introduction(self):
@@ -338,10 +339,32 @@ class MirrorPuzzleTests(unittest.TestCase):
             self.assertEqual(g.player.record_build_action.call_count, int(rewarded))
             g.player.record_build_action.reset_mock()
             g.player.perk_dodge = 0.55
-            with patch("main.random.random", return_value=0):
+            with patch("elenor.game.combat.random.random", return_value=0):
                 g.on_player_hit(1, source=mob)
             self.assertEqual(g.player.record_build_action.call_count, int(rewarded))
 
 
 if __name__ == "__main__":
     unittest.main()
+
+class OpticalCacheTests(unittest.TestCase):
+    def test_cache_invalidates_for_mirror_geometry_and_blocking_props(self):
+        d = Dungeon(puzzle_profile='rats')
+        d.generate(4)
+        g = HeadlessGame(d)
+        ctrl = puzzles.spawn_floor_mirror_puzzle(g, Interactable)
+        puzzles.recalculate_mirror_puzzle(g, ctrl)
+        with patch.object(d, 'is_blocking_sight', wraps=d.is_blocking_sight) as trace:
+            puzzles.recalculate_mirror_puzzle(g, ctrl)
+            trace.assert_not_called()
+            ctrl.mirrors[0].mirror_ori = (ctrl.mirrors[0].mirror_ori + 1) % 4
+            puzzles.recalculate_mirror_puzzle(g, ctrl)
+            self.assertGreater(trace.call_count, 0)
+            trace.reset_mock()
+            d.invalidate_light_cache()
+            puzzles.recalculate_mirror_puzzle(g, ctrl)
+            self.assertGreater(trace.call_count, 0)
+            trace.reset_mock()
+            g.objects.append(Interactable(1, 1, 'barrel'))
+            puzzles.recalculate_mirror_puzzle(g, ctrl)
+            self.assertGreater(trace.call_count, 0)

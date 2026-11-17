@@ -1,6 +1,5 @@
 import math
 import random
-from entities import MOB_PROFILES
 
 
 def get_mission_texts(loc_dict):
@@ -227,7 +226,7 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
                 game.mobs.append(sm)
 
     if game.dungeon.mirror_puzzle_info is not None:
-        from puzzle_mirrors import spawn_floor_mirror_puzzle
+        from elenor.puzzles.mirrors import spawn_floor_mirror_puzzle
         spawn_floor_mirror_puzzle(
             game, InteractableCls,
             beam_color=(255, 45, 55),
