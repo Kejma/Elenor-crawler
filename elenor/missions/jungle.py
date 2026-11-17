@@ -6,9 +6,10 @@ import random
 import pygame
 
 from elenor.config import MAP_COLS, MAP_ROWS
+from elenor.rendering.daylight import canopy_light
 
 SHALLOW_WATER, DEEP_WATER, PIER, PEBBLE_SHORE = range(37, 41)
-FISHING_STAND = "prop_fishing_rod_stand"
+WATER_TILES = frozenset((SHALLOW_WATER, DEEP_WATER))
 SPOTS = ((13, "eddy"), (32, "snag"), (51, "current"))
 
 
@@ -19,7 +20,7 @@ def shoreline(x):
 def generate_jungle_bank(dungeon):
     # Called after Dungeon has reset all floor-owned state.
     rng = random.Random(206)
-    dungeon.ambient_light = (0.76, 0.80, 0.69)
+    dungeon.ambient_light = (0.16, 0.23, 0.26)
     dungeon.grid = []
     for y in range(MAP_ROWS):
         row = []
@@ -53,13 +54,14 @@ def generate_jungle_bank(dungeon):
         bank = shoreline(x)
         dungeon.grid[bank - 3][x] = 12
         dungeon.grid[bank - 4][x] = 12
-    for x, _ in SPOTS:
+    for x, spot in SPOTS:
         bank = shoreline(x)
         for y in range(bank - 1, bank + 2):
             for tx in (x - 1, x, x + 1):
                 dungeon.grid[y][tx] = PIER
                 dungeon.overlays.pop((tx, y), None)
-        dungeon.overlays[x, bank + 2] = "ov_bobber_ripples"
+        for tx in (x - 1, x, x + 1):
+            dungeon.fishing_edges[tx, bank + 1] = spot
 
     # Readably distinct water around the three approaches.
     for x, y_offset in ((10, 1), (11, 2), (15, 1), (16, 2), (17, 0)):
@@ -69,18 +71,16 @@ def generate_jungle_bank(dungeon):
             continue
         dungeon.overlays[x, shoreline(x) + 1] = "ov_shore_foam"
 
+    dungeon.sunlight = canopy_light(dungeon.grid)
+
     first_x = SPOTS[0][0]
     dungeon.start_pos = first_x, shoreline(first_x) - 2
     dungeon.rooms = [pygame.Rect(1, 7, MAP_COLS - 2, 14)]
 
 
 def populate_jungle_bank(game, Interactable):
-    for x, spot in SPOTS:
+    for x, _ in SPOTS:
         bank = shoreline(x)
-        stand = Interactable(x, bank, FISHING_STAND)
-        stand.fishing_spot = spot
-        stand.fishing_target = x + 0.5, bank + 2.7
-        game.objects.append(stand)
         for tx, ty, kind in (
             (x - 1, bank - 1, "prop_bait_bucket"),
             (x + 1, bank - 1, "prop_fisherman_stool"),

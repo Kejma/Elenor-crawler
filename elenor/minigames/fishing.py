@@ -1,7 +1,11 @@
 """The float, strike and reeling state for one cast."""
 
 from dataclasses import dataclass
+import math
 import random
+
+from elenor.config import MAP_COLS, MAP_ROWS
+from elenor.missions.jungle import PIER, WATER_TILES
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,7 @@ class FishingCast:
         self.spot = spot
         self.origin = origin
         self.target = target
+        self.retrieve_to = target
         self.fish_id = fish_id
         self.profile = profile
         self.delay = delay
@@ -101,6 +106,20 @@ class FishingCast:
                 < self.profile.surge_length
             )
         )
+
+    @property
+    def float_position(self):
+        fraction = (
+            min(1, self.elapsed / 0.36)
+            if self.phase == "cast"
+            else min(1, self.progress)
+        )
+        start, end = (
+            (self.origin, self.target)
+            if self.phase == "cast"
+            else (self.target, self.retrieve_to)
+        )
+        return tuple(a + (b - a) * fraction for a, b in zip(start, end))
 
     @property
     def bob(self):
@@ -151,38 +170,83 @@ class FishingCast:
                 self.phase = "escaped"
 
 
-def start_fishing(game, stand):
+def cast_route(dungeon, origin, target):
+    """Get the fishing spot and the last point reachable by the floating bobber."""
+    x, y = origin
+    tx, ty = target
+    spot = dungeon.fishing_edges.get((math.floor(x), math.floor(y)))
+    distance = math.dist(origin, target)
+    if not spot or not (
+        0.15 <= distance <= 7 and 0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS
+    ):
+        return None
+    if dungeon.grid[int(ty)][int(tx)] not in WATER_TILES:
+        return None
+    steps = math.ceil(distance / 0.08)
+    first_water = None
+    for i in range(1, steps + 1):
+        fraction = i / steps
+        wx, wy = x + (tx - x) * fraction, y + (ty - y) * fraction
+        tile = dungeon.grid[int(wy)][int(wx)]
+        if tile in WATER_TILES:
+            if first_water is None:
+                # A small margin keeps the float and ripples just off the planks.
+                first_water = min(steps, i + 4)
+        elif tile != PIER or first_water is not None:
+            return None
+    fraction = first_water / steps
+    return spot, (x + (tx - x) * fraction, y + (ty - y) * fraction)
+
+
+def start_fishing(game, tx, ty):
     if (
         game.player.pending_action
         or game.player.hp <= 0
         or game.inv_open
         or game.levelup_choices
     ):
-        return
-    cast_at(game, stand.fishing_spot, stand.fishing_target)
-
-
-def cast_at(game, spot, target):
+        return False
+    origin, target = (game.player.x, game.player.y), (tx, ty)
+    route = cast_route(game.dungeon, origin, target)
+    if route is None:
+        return False
+    spot, retrieve_to = route
     fish_id, profile = choose_catch(spot)
-    game.fishing_cast = FishingCast(
-        spot,
-        (game.player.x, game.player.y),
-        target,
-        fish_id,
-        profile,
-        random.uniform(2.1, 3.8),
-    )
+    cast = FishingCast(spot, origin, target, fish_id, profile, random.uniform(2.1, 3.8))
+    cast.retrieve_to = retrieve_to
+    game.fishing_cast = cast
     game.player.is_moving = False
+    game.player.facing = -1 if tx < origin[0] else 1
+    game.sfx.play("fishing_cast")
+    return True
+
+
+def press_fishing(game):
+    cast = game.fishing_cast
+    previous = cast.phase
+    cast.press()
+    if previous == "bite":
+        game.sfx.play("fishing_hook")
+    elif cast.phase == "early":
+        game.sfx.play("fishing_empty")
 
 
 def update_fishing(game, dt):
     cast = game.fishing_cast
     previous = cast.phase
+    elapsed, surging = cast.elapsed, cast.surging
     cast.update(dt)
     if cast.phase == previous:
+        if cast.phase == "reel":
+            if cast.surging and not surging:
+                game.play_spatial("fishing_tug", *cast.float_position)
+            if cast.reeling and int(elapsed / 0.17) != int(cast.elapsed / 0.17):
+                game.sfx.play("fishing_reel")
         return
-    if cast.phase in ("wait", "bite"):
-        game.play_spatial("step_water", *cast.target)
+    if cast.phase == "wait":
+        game.play_spatial("fishing_land", *cast.target)
+    elif cast.phase == "bite":
+        game.play_spatial("fishing_bite", *cast.target)
     elif cast.phase == "caught":
         game.fishing_catches[cast.fish_id] = (
             game.fishing_catches.get(cast.fish_id, 0) + 1
@@ -191,6 +255,8 @@ def update_fishing(game, dt):
 
         name = FISH_CATALOG_SPECS[cast.fish_id][0].removeprefix("Улов: ")
         game.add_log("event", game.loc["fishing"]["catch_log"].format(fish=name))
-        game.sfx.play("coin_pickup")
-    elif cast.phase in ("missed", "snapped", "escaped"):
-        game.sfx.play("step_water")
+        game.sfx.play("fishing_catch")
+    elif cast.phase == "snapped":
+        game.sfx.play("fishing_snap")
+    elif cast.phase in ("missed", "escaped"):
+        game.play_spatial("fishing_empty", *cast.float_position)

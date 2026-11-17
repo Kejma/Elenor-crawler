@@ -12,7 +12,7 @@ from elenor.profile import apply_display_mode, map_window_to_logical, present_lo
 from elenor.game.controller import GameController
 from elenor.game.targeting import is_cursor_on_mob
 
-from elenor.minigames.fishing import FINISHED, cast_at, update_fishing
+from elenor.minigames.fishing import FINISHED, press_fishing, start_fishing, update_fishing
 from elenor.ui.fishing import draw_fishing
 
 
@@ -62,16 +62,22 @@ def main():
             if hasattr(event, "pos"):
                 event.pos = map_window_to_logical(event.pos, game.viewport_rect)
 
+            click_world = event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and event.pos[1] < VIEW_H * SCALE
+            press_space = event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE and not getattr(event, "repeat", False)
+            if click_world:
+                aim = ((event.pos[0] / SCALE + game.cam_x) / TILE_W,
+                       (event.pos[1] / SCALE + game.cam_y) / TILE_H)
+            else:
+                aim = (world_mx, world_my)
+
             cast = game.fishing_cast
             if cast is not None:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        game.fishing_cast = None
-                    elif event.key == pygame.K_SPACE and not getattr(event, "repeat", False):
-                        if cast.phase in FINISHED:
-                            cast_at(game, cast.spot, cast.target)
-                        else:
-                            cast.press()
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    game.fishing_cast = None
+                elif cast.phase in FINISHED and (press_space or click_world):
+                    start_fishing(game, *aim)
+                elif press_space:
+                    press_fishing(game)
                 elif event.type == pygame.KEYUP and event.key == pygame.K_SPACE:
                     cast.reeling = False
                 elif event.type == pygame.WINDOWFOCUSLOST:
@@ -85,6 +91,13 @@ def main():
             if hasattr(game, "dev_panel") and game.dev_panel:
                 if game.dev_panel.handle_event(event, game, world_mx, world_my):
                     continue
+
+            if game.campaign == "jungle" and (click_world or press_space):
+                player_tile = int(game.player.x), int(game.player.y)
+                if player_tile in game.dungeon.fishing_edges and not game.inv_open and not game.levelup_choices:
+                    if click_world or mouse_pos[1] < VIEW_H * SCALE:
+                        start_fishing(game, *aim)
+                        continue
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -527,12 +540,19 @@ def main():
 
         world_ox = game.player.x * TILE_W
         world_oy = game.player.y * TILE_H
-        fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(world_ox, world_oy, game.cam_x, game.cam_y)
+        sun = game.dungeon.sunlight
+        daylight_sight = max(152, min(250, 220 + (game.player.dark_vision_radius - 68))) if sun is not None else None
+        fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(
+            world_ox, world_oy, game.cam_x, game.cam_y, daylight_sight=daylight_sight
+        )
         game.current_visible_tiles = visible_tiles
         if (game.world_active and not game.inv_open and not game.levelup_choices
                 and not dev_open and game.player.hp > 0):
             update_mirror_puzzles(game, dt)
         game.player.update_illumination(game.dungeon.braziers, game.dungeon.room_lights, game.objects, player_open_tiles)
+        if sun is not None:
+            game.player.illumination = max(game.player.illumination,
+                                           .23 + .66 * sun[int(world_ox), int(world_oy)])
 
         game.particles = [pt for pt in game.particles if pt is not None and pt.update(dt)]
         game.popups = [p for p in game.popups if p is not None and p.update(dt)]
@@ -596,6 +616,8 @@ def main():
                 "color": (0.38, 0.48, 0.72)
             }
         ]
+        if sun is not None:
+            lights[0]["color"] = (.08, .12, .15)
         if game.player.has_lit_torch:
             lights.append({
                 "pos": (p_sx + 4, p_sy - 2, TORCH_Z_HEIGHT),
@@ -825,7 +847,7 @@ def main():
         )
 
         if game.campaign == "jungle" and not game.inv_open:
-            draw_fishing(screen, game)
+            draw_fishing(screen, game, (world_mx, world_my), fov_mask)
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)

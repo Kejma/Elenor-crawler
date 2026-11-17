@@ -1,18 +1,16 @@
-import math
 import unittest
 
-from elenor.minigames.fishing import FINISHED, POOLS, PROFILES, FishingCast
+from elenor.minigames.fishing import FINISHED, POOLS, PROFILES, FishingCast, cast_route
 from elenor.missions.jungle import (
     DEEP_WATER,
     SHALLOW_WATER,
+    PIER,
     SPOTS,
-    populate_jungle_bank,
+    shoreline,
 )
 from elenor.rendering.fishing import FISH_CATALOG_SPECS
 from elenor.world.dungeon import Dungeon
 from elenor.world.merchant import reachable_tiles
-
-from test_mirror_puzzles import HeadlessGame, Interactable
 
 
 def make_cast(profile):
@@ -68,23 +66,51 @@ class FishingTests(unittest.TestCase):
         ]
         self.assertCountEqual(ids, FISH_CATALOG_SPECS.keys())
 
-    def test_three_stands_accessible_from_spawn_and_cast_into_water(self):
+    def test_shallow_and_deep_casts_stay_in_water_until_landed(self):
         dungeon = Dungeon()
         dungeon.generate(campaign="jungle")
-        game = HeadlessGame(dungeon)
-        populate_jungle_bank(game, Interactable)
         reachable = reachable_tiles(dungeon, dungeon.start_pos)
-        stands = [obj for obj in game.objects if hasattr(obj, "fishing_spot")]
-        self.assertCountEqual(
-            [obj.fishing_spot for obj in stands], [spot for _, spot in SPOTS]
-        )
-        for stand in stands:
-            self.assertIn((stand.x, stand.y), reachable)
-            wx, wy = stand.fishing_target
-            self.assertIn(dungeon.grid[int(wy)][int(wx)], (SHALLOW_WATER, DEEP_WATER))
-            self.assertLess(
-                math.dist((stand.x + 0.5, stand.y + 0.5), stand.fishing_target), 4
-            )
+        for x, spot in SPOTS:
+            y = shoreline(x)
+            self.assertIn((x, y + 1), reachable)
+            self.assertEqual(dungeon.grid[y + 1][x], PIER)
+            for depth, tile in ((2.5, SHALLOW_WATER), (5.5, DEEP_WATER)):
+                origin, aim = (x + 0.5, y + 1.5), (x + 0.5, y + depth)
+                self.assertEqual(dungeon.grid[int(aim[1])][int(aim[0])], tile)
+                self.assertIsNone(cast_route(dungeon, (x + 0.5, y + 0.5), aim))
+                self.assertIsNone(cast_route(dungeon, origin, (x + 0.5, y - 0.5)))
+                selected, end = cast_route(dungeon, origin, aim)
+                self.assertEqual(selected, spot)
+                cast = make_cast("shoal")
+                cast.phase = "reel"
+                cast.target, cast.retrieve_to = aim, end
+                for step in range(11):
+                    cast.progress = step / 10
+                    fx, fy = cast.float_position
+                    self.assertIn(
+                        dungeon.grid[int(fy)][int(fx)], (SHALLOW_WATER, DEEP_WATER)
+                    )
         self.assertTrue(dungeon.is_blocking_move(30, 28))
+
+    def test_daylight_keeps_range_and_canopy_shadows(self):
+        dungeon = Dungeon()
+        dungeon.generate(campaign="jungle")
+        self.assertLess(dungeon.sunlight.min(), 0.30)
+        self.assertEqual(dungeon.sunlight.max(), 1)
+        # Water gives a clear view across the river. The outer view still fades
+        # while the same world pixel remains geometrically visible.
+        wx, wy = 500, 320
+        cam_x, cam_y = wx - 240, wy - 100
+        raw, _, _ = dungeon.compute_nox_fov(wx, wy, cam_x, cam_y)
+        self.assertEqual(raw[420, 100], 1)
+        mask, visible, _ = dungeon.compute_nox_fov(
+            wx, wy, cam_x, cam_y, daylight_sight=200
+        )
+        self.assertEqual(mask[240, 100], 1)
+        self.assertTrue(0 < mask[420, 100] < 0.25)
+        self.assertEqual(mask[450, 100], 0)
+        self.assertNotIn(((450 + cam_x) // 16, wy // 16), visible)
         dungeon.generate()
+        self.assertIsNone(dungeon.sunlight)
+        self.assertFalse(dungeon.fishing_edges)
         self.assertEqual(dungeon.ambient_light, (0, 0, 0))

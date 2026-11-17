@@ -78,6 +78,8 @@ class Dungeon:
     def generate(self, floor_num=1, *, campaign="rats"):
         self.floor_num = floor_num
         self.ambient_light = (0.0, 0.0, 0.0)
+        self.sunlight = None
+        self.fishing_edges = {}
         self.rooms = []
         self.braziers = []
         self.room_lights = []
@@ -689,7 +691,7 @@ class Dungeon:
                         allowed_grid[wx, wy] = 1.0
         return allowed_grid
 
-    def compute_nox_fov(self, world_ox, world_oy, cam_x, cam_y):
+    def compute_nox_fov(self, world_ox, world_oy, cam_x, cam_y, *, daylight_sight=None):
         self._last_viewer_pos = (world_ox / TILE_W, world_oy / TILE_H)
         cam_ix, cam_iy = int(round(cam_x)), int(round(cam_y))
 
@@ -767,5 +769,19 @@ class Dungeon:
         fov_red_view = pygame.surfarray.pixels3d(fov_surf)[:, :, 0]
         np.multiply(fov_red_view, 1.0 / 255.0, out=self._fov_full_mask[:, :VIEW_H], casting="unsafe")
         del fov_red_view
+
+        if daylight_sight is not None:
+            px = np.arange(VIEW_W, dtype=np.float32)[:, None] + cam_ix - world_ox
+            py = np.arange(VIEW_H, dtype=np.float32)[None, :] + cam_iy - world_oy
+            fade = np.clip((daylight_sight - np.hypot(px, py)) / 90, 0, 1)
+            self._fov_full_mask[:, :VIEW_H] *= fade * fade * (3 - 2 * fade)
+
+            def in_range(tile):
+                x, y = tile
+                return math.hypot((x + .5) * TILE_W - world_ox,
+                                  (y + .5) * TILE_H - world_oy) < daylight_sight
+
+            visible_tiles = {tile for tile in visible_tiles if in_range(tile)}
+            open_visible_tiles = {tile for tile in open_visible_tiles if tile in visible_tiles}
 
         return self._fov_full_mask, visible_tiles, open_visible_tiles
