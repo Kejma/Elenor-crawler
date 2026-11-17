@@ -219,6 +219,14 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
                 _scale_mob_for_floor(sm, floor_num)
                 game.mobs.append(sm)
 
+    if floor_num >= 4:
+        from puzzle_mirrors import spawn_pre_boss_mirror_puzzle
+        spawn_pre_boss_mirror_puzzle(
+            game, InteractableCls,
+            beam_color=(255, 45, 55),
+            spawn_chance=1.0
+        )
+
     for m in game.mobs:
         attach_mob_dialogues(m, game.loc)
 

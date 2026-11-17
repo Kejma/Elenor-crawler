@@ -211,18 +211,87 @@ class Dungeon:
 
         self.grid = [[base_wall for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
 
-        max_gen_x = (MAP_COLS - 24) if floor_num >= 4 else (MAP_COLS - 3)
-        attempts = 55 if floor_num >= 4 else 65
+        self.pre_boss_puzzle_info = None
+        reserved_boss_zone = None
+
+        if floor_num >= 4:
+            # Случайно выбираем сторону света и смещение для комплекса [Зал Головоломки -> Зал Босса]
+            boss_dir = random.choice(["east", "west", "north", "south"])
+            pw, ph = 11, 9
+            if boss_dir == "east":
+                bw, bh = 18, 14
+                bx = MAP_COLS - bw - 3
+                by = random.randint(4, MAP_ROWS - bh - 4)
+                boss_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(bx - pw - 1, boss_rect.centery - ph // 2, pw, ph)
+                entry_door_xy = (p_rect.left - 1, p_rect.centery)
+                boss_door_xy = (boss_rect.left - 1, p_rect.centery)
+                outer_entry_xy = (p_rect.left - 2, p_rect.centery)
+            elif boss_dir == "west":
+                bw, bh = 18, 14
+                bx = 3
+                by = random.randint(4, MAP_ROWS - bh - 4)
+                boss_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(bx + bw + 1, boss_rect.centery - ph // 2, pw, ph)
+                entry_door_xy = (p_rect.right, p_rect.centery)
+                boss_door_xy = (boss_rect.right, p_rect.centery)
+                outer_entry_xy = (p_rect.right + 1, p_rect.centery)
+            elif boss_dir == "north":
+                bw, bh = 18, 12
+                bx = random.randint(8, MAP_COLS - bw - 8)
+                by = 3
+                boss_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(boss_rect.centerx - pw // 2, by + bh + 1, pw, ph)
+                entry_door_xy = (p_rect.centerx, p_rect.bottom)
+                boss_door_xy = (p_rect.centerx, boss_rect.bottom)
+                outer_entry_xy = (p_rect.centerx, p_rect.bottom + 1)
+            else:  # "south"
+                bw, bh = 18, 12
+                bx = random.randint(8, MAP_COLS - bw - 8)
+                by = MAP_ROWS - bh - 3
+                boss_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(boss_rect.centerx - pw // 2, by - ph - 1, pw, ph)
+                entry_door_xy = (p_rect.centerx, p_rect.top - 1)
+                boss_door_xy = (p_rect.centerx, boss_rect.top - 1)
+                outer_entry_xy = (p_rect.centerx, p_rect.top - 2)
+
+            reserved_boss_zone = boss_rect.union(p_rect).inflate(4, 4)
+            self.pre_boss_puzzle_info = {
+                "dir": boss_dir,
+                "puzzle_rect": p_rect,
+                "boss_rect": boss_rect,
+                "entry_door": entry_door_xy,
+                "boss_door": boss_door_xy,
+                "outer_entry": outer_entry_xy,
+            }
+
+        attempts = 85 if floor_num >= 4 else 65
 
         for _ in range(attempts):
             w = random.randint(6, 10)
             h = random.randint(5, 8)
-            x = random.randint(3, max(4, max_gen_x - w))
+            x = random.randint(3, MAP_COLS - w - 3)
             y = random.randint(3, MAP_ROWS - h - 3)
             new_rect = pygame.Rect(x, y, w, h)
 
+            if reserved_boss_zone and new_rect.inflate(2, 2).colliderect(reserved_boss_zone):
+                continue
+
             if not any(new_rect.inflate(2, 2).colliderect(r) for r in self.rooms):
-                # 1. Сначала укладываем чистый базовый пол комнаты
+                bend_first_horiz = True
+                if self.rooms and reserved_boss_zone:
+                    px, py = self.rooms[-1].center
+                    cx, cy = new_rect.center
+                    inner_res = reserved_boss_zone.inflate(-2, -2)
+                    h1 = pygame.Rect(min(px, cx), py, abs(cx - px) + 1, 2)
+                    v1 = pygame.Rect(cx, min(py, cy), 2, abs(cy - py) + 1)
+                    if h1.colliderect(inner_res) or v1.colliderect(inner_res):
+                        v2 = pygame.Rect(px, min(py, cy), 2, abs(cy - py) + 1)
+                        h2 = pygame.Rect(min(px, cx), cy, abs(cx - px) + 1, 2)
+                        if v2.colliderect(inner_res) or h2.colliderect(inner_res):
+                            continue
+                        bend_first_horiz = False
+
                 base_fl = 4 if floor_num == 2 else (0 if floor_num == 3 else 8)
                 for ry in range(y, y + h):
                     for rx in range(x, x + w):
@@ -230,14 +299,11 @@ class Dungeon:
                             continue
                         self.grid[ry][rx] = base_fl
 
-                # 2. Логичные природные элементы + тематические зоны пыли, спор и объёмного тумана!
                 if floor_num == 2 and len(self.rooms) > 0 and random.random() < 0.30:
-                    # Пыльная кладовка в деревянном погребе
                     self.atmo_zones.append({"rect": new_rect, "kind": "dust"})
                 elif floor_num in (3, 4) and len(self.rooms) > 0:
                     feat_roll = random.random()
                     if feat_roll < 0.35 and w >= 6 and h >= 6:
-                        # Цельная округлая лужа (2), окружённая мхом (3) + стелющийся над водой туман!
                         px_c = random.uniform(x + 2.2, x + w - 2.2)
                         py_c = random.uniform(y + 2.0, y + h - 2.0)
                         w_rad = random.uniform(1.15, 1.75)
@@ -251,7 +317,6 @@ class Dungeon:
                         self.atmo_zones.append({"rect": new_rect, "kind": "spores"})
                         self.fog_zones.append({"wx": px_c, "wy": py_c, "radius": w_rad + 1.4, "color": (0.48, 0.72, 0.85), "density": 0.48, "kind": "mist"})
                     elif feat_roll < 0.68:
-                        # Сырой замшелый угол у каменной стены со спорами
                         corner_x = x if random.random() < 0.5 else (x + w - 1)
                         corner_y = y if random.random() < 0.5 else (y + h - 1)
                         m_rad = random.uniform(1.8, 2.8)
@@ -266,41 +331,66 @@ class Dungeon:
                     px, py = self.rooms[-1].center
                     cx, cy = new_rect.center
                     cor_tile = 4 if floor_num == 2 else (0 if floor_num == 3 else 8)
-                    for hx in range(min(px, cx), max(px, cx) + 1):
-                        if self.grid[py][hx] in (1, 5, 6, 7):
-                            self.grid[py][hx] = cor_tile
-                        if floor_num >= 4 and py + 1 < MAP_ROWS - 2 and random.random() < 0.45:
-                            if self.grid[py + 1][hx] in (1, 5, 6, 7):
-                                self.grid[py + 1][hx] = cor_tile
-                    for vy in range(min(py, cy), max(py, cy) + 1):
-                        if self.grid[vy][cx] in (1, 5, 6, 7):
-                            self.grid[vy][cx] = cor_tile
+                    if bend_first_horiz:
+                        for hx in range(min(px, cx), max(px, cx) + 1):
+                            if self.grid[py][hx] in (1, 5, 6, 7):
+                                self.grid[py][hx] = cor_tile
+                        for vy in range(min(py, cy), max(py, cy) + 1):
+                            if self.grid[vy][cx] in (1, 5, 6, 7):
+                                self.grid[vy][cx] = cor_tile
+                    else:
+                        for vy in range(min(py, cy), max(py, oy if False else cy) + 1):
+                            if self.grid[vy][px] in (1, 5, 6, 7):
+                                self.grid[vy][px] = cor_tile
+                        for hx in range(min(px, cx), max(px, cx) + 1):
+                            if self.grid[cy][hx] in (1, 5, 6, 7):
+                                self.grid[cy][hx] = cor_tile
 
                 self.rooms.append(new_rect)
 
-        # На 4 ярусе (Пещеры) пристраиваем справа ОГРОМНЫЙ ЗАЛ КРЫСИНОГО КОРОЛЯ (18x14)!
-        if floor_num >= 4:
-            bx, by, bw, bh = MAP_COLS - 21, 13, 18, 14
-            boss_rect = pygame.Rect(bx, by, bw, bh)
+        # Вырезаем Зал Босса и предбоссовый Зал Головоломки в выбранной стороне света!
+        if floor_num >= 4 and self.pre_boss_puzzle_info is not None:
+            info = self.pre_boss_puzzle_info
+            boss_rect = info["boss_rect"]
+            p_rect = info["puzzle_rect"]
+            bx, by, bw, bh = boss_rect.x, boss_rect.y, boss_rect.w, boss_rect.h
+
             for ry in range(by, by + bh):
                 for rx in range(bx, bx + bw):
-                    # Срезаем уголки для пещерного свода и выкладываем каменный ритуальный помост в центре
                     dist_c = math.hypot(rx - boss_rect.centerx, ry - boss_rect.centery)
                     if (rx in (bx, bx + bw - 1) and ry in (by, by + bh - 1)):
                         continue
                     self.grid[ry][rx] = 0 if dist_c <= 4.2 else 8
 
+            for ry in range(p_rect.top, p_rect.bottom):
+                for rx in range(p_rect.left, p_rect.right):
+                    self.grid[ry][rx] = 8
+
+            ox, oy = info["outer_entry"]
+            self.grid[oy][ox] = 8
             if self.rooms:
-                px, py = self.rooms[-1].center
-                cx, cy = boss_rect.left, boss_rect.centery
-                for hx in range(min(px, cx), max(px, cx) + 1):
-                    self.grid[py][hx] = 8
-                    if py + 1 < MAP_ROWS - 2:
-                        self.grid[py + 1][hx] = 8
-                for vy in range(min(py, cy), max(py, cy) + 1):
-                    self.grid[vy][cx] = 8
-                    self.grid[vy][cx - 1] = 8
-                self.doors[(boss_rect.left, boss_rect.centery)] = Door(boss_rect.left, boss_rect.centery, locked_by_lever=False)
+                nearest_r = min(self.rooms, key=lambda r: math.hypot(r.centerx - ox, r.centery - oy))
+                px, py = nearest_r.center
+                inner_res = boss_rect.union(p_rect).inflate(2, 2)
+                h_check = pygame.Rect(min(px, ox), py, abs(ox - px) + 1, 1)
+                v_check = pygame.Rect(ox, min(py, oy), 1, abs(oy - py) + 1)
+                if not h_check.colliderect(inner_res) and not v_check.colliderect(inner_res):
+                    for hx in range(min(px, ox), max(px, ox) + 1):
+                        self.grid[py][hx] = 8
+                    for vy in range(min(py, oy), max(py, oy) + 1):
+                        self.grid[vy][ox] = 8
+                else:
+                    for vy in range(min(py, oy), max(py, oy) + 1):
+                        self.grid[vy][px] = 8
+                    for hx in range(min(px, ox), max(px, ox) + 1):
+                        self.grid[oy][hx] = 8
+
+            ed_x, ed_y = info["entry_door"]
+            bd_x, bd_y = info["boss_door"]
+            self.grid[ed_y][ed_x] = 8
+            self.grid[bd_y][bd_x] = 8
+            self.doors[(ed_x, ed_y)] = Door(ed_x, ed_y, locked_by_lever=False)
+            self.doors[(bd_x, bd_y)] = Door(bd_x, bd_y, locked_by_lever=True)
 
             self.rooms.append(boss_rect)
             self.boss_room = boss_rect

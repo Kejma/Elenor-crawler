@@ -1244,6 +1244,9 @@ def create_placeholder_assets():
                 br_norm.set_at((x, y), (75 if x < 7 else 180, 160, 220))
     assets["brazier"] = (br_diff, br_norm)
 
+    from puzzle_mirrors import register_mirror_puzzle_assets
+    register_mirror_puzzle_assets(assets)
+
     from dtex_format import bootstrap_assets_if_needed, load_custom_dtex_animations
     bootstrap_assets_if_needed(assets, build_hero_sprite)
     anim_bank = load_custom_dtex_animations(assets)
@@ -2296,14 +2299,14 @@ class Renderer:
                 })
         for obj in objects:
             if not obj.used and (obj.x, obj.y) in visible_tiles:
-                if obj.kind in ("woven_rug", "stairs", "trap"):
+                if obj.kind in ("woven_rug", "stairs", "trap", "mirror_rail_h", "mirror_rail_v"):
                     fd, fn = self.assets[obj.kind]
                     self.diff_canvas.blit(fd, (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y - 4)))
                     self.norm_canvas.blit(fn, (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y - 4)))
                     continue
                 pair = self.get_world_loot_pair(obj.item) if obj.kind == "loot" else self.assets.get(obj.kind, self.assets["loot"])
                 is_npc = (obj.kind in ("npc_innkeeper", "npc_merchant"))
-                is_fire = (obj.kind in ("campfire", "fireplace"))
+                is_fire = (obj.kind in ("campfire", "fireplace", "light_emitter", "light_receiver_on"))
                 render_list.append({
                     "wx": float(obj.x), "wy": float(obj.y),
                     "actor_wx": obj.x + 0.5, "actor_wy": obj.y + 0.5,
@@ -2835,6 +2838,10 @@ class Renderer:
                 cy_s = int((pa["ty"] * TILE_H - cam_y) * SCALE)
                 r_px = int(pa["item"].aoe_radius * TILE_W * SCALE)
                 pygame.draw.circle(screen, pa["item"].color, (cx_s, cy_s), r_px, 2)
+
+        from puzzle_mirrors import render_mirror_puzzles_beams
+        if ui_texts.get("_game_ref") is not None:
+            render_mirror_puzzles_beams(screen, ui_texts["_game_ref"], cam_x, cam_y, visible_tiles)
 
         # Render Combat Skill & God Spell Visual FX
         for vfx in ui_texts.get("_visual_fx", []):

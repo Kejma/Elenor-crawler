@@ -42,6 +42,13 @@ def load_modular_locales():
     # Базовый реестр характеристик оружия и предметов
     merged = {"items": {k: dict(v) for k, v in BASE_ITEMS_DB.items()}}
     merged["items"].update(CURRENCY_AND_GEMS_DB)
+    merged["items"]["focusing_lens"] = {
+        "name": "Фокусирующая линза",
+        "type": "quest_key",
+        "rarity": "rare",
+        "icon": "trinket",
+        "desc": "Тяжёлый гранёный хрусталь в бронзовой оправе. Собирает рассеянный свет древних обелисков в плотный луч."
+    }
 
     if os.path.isdir(ru_dir):
         for fname in sorted(os.listdir(ru_dir)):
@@ -270,7 +277,7 @@ class GameController:
         non_weapon_candidates = [
             item_id for item_id, data in self.loc["items"].items()
             if not (data.get("type") == "equipment" and data.get("slot") == "right_hand")
-            and data.get("type") not in ("currency_coin", "gem")
+            and data.get("type") not in ("currency_coin", "gem", "quest_key")
             and not data.get("is_torch", False)
             and data.get("rarity", "common") == chosen_rarity
             and (allowed_types is None or data.get("type") in allowed_types)
@@ -588,6 +595,7 @@ class GameController:
         self.visual_fx = []
         self.mobs = []
         self.objects = []
+        self.mirror_puzzles = []
         self.seen_entities = set()
         self._prev_tile_id = self.dungeon.grid[int(self.player.y)][int(self.player.x)]
         self._was_near_fire = True
@@ -602,11 +610,12 @@ class GameController:
 
         populate_mission_floor(self, floor_num, Enemy, Interactable)
 
+        from puzzle_mirrors import MIRROR_SOLID_KINDS
         solid_kinds = {
             "tavern_table", "bar_counter", "wine_cask", "bed",
             "fireplace", "shelf_bottles", "cauldron", "crate_stack",
             "grandfather_clock", "wash_basin", "meat_rack", "firewood_pile", "armor_stand"
-        }
+        } | MIRROR_SOLID_KINDS
         self.dungeon.solid_props = {
             (obj.x, obj.y) for obj in self.objects if obj.kind in solid_kinds
         }
@@ -909,6 +918,10 @@ class GameController:
 
         if obj.kind == "npc_merchant":
             self.interact_with_merchant(obj)
+            return True
+
+        from puzzle_mirrors import handle_mirror_puzzle_interaction
+        if handle_mirror_puzzle_interaction(self, obj):
             return True
 
         if handle_mission_object_interaction(self, obj, Enemy, Interactable):
@@ -1328,13 +1341,15 @@ class GameController:
 
                 y_pop_off = -0.22 * hit_i
                 if is_crit:
-                    self.player.record_build_action("cunning", 0.22)
+                    if not getattr(m, "no_rewards", False):
+                        self.player.record_build_action("cunning", 0.22)
                     self.sfx.play("crit")
                     self.fx.trigger_shake(2.0, 0.14)
                     self.add_log("combat", f"Критический удар по врагу ({m.kind}): -{final_dmg} ХП!", (255, 230, 95))
                     self.add_popup(m.x, m.y + y_pop_off, f"-{final_dmg}", (255, 230, 75), big=True)
                 else:
-                    self.player.record_build_action("body", 0.15)
+                    if not getattr(m, "no_rewards", False):
+                        self.player.record_build_action("body", 0.15)
                     self.sfx.play("hit")
                     self.add_log("combat", f"Удар по врагу ({m.kind}): -{final_dmg} ХП.")
                     self.add_popup(m.x, m.y + y_pop_off, f"-{final_dmg}", (255, 245, 230))
@@ -1764,8 +1779,15 @@ class GameController:
     def _check_mob_death(self, m):
         if m.hp <= 0 and m in self.mobs:
             self.mobs.remove(m)
-            self.add_log("combat", f"Враг повержен: {m.kind} (+{m.xp_value} опыта).", (135, 245, 160))
             self.fx.add_blood_splatter(m.x, m.y, count=10, is_kill=True)
+            if getattr(m, "no_rewards", False):
+                self.add_log("combat", f"Враг из засады повержен: {m.kind} (0 опыта).", (165, 165, 175))
+                for _ in range(10):
+                    ang = random.uniform(0, 6.28)
+                    spd = random.uniform(0.8, 2.8)
+                    self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, (190, 180, 170), 2.8, 0.40))
+                return
+            self.add_log("combat", f"Враг повержен: {m.kind} (+{m.xp_value} опыта).", (135, 245, 160))
             drop_tx, drop_ty = int(m.x), int(m.y)
             if getattr(m, "is_boss", False):
                 # С Босса высыпается платина и редкий самоцвет!
@@ -2247,8 +2269,9 @@ def main():
                                     game.player.hp = min(float(game.player.max_hp), game.player.hp + pr.life_steal)
                                 if game.player.mp < game.player.max_mp:
                                     game.player.mp = min(float(game.player.max_mp), game.player.mp + game.player.mp_on_hit * 0.5)
-                                # Только реальное попадание метательным оружием развивает Ловкача!
-                                game.player.record_build_action("cunning", 0.16)
+                                # Только реальное попадание по наградным мобам развивает Ловкача!
+                                if not getattr(m, "no_rewards", False):
+                                    game.player.record_build_action("cunning", 0.16)
                             else:
                                 is_crit = False
                                 dmg = max(1, int(math.floor(pr.mag_dmg - m.mag_def)))
@@ -2311,6 +2334,8 @@ def main():
             game.sfx.play("hurt")
             game.trigger_event_thought("torch_burned_out", force_important=True)
 
+        from puzzle_mirrors import update_mirror_puzzles, inject_mirror_puzzle_lights
+        update_mirror_puzzles(game, dt)
         game.fx.update(dt, game.player, game.dungeon, game.mobs, game.add_popup)
 
         # Фоновая пространственная музыка активной кампании (управляется модулем миссии!)
@@ -2527,6 +2552,8 @@ def main():
                 if allowed is not None:
                     register_world_and_hud_light(lx_w, ly_w, foot_w, 24.0, rad, (1.20, 0.72, 0.32), allowed)
 
+        inject_mirror_puzzle_lights(game, lights, player_open_tiles, register_world_and_hud_light)
+
         for pr in game.projectiles:
             if getattr(pr, "emits_light", True) and (int(pr.wx), int(pr.wy)) in player_open_tiles:
                 wx_p, wy_p = pr.wx * TILE_W, pr.wy * TILE_H
@@ -2581,6 +2608,7 @@ def main():
                         break
 
         ui_bundle = dict(game.loc["ui"])
+        ui_bundle["_game_ref"] = game
         ui_bundle["_perks_db"] = game.loc.get("perks", {})
         ui_bundle["_world_hover_item"] = world_hover_item
         ui_bundle["_visual_fx"] = game.visual_fx

@@ -1,0 +1,4561 @@
+{
+  "bpm": 108.0,
+  "synth_params": {
+    "rock_kick": {
+      "drive": 0.45,
+      "cutoff": 0.6,
+      "punch": 0.8,
+      "detune": 0.1,
+      "decay": 0.45,
+      "fifth": 0.0
+    },
+    "rock_snare": {
+      "drive": 0.4,
+      "cutoff": 0.75,
+      "punch": 0.75,
+      "detune": 0.2,
+      "decay": 0.45,
+      "fifth": 0.0
+    },
+    "hihat": {
+      "drive": 0.25,
+      "cutoff": 0.9,
+      "punch": 0.7,
+      "detune": 0.4,
+      "decay": 0.22,
+      "fifth": 0.0
+    },
+    "crash": {
+      "drive": 0.35,
+      "cutoff": 0.8,
+      "punch": 0.65,
+      "detune": 0.5,
+      "decay": 0.75,
+      "fifth": 0.0
+    },
+    "war_drum": {
+      "drive": 0.6,
+      "cutoff": 0.28,
+      "punch": 0.82,
+      "detune": 0.25,
+      "decay": 0.65,
+      "fifth": 0.0
+    },
+    "tambourine": {
+      "drive": 0.2,
+      "cutoff": 0.92,
+      "punch": 0.75,
+      "detune": 0.55,
+      "decay": 0.4,
+      "fifth": 0.0
+    },
+    "acoustic_steel": {
+      "drive": 0.18,
+      "cutoff": 0.82,
+      "punch": 0.8,
+      "detune": 0.28,
+      "decay": 0.72,
+      "fifth": 0.2
+    },
+    "acoustic_nylon": {
+      "drive": 0.1,
+      "cutoff": 0.58,
+      "punch": 0.65,
+      "detune": 0.18,
+      "decay": 0.65,
+      "fifth": 0.1
+    },
+    "bard_lute": {
+      "drive": 0.22,
+      "cutoff": 0.76,
+      "punch": 0.85,
+      "detune": 0.38,
+      "decay": 0.58,
+      "fifth": 0.45
+    },
+    "celtic_harp": {
+      "drive": 0.08,
+      "cutoff": 0.85,
+      "punch": 0.55,
+      "detune": 0.32,
+      "decay": 0.88,
+      "fifth": 0.25
+    },
+    "hurdy_gurdy": {
+      "drive": 0.52,
+      "cutoff": 0.68,
+      "punch": 0.8,
+      "detune": 0.48,
+      "decay": 0.85,
+      "fifth": 0.75
+    },
+    "bagpipes": {
+      "drive": 0.58,
+      "cutoff": 0.74,
+      "punch": 0.7,
+      "detune": 0.42,
+      "decay": 0.92,
+      "fifth": 0.8
+    },
+    "wood_flute": {
+      "drive": 0.12,
+      "cutoff": 0.64,
+      "punch": 0.55,
+      "detune": 0.25,
+      "decay": 0.78,
+      "fifth": 0.0
+    },
+    "war_horn": {
+      "drive": 0.48,
+      "cutoff": 0.52,
+      "punch": 0.45,
+      "detune": 0.35,
+      "decay": 0.9,
+      "fifth": 0.5
+    },
+    "chapel_bell": {
+      "drive": 0.25,
+      "cutoff": 0.8,
+      "punch": 0.85,
+      "detune": 0.5,
+      "decay": 0.92,
+      "fifth": 0.3
+    },
+    "slap_bass": {
+      "drive": 0.55,
+      "cutoff": 0.65,
+      "punch": 0.85,
+      "detune": 0.2,
+      "decay": 0.6,
+      "fifth": 0.0
+    },
+    "dist_guitar": {
+      "drive": 0.82,
+      "cutoff": 0.62,
+      "punch": 0.75,
+      "detune": 0.45,
+      "decay": 0.85,
+      "fifth": 0.75
+    },
+    "screamer_lead": {
+      "drive": 0.75,
+      "cutoff": 0.78,
+      "punch": 0.65,
+      "detune": 0.55,
+      "decay": 0.9,
+      "fifth": 0.25
+    },
+    "grunge_organ": {
+      "drive": 0.4,
+      "cutoff": 0.7,
+      "punch": 0.4,
+      "detune": 0.6,
+      "decay": 0.85,
+      "fifth": 0.45
+    }
+  },
+  "patterns": [
+    {
+      "name": "П1: Перебор",
+      "steps": 32,
+      "channels": [
+        {
+          "inst_id": "war_drum",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "hihat",
+          "mute": false,
+          "solo": false,
+          "volume": 0.5,
+          "steps": [
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "C4",
+              "v": 0.85,
+              "l": 5,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "bard_lute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.8,
+          "steps": [
+            {
+              "a": true,
+              "n": "G3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "G2": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "F3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "F2": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "B3",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {
+                "F2": 4
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "B3",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "B3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "F2": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "F2",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "G3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "D2": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "G2",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "G2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "F3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "G3",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {
+                "D2": 3
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "F3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "G3",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "F2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "F3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "E3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "E2": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "hurdy_gurdy",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Паттерн 2",
+      "steps": 32,
+      "channels": [
+        {
+          "inst_id": "war_drum",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "hihat",
+          "mute": false,
+          "solo": false,
+          "volume": 0.5,
+          "steps": [
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F#4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "C4",
+              "v": 0.85,
+              "l": 4,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "bard_lute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.8,
+          "steps": [
+            {
+              "a": true,
+              "n": "C3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "C4": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "B2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "B2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {
+                "B3": 1
+              }
+            },
+            {
+              "a": true,
+              "n": "B2",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "B3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "B3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "B2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "A3": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "A2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A2",
+              "v": 0.85,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A3",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "A2": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "G2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "F3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "G2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "G3": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "G2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {
+                "A3": 1
+              }
+            },
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {
+                "A3": 2
+              }
+            },
+            {
+              "a": false,
+              "n": "F3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.85,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "hurdy_gurdy",
+          "mute": false,
+          "solo": false,
+          "volume": 0.78,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "playlist_tracks": [
+    [
+      0,
+      null,
+      0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ]
+}
