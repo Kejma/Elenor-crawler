@@ -20,6 +20,7 @@ class SoundSynth:
             self.disco_cur_dry = [0.0, 0.0]
             self.disco_cur_muff = [0.0, 0.0]
             self._build_bank()
+            self._build_fishing_bank()
         except Exception:
             self.enabled = False
 
@@ -48,6 +49,30 @@ class SoundSynth:
             self.sounds_muff[name] = self._make_sound(muff_wave)
         else:
             self.sounds_muff[name] = self.sounds[name]
+
+    def _build_fishing_bank(self):
+        rng = np.random.default_rng(417)
+        for name, duration, frequencies, gain, noise_mix in (
+            ("cast", .23, (340, 840), .13, .8),
+            ("land", .19, (570, 155), .26, .65),
+            ("bite", .12, (780, 245), .34, .50),
+            ("hook", .11, (450, 975), .17, .42),
+            ("tug", .16, (210, 390), .22, .68),
+            ("reel", .063, (1160, 420), .12, .32),
+            ("snap", .105, (1530, 210), .30, .35),
+            ("empty", .16, (630, 230), .16, .68),
+            ("catch", .28, (310, 1030), .22, .54),
+        ):
+            samples = int(self.freq * duration)
+            t = np.arange(samples) / self.freq
+            frequency = np.linspace(*frequencies, samples)
+            chirp = np.sin(2 * np.pi * np.cumsum(frequency) / self.freq)
+            noise = np.convolve(rng.uniform(-1, 1, samples), np.ones(4) / 4, mode="same")
+            fade = np.minimum(1, t * 550) * np.exp(-5 * t / duration)
+            if name == "reel":
+                fade *= .35 + .65 * np.sin(2 * np.pi * 52 * t) ** 6
+            wave = ((1 - noise_mix) * chirp + noise_mix * noise) * fade * gain
+            self._register(f"fishing_{name}", wave, make_muff=True, cutoff=410)
 
     def _build_bank(self):
         sr = self.freq

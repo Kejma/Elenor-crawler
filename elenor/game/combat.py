@@ -89,12 +89,6 @@ class CombatMixin:
                     return
             self._perform_melee_attack(target_wx, target_wy)
         else:
-            stands = (obj for obj in self.objects if hasattr(obj, "fishing_spot"))
-            stand = min(stands, key=lambda obj: math.hypot(px - obj.x - .5, py - obj.y - .5), default=None)
-            if stand is not None and math.hypot(px - stand.x - .5, py - stand.y - .5) <= 1.65:
-                from elenor.minigames.fishing import start_fishing
-                start_fishing(self, stand)
-                return
             if not self._try_precise_interaction(px, py, max_cursor_dist=1.65):
                 self._perform_melee_attack(target_wx, target_wy)
 
@@ -171,11 +165,6 @@ class CombatMixin:
 
         cand_objs.sort(key=lambda o: math.hypot(ref_wx - (o.x + 0.5), ref_wy - (o.y + 0.5)))
         obj = cand_objs[0]
-
-        if hasattr(obj, "fishing_spot"):
-            from elenor.minigames.fishing import start_fishing
-            start_fishing(self, obj)
-            return True
 
         if obj.kind == "merchant_counter":
             self.interact_with_merchant(obj.merchant_owner)

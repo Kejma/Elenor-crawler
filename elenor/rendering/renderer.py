@@ -1,3 +1,4 @@
+from elenor.rendering.daylight import apply_daylight, visible_sun
 import math
 import pygame
 import numpy as np
@@ -14,6 +15,7 @@ class Renderer(UIRendererMixin):
         self.anim_bank = self.assets.pop("_anim_bank", {})
         self.hero_cache = {}
         self.rot_cache = {}
+        self.water_normals = {}
         self.flip_cache = {}
         self.chill_cache = {}
         self.emissive_cache = {}
@@ -606,6 +608,20 @@ class Renderer(UIRendererMixin):
                 else:
                     key = TILE_ROLE_MAP.get(t_val, f"floor_{t_val}")
                 d_surf, n_surf = self.get_tile_pair(key, c, r)
+                if key in ("floor_lake_shallow", "floor_lake_deep"):
+                    animation = self.anim_bank.get(key)
+                    if animation and animation["frames"]:
+                        frames = animation["frames"]
+                        phase = (c * 11 + r * 7 + (c * r) % 5) % len(frames)
+                        d_surf, n_surf = frames[(int(now_sec * animation["fps"]) + phase) % len(frames)]
+                    # Lower the angular contrast of the authored waves in
+                    # sunlight so a whole river does not read as diagonal bars.
+                    cache_key = (key, n_surf)
+                    if cache_key not in self.water_normals:
+                        original = pygame.surfarray.array3d(n_surf)
+                        softened = original * .43 + np.array((128, 128, 255)) * .57
+                        self.water_normals[cache_key] = pygame.surfarray.make_surface(softened.astype(np.uint8))
+                    n_surf = self.water_normals[cache_key]
                 self.diff_canvas.blit(d_surf, (sx, sy))
                 self.norm_canvas.blit(n_surf, (sx, sy))
 
@@ -811,11 +827,18 @@ class Renderer(UIRendererMixin):
                             mask_slice = a_mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
                             np.copyto(self.entity_y_canvas[cx0:cx1, cy0:cy1], sole_sy, where=mask_slice)
 
+        game_ref = ui_texts.get("_game_ref")
+        cast = getattr(game_ref, "fishing_cast", None)
+        if cast is not None:
+            from elenor.rendering.fishing_cast import draw_fishing_cast
+            draw_fishing_cast(self.diff_canvas, self.norm_canvas, cast, cam_x, cam_y, now_sec)
+
         tz_diff, tz_norm = self.assets["thought_zone"]
         self.diff_canvas.blit(tz_diff, (0, VIEW_H))
         self.norm_canvas.blit(tz_norm, (0, VIEW_H))
 
         ambient_light = getattr(dungeon, "ambient_light", (0.0, 0.0, 0.0))
+        sunlight = visible_sun(getattr(dungeon, "sunlight", None), cam_x, cam_y)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
@@ -828,7 +851,7 @@ class Renderer(UIRendererMixin):
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
                 enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec,
-                ambient_light=ambient_light
+                ambient_light=ambient_light, sunlight=sunlight
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -855,6 +878,7 @@ class Renderer(UIRendererMixin):
 
             for channel, ambient in zip((r_mult, g_mult, b_mult), ambient_light):
                 channel[:, :VIEW_H] = ambient
+            apply_daylight((r_mult, g_mult, b_mult), (nx, ny, nz), sunlight)
             r_mult[:, VIEW_H:] = 0.74
             g_mult[:, VIEW_H:] = 0.74
             b_mult[:, VIEW_H:] = 0.80
@@ -932,7 +956,6 @@ class Renderer(UIRendererMixin):
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))
 
-        game_ref = ui_texts.get("_game_ref")
         if game_ref is not None and getattr(game_ref, "mirror_puzzles", None):
             from elenor.rendering.mirrors import render_mirror_puzzles_beams
             from elenor.rendering.visibility import overlay_visibility
