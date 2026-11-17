@@ -195,6 +195,10 @@ def register_mirror_puzzle_assets(assets):
         assets[rail_key] = (rl_d, rl_n)
 
 
+def _puzzle_text(game, key):
+    return game.loc.get("mirror_puzzle", {}).get(key, key)
+
+
 class MirrorPuzzleController:
     def __init__(
         self, room_rect, emitters, receiver_obj, mirror_objs, target_doors,
@@ -260,57 +264,82 @@ def _bfs_reachable(room_rect, blocked_set, start_xy):
     return visited
 
 
-def find_safe_accessible_tile_for_puzzle_item(game, puzzle_rect, forbidden_rects=None):
+def reachable_floor_tiles(dungeon, start_xy, extra_blocked=(), max_distance=None):
+    """Walkable component; closed unlocked doors can be opened by the player.
+
+    Locked gates remain blocked. Unlike find_path(), this never returns a partial
+    path and has no search budget that could turn a valid location into a fallback.
     """
-    Находит клетку в обычных комнатах этажа, до которой игрок ГАРАНТИРОВАННО может дойти
-    от своей стартовой позиции при ЗАПЕРТОЙ двери головоломки!
-    Исключает появление рычага или линзы за закрытой дверью головоломки.
-    """
-    dungeon = game.dungeon
-    px, py = int(game.player.x), int(game.player.y)
-    forb = list(forbidden_rects or []) + [puzzle_rect.inflate(2, 2)]
-    if getattr(dungeon, "boss_room", None):
-        forb.append(dungeon.boss_room.inflate(2, 2))
-
-    occupied_objs = {(o.x, o.y) for o in game.objects if not o.used}
-    occupied_objs.update(dungeon.doors.keys())
-    occupied_objs.update(dungeon.levers.keys())
-
-    cand_rooms = [
-        r for r in dungeon.rooms
-        if not any(r.colliderect(fr) for fr in forb)
-    ]
-    random.shuffle(cand_rooms)
-
-    # Предпочитаем комнаты подальше от старта (но строго достижимые по A*!)
-    cand_rooms.sort(key=lambda r: math.hypot(r.centerx - px, r.centery - py), reverse=True)
-
-    for room in cand_rooms:
-        room_tiles = [
-            (tx, ty)
-            for ty in range(room.top + 1, room.bottom - 1)
-            for tx in range(room.left + 1, room.right - 1)
-            if not dungeon.is_blocking_move(tx, ty) and (tx, ty) not in occupied_objs
-        ]
-        random.shuffle(room_tiles)
-        for tx, ty in room_tiles[:6]:
-            if (tx, ty) == (px, py):
+    blocked = set(extra_blocked)
+    start = tuple(map(int, start_xy))
+    seen = {start}
+    q = deque([(start, 0)])
+    while q:
+        (x, y), distance = q.popleft()
+        if max_distance is not None and distance >= max_distance:
+            continue
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            pt = tx, ty = x + dx, y + dy
+            if not (0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS) or pt in seen or pt in blocked:
                 continue
-            path = dungeon.find_path((px, py), (tx, ty), max_expanded=900)
-            # Проверяем, что найденный путь реально дошёл до (tx, ty)
-            if path and int(path[-1][0]) == tx and int(path[-1][1]) == ty:
-                return (tx, ty)
+            door = dungeon.doors.get(pt)
+            if door and door.locked and not door.is_open:
+                continue
+            if door and not door.locked:
+                if dungeon.grid[ty][tx] in (1, 5, 6, 7) or pt in dungeon.solid_props:
+                    continue
+            elif dungeon.is_blocking_move(tx, ty):
+                continue
+            seen.add(pt)
+            q.append((pt, distance + 1))
+    return seen
 
-    # Резерв: любая достижимая клетка рядом с входом в зал головоломки
-    for r_dist in range(2, 8):
-        for dy in range(-r_dist, r_dist + 1):
-            for dx in range(-r_dist, r_dist + 1):
-                tx, ty = px + dx, py + dy
-                if 1 <= tx < MAP_COLS - 1 and 1 <= ty < MAP_ROWS - 1:
-                    if not dungeon.is_blocking_move(tx, ty) and (tx, ty) not in occupied_objs:
-                        if not any(fr.collidepoint(tx, ty) for fr in forb):
-                            return (tx, ty)
-    return (px, py)
+
+def find_safe_accessible_tile_for_puzzle_item(game, puzzle_rect, forbidden_rects=None):
+    """Return a reachable unoccupied key tile, or None; never guess a fallback."""
+    from entities import SOLID_INTERACTABLE_KINDS
+    dungeon = game.dungeon
+    start = int(game.player.x), int(game.player.y)
+    forbidden = list(forbidden_rects or []) + [puzzle_rect.inflate(2, 2)]
+    occupied = {(o.x, o.y) for o in game.objects if not o.used}
+    occupied.update(dungeon.doors)
+    occupied.update(dungeon.levers)
+    occupied.update((int(m.x), int(m.y)) for m in game.mobs if m.hp > 0)
+    occupied.update((br["x"], br["y"]) for br in dungeon.braziers)
+    solids = {(o.x, o.y) for o in game.objects
+              if not o.used and o.kind in SOLID_INTERACTABLE_KINDS}
+    reachable = reachable_floor_tiles(dungeon, start, solids)
+    candidates = [pt for pt in sorted(reachable) if pt != start and pt not in occupied
+                  and not any(r.collidepoint(pt) for r in forbidden)]
+    if not candidates:
+        return None
+    # Prefer a different room, keeping the fallback in the same proven component.
+    other_rooms = [pt for pt in candidates if any(r.collidepoint(pt) and not r.collidepoint(start)
+                                                for r in dungeon.rooms)]
+    return random.choice(other_rooms or candidates)
+
+
+def _layout_hits_receiver(room_rect, layout, solved):
+    """Validate the optical route before changing the world or opening a gate."""
+    mirrors = {(m["pos"] if solved else m["start_pos"]): m for m in layout["mirrors"]}
+    x, y = layout["em_pos"]
+    dx, dy = layout["em_dir"]
+    visited = set()
+    while (x, y, dx, dy) not in visited:
+        visited.add((x, y, dx, dy))
+        x, y = x + dx, y + dy
+        if not room_rect.collidepoint(x, y) or (x, y) in layout["walls"] or (x, y) == layout["em_pos"]:
+            return False
+        if (x, y) == layout["rec_pos"]:
+            return True
+        m = mirrors.get((x, y))
+        if m:
+            ori = m["ori"] if solved else m["start_ori"]
+            direction = (DOUBLE_REFLECT_MAP if m["is_double"] else SINGLE_REFLECT_MAP)[ori].get((dx, dy))
+            if direction is None:
+                return False
+            dx, dy = direction
+    return False
 
 
 def _try_generate_procedural_layout(room_rect, protected_porch):
@@ -406,7 +435,7 @@ def _try_generate_procedural_layout(room_rect, protected_porch):
                     walls.add((bx_w, by_w))
 
     else:
-        num_bounces = random.randint(3, 5)
+        num_bounces = random.randint(3, 5) + max(0, (rw - 11) // 2)
         valid_starts = [pt for pt in floor_tiles if pt not in protected_porch]
         if not valid_starts:
             return None
@@ -500,6 +529,12 @@ def _try_generate_procedural_layout(room_rect, protected_porch):
         for cand_w in free_for_walls[:random.randint(2, 4)]:
             walls.add(cand_w)
 
+    if rw >= 13:
+        nodes = {em_pos, rec_pos} | {m["pos"] for m in mirrors_spec}
+        partition = {(rx0 + rw // 2, y) for y in range(ry0, ry0 + rh)}
+        passage = {(rx0 + rw // 2, ry0 + rh // 2 + dy) for dy in (-1, 0, 1)}
+        walls.update(partition - beam_path_tiles - nodes - protected_porch - passage)
+
     occupied_all = {em_pos, rec_pos} | {m["pos"] for m in mirrors_spec} | walls
     single_indices = [i for i, m in enumerate(mirrors_spec) if not m["is_double"]]
     random.shuffle(single_indices)
@@ -560,6 +595,10 @@ def _try_generate_procedural_layout(room_rect, protected_porch):
     if not protected_porch.issubset(reachable):
         return None
 
+    for ox, oy in (em_pos, rec_pos):
+        if not any((ox + dx, oy + dy) in reachable for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+            return None
+
     for m in mirrors_spec:
         if m["is_movable"]:
             r_tiles = m["rail_tiles"]
@@ -574,13 +613,16 @@ def _try_generate_procedural_layout(room_rect, protected_porch):
             if not any((mx + dx, my + dy) in reachable for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                 return None
 
-    return {
+    layout = {
         "walls": walls,
         "em_pos": em_pos,
         "em_dir": d_in if use_double else em_dir,
         "rec_pos": rec_pos,
         "mirrors": mirrors_spec,
     }
+    if not _layout_hits_receiver(room_rect, layout, solved=True) or _layout_hits_receiver(room_rect, layout, solved=False):
+        return None
+    return layout
 
 
 def setup_mirror_puzzle_in_room(
@@ -606,6 +648,10 @@ def setup_mirror_puzzle_in_room(
 
     dungeon = game.dungeon
     wall_id, floor_id = get_biome_tiles(dungeon)
+    if emitter_mode == "random":
+        emitter_mode = random.choice(["ready", "need_lever", "need_lens"])
+    if emitter_mode not in ("ready", "need_lever", "need_lens"):
+        raise ValueError("Unknown emitter mode")
 
     for ry in range(room_rect.top, room_rect.bottom):
         for rx in range(room_rect.left, room_rect.right):
@@ -657,9 +703,6 @@ def setup_mirror_puzzle_in_room(
     for (wx, wy) in layout["walls"]:
         dungeon.grid[wy][wx] = wall_id
 
-    if emitter_mode == "random":
-        emitter_mode = random.choice(["ready", "need_lever", "need_lens"])
-
     em_x, em_y = layout["em_pos"]
     em_kind = "light_emitter_off" if emitter_mode == "need_lever" else "light_emitter"
     emitter_obj = InteractableCls(em_x, em_y, em_kind)
@@ -702,14 +745,20 @@ def setup_mirror_puzzle_in_room(
     )
 
     # Если излучателю нужен рычаг или фокусирующая линза — спавним их строго в ДОСТУПНОЙ зоне этажа!
-    if emitter_mode == "need_lever":
-        kx, ky = find_safe_accessible_tile_for_puzzle_item(game, room_rect, forbidden_key_rects)
+    key_tile = None
+    if emitter_mode != "ready":
+        key_tile = find_safe_accessible_tile_for_puzzle_item(game, room_rect, forbidden_key_rects)
+        if key_tile is None:
+            # An unlucky floor must never require an unreachable key.
+            ctrl.emitter_state = "ready"
+    if key_tile is not None and emitter_mode == "need_lever":
+        kx, ky = key_tile
         p_lev = InteractableCls(kx, ky, "lever_off")
         p_lev.is_puzzle_emitter_lever = True
         p_lev.puzzle_ctrl = ctrl
         game.objects.append(p_lev)
-    elif emitter_mode == "need_lens":
-        kx, ky = find_safe_accessible_tile_for_puzzle_item(game, room_rect, forbidden_key_rects)
+    elif key_tile is not None and emitter_mode == "need_lens":
+        kx, ky = key_tile
         lens_itm = game.make_item("focusing_lens")
         game.objects.append(InteractableCls(kx, ky, "loot", lens_itm))
 
@@ -718,23 +767,28 @@ def setup_mirror_puzzle_in_room(
     return ctrl
 
 
-def spawn_pre_boss_mirror_puzzle(
+def spawn_floor_mirror_puzzle(
     game, InteractableCls, beam_color=(255, 45, 55), spawn_chance=1.0,
-    emitter_mode="ready", ambush_enabled=False
+    emitter_mode="random", ambush_enabled=None
 ):
     dungeon = game.dungeon
-    info = getattr(dungeon, "pre_boss_puzzle_info", None)
+    info = getattr(dungeon, "mirror_puzzle_info", None)
     if info is None:
         return None
 
+    tutorial = info.get("tutorial", False)
+    if tutorial:
+        emitter_mode, ambush_enabled = "ready", False
+    elif ambush_enabled is None:
+        ambush_enabled = dungeon.floor_num >= 3 and random.random() < 0.35
     p_rect = info["puzzle_rect"]
-    bd_x, bd_y = info["boss_door"]
+    bd_x, bd_y = info["gate_door"]
     ed_x, ed_y = info["entry_door"]
-    boss_door = dungeon.doors.get((bd_x, bd_y))
+    gate_door = dungeon.doors.get((bd_x, bd_y))
 
     if random.random() > float(spawn_chance):
-        if boss_door is not None:
-            boss_door.locked = False
+        if gate_door is not None:
+            gate_door.locked = False
         return None
 
     game.mobs = [m for m in game.mobs if not p_rect.inflate(2, 2).collidepoint(int(m.x), int(m.y))]
@@ -747,14 +801,19 @@ def spawn_pre_boss_mirror_puzzle(
         "radius": 155.0
     })
 
-    target_doors = [boss_door] if boss_door is not None else []
+    target_doors = [gate_door] if gate_door is not None else []
     return setup_mirror_puzzle_in_room(
         game, p_rect, target_doors, InteractableCls,
         beam_color=beam_color, spawn_chance=1.0,
         protected_doors=[(ed_x, ed_y), (bd_x, bd_y)],
         emitter_mode=emitter_mode, ambush_enabled=ambush_enabled,
-        forbidden_key_rects=[info["boss_rect"]]
+        forbidden_key_rects=[info["sealed_rect"]]
     )
+
+
+def spawn_pre_boss_mirror_puzzle(game, InteractableCls, **kwargs):
+    """Compatibility entry point for the rat campaign introduction."""
+    return spawn_floor_mirror_puzzle(game, InteractableCls, **kwargs)
 
 
 def recalculate_mirror_puzzle(game, ctrl: MirrorPuzzleController):
@@ -786,7 +845,7 @@ def recalculate_mirror_puzzle(game, ctrl: MirrorPuzzleController):
         seg_start = (cur_x + 0.5, cur_y + 0.5)
         visited_states = set()
 
-        for _ in range(48):
+        for _ in range(MAP_COLS * MAP_ROWS * 4):
             nx, ny = cur_x + dx, cur_y + dy
             state_key = (nx, ny, dx, dy)
             if state_key in visited_states:
@@ -846,9 +905,9 @@ def recalculate_mirror_puzzle(game, ctrl: MirrorPuzzleController):
             d.is_open = True
         dungeon.invalidate_light_cache()
         game.sfx.play("levelup")
-        game.add_popup(ctrl.receiver.x + 0.5, ctrl.receiver.y + 0.5, "ПРОХОД ОТКРЫТ!", (255, 110, 125), big=True)
+        game.add_popup(ctrl.receiver.x + 0.5, ctrl.receiver.y + 0.5, _puzzle_text(game, "passage_open"), (255, 110, 125), big=True)
         game.set_thought(
-            "Поток света сошёлся в гранях ока! Древний засов с грохотом открыл путь.",
+            _puzzle_text(game, "puzzle_solved"),
             important=True
         )
         for _ in range(22):
@@ -875,11 +934,11 @@ def handle_mirror_puzzle_interaction(game, obj):
             if ctrl is not None:
                 ctrl.emitter_state = "ready"
                 recalculate_mirror_puzzle(game, ctrl)
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, "ОБЕЛИСК ЗАПИТАН!", (255, 220, 95), big=True)
-            game.set_thought("В стенах загудело! На древний обелиск света пошла энергия.", important=True)
+            game.add_popup(obj.x + 0.5, obj.y + 0.5, _puzzle_text(game, "emitter_powered"), (255, 220, 95), big=True)
+            game.set_thought(_puzzle_text(game, "power_restored"), important=True)
         else:
             game.play_spatial("step", obj.x + 0.5, obj.y + 0.5)
-            game.set_thought("Рычаг уже опущен, питание подано на обелиск.", important=False, chance=0.8)
+            game.set_thought(_puzzle_text(game, "lever_already_on"), important=False, chance=0.8)
         return True
 
     # 2. Осмотр или установка Фокусирующей Линзы в Излучатель
@@ -887,14 +946,15 @@ def handle_mirror_puzzle_interaction(game, obj):
         ctrl = next((c for c in getattr(game, "mirror_puzzles", []) if obj in c.emitters), None)
         if ctrl and ctrl.emitter_state == "need_lever":
             game.play_spatial("hurt", obj.x + 0.5, obj.y + 0.5)
-            game.add_popup(obj.x + 0.5, obj.y + 0.5, "НЕТ ПИТАНИЯ", (255, 115, 95))
-            game.set_thought("Обелиск холоден и пуст. Нужно найти рычаг в других комнатах этажа, чтобы запустить его.", important=True)
+            game.add_popup(obj.x + 0.5, obj.y + 0.5, _puzzle_text(game, "no_power"), (255, 115, 95))
+            game.set_thought(_puzzle_text(game, "find_lever"), important=True)
             return True
 
         if ctrl and ctrl.emitter_state == "need_lens":
             # Проверяем, есть ли у игрока в сумке или на поясе «Фокусирующая линза»
             lens_itm = next(
-                (itm for itm in game.player.inventory if itm and itm.id == "focusing_lens"),
+                (itm for itm in list(game.player.inventory) + list(game.player.hotbar)
+                 if itm and itm.id == "focusing_lens"),
                 None
             )
             if lens_itm is not None:
@@ -902,24 +962,24 @@ def handle_mirror_puzzle_interaction(game, obj):
                 ctrl.emitter_state = "ready"
                 recalculate_mirror_puzzle(game, ctrl)
                 game.sfx.play("magic")
-                game.add_popup(obj.x + 0.5, obj.y + 0.5, "ЛИНЗА УСТАНОВЛЕНА!", (130, 255, 195), big=True)
-                game.set_thought("Линза встала в пазы со звонким щелчком — рассеянный свет собрался в мощный поток!", important=True)
+                game.add_popup(obj.x + 0.5, obj.y + 0.5, _puzzle_text(game, "lens_installed"), (130, 255, 195), big=True)
+                game.set_thought(_puzzle_text(game, "lens_fitted"), important=True)
             else:
                 game.play_spatial("ui", obj.x + 0.5, obj.y + 0.5)
-                game.add_popup(obj.x + 0.5, obj.y + 0.5, "НУЖНА ЛИНЗА", (255, 200, 90))
-                game.set_thought("Из пустого гнезда бьёт мутный рассеянный свет. Нужно найти на этом ярусе Фокусирующую линзу.", important=True)
+                game.add_popup(obj.x + 0.5, obj.y + 0.5, _puzzle_text(game, "need_lens"), (255, 200, 90))
+                game.set_thought(_puzzle_text(game, "find_lens"), important=True)
             return True
 
         game.play_spatial("magic", obj.x + 0.5, obj.y + 0.5)
-        game.set_thought("Древний обелиск. Из его линзы льётся широкий поток багрового света.", important=False, chance=0.85)
+        game.set_thought(_puzzle_text(game, "emitter_examine"), important=False, chance=0.85)
         return True
 
     if obj.kind in ("light_receiver_off", "light_receiver_on"):
         game.play_spatial("ui", obj.x + 0.5, obj.y + 0.5)
         if obj.kind == "light_receiver_on":
-            game.set_thought("Кристалл напитан светом, решётка поднята.", important=False, chance=0.85)
+            game.set_thought(_puzzle_text(game, "receiver_on"), important=False, chance=0.85)
         else:
-            game.set_thought("Приёмное око механизма. Нужно направить сюда поток света зеркалами.", important=False, chance=0.85)
+            game.set_thought(_puzzle_text(game, "receiver_off"), important=False, chance=0.85)
         return True
 
     if not getattr(obj, "is_mirror", False):
@@ -927,7 +987,7 @@ def handle_mirror_puzzle_interaction(game, obj):
 
     if getattr(obj, "is_movable", False):
         game.play_spatial("step_stone", obj.x + 0.5, obj.y + 0.5)
-        game.set_thought("Тумба на рельсах. Чтобы сдвинуть её, нужно просто упереться в неё на ходу.", important=False, chance=0.9)
+        game.set_thought(_puzzle_text(game, "movable_mirror"), important=False, chance=0.9)
         return True
 
     obj.mirror_ori += 1
@@ -1028,7 +1088,7 @@ def _update_puzzle_ambush_spawner(game, ctrl, dt):
         return
 
     # Ограничиваем число одновременно живых мобов засады до 3, чтобы не устраивать свалку
-    alive_ambush = sum(1 for m in game.mobs if getattr(m, "from_puzzle_ambush", False))
+    alive_ambush = sum(1 for m in game.mobs if m.hp > 0 and getattr(m, "puzzle_ambush_owner", None) is ctrl)
     if alive_ambush >= 3:
         return
 
@@ -1038,35 +1098,40 @@ def _update_puzzle_ambush_spawner(game, ctrl, dt):
     ctrl.ambush_timer = random.uniform(7.0, 10.5)
 
     dungeon = game.dungeon
-    vis_tiles = getattr(game, "current_visible_tiles", set())
+    vis_tiles = getattr(game, "current_visible_tiles", None)
+    if vis_tiles is None:
+        return  # Visibility has not been calculated for this floor yet.
     boss_r = getattr(dungeon, "boss_room", None)
-
+    occupied = {(o.x, o.y) for o in game.objects if not o.used}
+    occupied.update((int(m.x), int(m.y)) for m in game.mobs if m.hp > 0)
+    occupied.update(dungeon.doors)
+    occupied.update(dungeon.levers)
+    # AI cannot open even unlocked doors: use actual movement blockers here.
+    reachable = _bfs_reachable(
+        pygame.Rect(0, 0, MAP_COLS, MAP_ROWS),
+        {(x, y) for y in range(MAP_ROWS) for x in range(MAP_COLS)
+         if dungeon.is_blocking_move(x, y)},
+        (int(px), int(py))
+    )
     candidates = []
-    for ty in range(max(1, int(py) - 14), min(MAP_ROWS - 1, int(py) + 15)):
-        for tx in range(max(1, int(px) - 14), min(MAP_COLS - 1, int(px) + 15)):
-            if (tx, ty) in vis_tiles:
-                continue
-            if dungeon.is_blocking_move(tx, ty):
-                continue
-            if boss_r and boss_r.inflate(2, 2).collidepoint(tx, ty):
-                continue
-            dist = math.hypot((tx + 0.5) - px, (ty + 0.5) - py)
-            if 5.5 <= dist <= 14.5:
-                candidates.append((tx, ty))
-
+    for tx, ty in sorted(reachable - occupied):
+        # Check neighbouring tiles as well: a sprite may extend into a visible tile.
+        if any((tx + dx, ty + dy) in vis_tiles for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+            continue
+        if boss_r and boss_r.inflate(2, 2).collidepoint(tx, ty):
+            continue
+        dist = math.hypot(tx + 0.5 - px, ty + 0.5 - py)
+        if not 5.5 <= dist <= 14.5:
+            continue
+        # Conservative direct LOS check also protects against gaps between FOV rays.
+        if dungeon.has_line_of_sight(px, py, tx + 0.5, ty + 0.5, 18.0):
+            continue
+        path = dungeon.find_path((tx, ty), (int(px), int(py)), max_expanded=MAP_COLS * MAP_ROWS)
+        if path and len(path) <= 22 and tuple(map(int, path[-1])) == (int(px), int(py)):
+            candidates.append((tx, ty))
     if not candidates:
         return
-
-    random.shuffle(candidates)
-    spawn_xy = None
-    for tx, ty in candidates[:12]:
-        path = dungeon.find_path((tx, ty), (int(px), int(py)), max_expanded=240)
-        if path and len(path) <= 22:
-            spawn_xy = (tx, ty)
-            break
-
-    if spawn_xy is None:
-        return
+    spawn_xy = random.choice(candidates)
 
     fl = getattr(dungeon, "floor_num", 3)
     mob_kind = "rat_cultist" if (fl >= 3 and random.random() < 0.35) else "rat"
@@ -1075,6 +1140,7 @@ def _update_puzzle_ambush_spawner(game, ctrl, dt):
         amb_mob.apply_balance_profile(game.balance_data.get("enemies", {}).get(mob_kind), floor_num=fl)
     amb_mob.awareness = 100.0
     amb_mob.from_puzzle_ambush = True
+    amb_mob.puzzle_ambush_owner = ctrl
 
     ctrl.ambush_spawned_count += 1
     if ctrl.ambush_spawned_count >= 4:
@@ -1088,13 +1154,13 @@ def _update_puzzle_ambush_spawner(game, ctrl, dt):
 
 def update_mirror_puzzles(game, dt):
     puzzles = getattr(game, "mirror_puzzles", [])
-    if not puzzles:
+    if not puzzles or dt <= 0.0 or game.player.hp <= 0:
         return
 
     for ctrl in puzzles:
         _update_body_pushing_mirrors(game, ctrl, dt)
-        _update_puzzle_ambush_spawner(game, ctrl, dt)
         recalculate_mirror_puzzle(game, ctrl)
+        _update_puzzle_ambush_spawner(game, ctrl, dt)
 
         ctrl.burn_tick_timer += dt
         if ctrl.burn_tick_timer >= 0.45:

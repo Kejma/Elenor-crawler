@@ -42,13 +42,6 @@ def load_modular_locales():
     # Базовый реестр характеристик оружия и предметов
     merged = {"items": {k: dict(v) for k, v in BASE_ITEMS_DB.items()}}
     merged["items"].update(CURRENCY_AND_GEMS_DB)
-    merged["items"]["focusing_lens"] = {
-        "name": "Фокусирующая линза",
-        "type": "quest_key",
-        "rarity": "rare",
-        "icon": "trinket",
-        "desc": "Тяжёлый гранёный хрусталь в бронзовой оправе. Собирает рассеянный свет древних обелисков в плотный луч."
-    }
 
     if os.path.isdir(ru_dir):
         for fname in sorted(os.listdir(ru_dir)):
@@ -109,7 +102,7 @@ class GameController:
             self._sfx_last_played[name] = now_t
             _orig_play(name, *args, **kwargs)
         self.sfx.play = _throttled_play
-        self.dungeon = Dungeon()
+        self.dungeon = Dungeon(puzzle_profile="rats")
         self.renderer = Renderer()
         self.dev_panel = DevPanel()
         self.inv_open = False
@@ -291,7 +284,7 @@ class GameController:
         if not non_weapon_candidates:
             non_weapon_candidates = [
                 item_id for item_id, data in self.loc["items"].items()
-                if data.get("type") not in ("currency_coin", "gem")
+                if data.get("type") not in ("currency_coin", "gem", "quest_key")
                 and not data.get("is_torch", False)
                 and (allowed_types is None or data.get("type") in allowed_types)
             ]
@@ -596,6 +589,7 @@ class GameController:
         self.mobs = []
         self.objects = []
         self.mirror_puzzles = []
+        self.current_visible_tiles = set()
         self.seen_entities = set()
         self._prev_tile_id = self.dungeon.grid[int(self.player.y)][int(self.player.x)]
         self._was_near_fire = True
@@ -611,11 +605,8 @@ class GameController:
         populate_mission_floor(self, floor_num, Enemy, Interactable)
 
         from puzzle_mirrors import MIRROR_SOLID_KINDS
-        solid_kinds = {
-            "tavern_table", "bar_counter", "wine_cask", "bed",
-            "fireplace", "shelf_bottles", "cauldron", "crate_stack",
-            "grandfather_clock", "wash_basin", "meat_rack", "firewood_pile", "armor_stand"
-        } | MIRROR_SOLID_KINDS
+        from entities import SOLID_INTERACTABLE_KINDS
+        solid_kinds = SOLID_INTERACTABLE_KINDS | MIRROR_SOLID_KINDS
         self.dungeon.solid_props = {
             (obj.x, obj.y) for obj in self.objects if obj.kind in solid_kinds
         }
@@ -765,13 +756,14 @@ class GameController:
         self.trigger_event_thought("drop_item", item=item.name)
         self.add_popup(self.player.x, self.player.y, f"Выброшено: {item.name}", (185, 175, 165))
 
-    def on_player_hit(self, raw_dmg, is_magic=False):
+    def on_player_hit(self, raw_dmg, is_magic=False, source=None):
         if getattr(self.player, "god_mode", False):
             self.add_popup(self.player.x, self.player.y, "БЕССМЕРТИЕ", (255, 225, 90))
             return
         if random.random() < self.player.dodge_chance:
             # Уворот даёт умеренную прибавку через трёхплечевые весы
-            self.player.record_build_action("cunning", 0.08)
+            if not getattr(source, "no_rewards", False):
+                self.player.record_build_action("cunning", 0.08)
             self.add_popup(self.player.x, self.player.y, "УВОРОТ", (140, 230, 255))
             self.add_log("combat", "Уклонение от вражеской атаки!", (140, 230, 255))
             self.trigger_event_thought("combat_dodge")
@@ -781,6 +773,7 @@ class GameController:
             for m in self.mobs:
                 if math.hypot(m.x - self.player.x, m.y - self.player.y) <= 1.95:
                     m.apply_status("burn", 2.8, self.add_popup, dmg_val=self.player.ignite_burn_dmg)
+                    self.record_combat_growth(m, getattr(self.player, "ignite_growth_credit", None))
 
         defense = self.player.mag_defense if is_magic else self.player.phys_defense
         dmg = max(1, int(math.floor(raw_dmg - defense)))
@@ -1489,13 +1482,14 @@ class GameController:
         is_combat = (item.type == "combat_skill")
         if item.type == "consumable_spell":
             total_pwr = int(math.floor(item.power * 1.65 + self.player.mag_attack * 1.5))
-            self.player.record_build_action("mind", 0.30)
+            growth = ("mind", 0.30)
         elif is_combat:
             total_pwr = int(math.floor(item.power + self.player.phys_attack))
-            self.player.record_build_action("cunning" if item.id in ("throw_knife", "poison_flask") else "body", 0.30)
+            growth = ("cunning" if item.id in ("throw_knife", "poison_flask") else "body", 0.30)
         else:
             total_pwr = int(math.floor(item.power + self.player.mag_attack))
-            self.player.record_build_action("mind", 0.35)
+            growth = ("mind", 0.35)
+        growth_credit = {"action": growth, "awarded": False}
         c_type = getattr(item, "cast_type", "projectile")
 
         if item.life_steal > 0:
@@ -1509,9 +1503,11 @@ class GameController:
             self.sfx.play("torch")
             dur = max(1.5, float(getattr(item, "duration", 5.0)))
             self.player.ignite_timer = dur
+            self.player.ignite_growth_credit = growth_credit
             self.player.ignite_burn_dmg = max(1, int(math.floor(item.power + self.player.mag_attack * 0.45)))
             self.visual_fx.append({
                 "kind": "fire_trail",
+                "growth_credit": growth_credit,
                 "x": px, "y": py, "radius": 0.85,
                 "dmg": self.player.ignite_burn_dmg,
                 "color": (255, 110, 35), "timer": 2.6, "max_timer": 2.6
@@ -1538,6 +1534,7 @@ class GameController:
                     m.glow_timer = root_d
                     m.glow_color = (110, 225, 255)
                     self.add_popup(m.x, m.y, f"-{dmg}", item.color)
+                    self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
 
@@ -1605,6 +1602,7 @@ class GameController:
                     m.glow_timer = 0.85
                     m.glow_color = (150, 240, 255)
                     self.add_popup(m.x, m.y, f"-{dmg}", item.color)
+                    self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
 
@@ -1614,6 +1612,8 @@ class GameController:
             dur = max(1.0, float(getattr(item, "duration", 5.0)))
             instant_heal = max(2, int(math.floor(total_pwr * 0.38)))
             rem_heal = max(2.0, float(total_pwr - instant_heal))
+            if self.player.hp < self.player.max_hp:
+                self.player.record_build_action(*growth)
             self.player.hp = min(float(self.player.max_hp), self.player.hp + instant_heal)
             self.player.rejuv_timer = dur
             self.player.rejuv_rate = rem_heal / dur
@@ -1637,6 +1637,7 @@ class GameController:
                     m.hp -= dmg
                     m.apply_status("root", root_d, self.add_popup)
                     self.add_popup(m.x, m.y, f"-{dmg}", item.color)
+                    self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
 
@@ -1657,6 +1658,7 @@ class GameController:
                     m.apply_knockback(k_dx / kl, k_dy / kl, item.knockback)
                     m.apply_status(item.status, item.status_dur, self.add_popup)
                     self.add_popup(m.x, m.y, f"-{dmg}", item.color)
+                    self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
 
@@ -1678,6 +1680,7 @@ class GameController:
                     m.apply_knockback(k_dx / kl, k_dy / kl, item.knockback)
                     m.apply_status(item.status, item.status_dur, self.add_popup)
                     self.add_popup(m.x, m.y, f"-{total_pwr}", item.color)
+                    self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
 
@@ -1711,6 +1714,7 @@ class GameController:
                     m.hp -= dmg
                     m.apply_status(item.status, item.status_dur, self.add_popup)
                     self.add_popup(m.x, m.y, f"-{dmg}", item.color)
+                    self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
 
@@ -1731,6 +1735,7 @@ class GameController:
             dmg = max(1, int(math.floor(total_pwr - target_mob.mag_def)))
             target_mob.hp -= dmg
             target_mob.apply_status(item.status, item.status_dur, self.add_popup)
+            self.record_combat_growth(target_mob, growth_credit)
             self._check_mob_death(target_mob)
             return
 
@@ -1751,16 +1756,18 @@ class GameController:
                     m.hp -= dmg
                     m.apply_status(item.status, item.status_dur, self.add_popup, dmg_val=max(2, total_pwr // 3))
                     self.add_popup(m.x, m.y, f"-{dmg}", item.color)
+                    self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
 
         is_dagger = (item.id == "throw_knife" or is_combat or item.icon in ("weapon_cleaver", "weapon_sword"))
-        self._fire_spell_bolt(
+        projectile = self._fire_spell_bolt(
             total_pwr, item.color, target_wx, target_wy,
             speed=item.proj_speed, status=item.status, status_dur=item.status_dur, knockback=item.knockback,
             visual_kind="spinning_dagger" if is_dagger else "orb",
             emits_light=not is_dagger
         )
+        projectile.growth_credit = growth_credit
 
     def _fire_spell_bolt(self, mag_dmg, color, target_wx, target_wy, speed=9.2, status=None, status_dur=0.0, knockback=0.0, visual_kind="orb", emits_light=True):
         if target_wx is None or target_wy is None:
@@ -1775,6 +1782,13 @@ class GameController:
             status=status, status_dur=status_dur, knockback=knockback,
             visual_kind=visual_kind, emits_light=emits_light
         ))
+        return self.projectiles[-1]
+
+    def record_combat_growth(self, target, credit):
+        """Share one growth credit across all targets/bounces of a cast."""
+        if credit and not credit["awarded"] and not getattr(target, "no_rewards", False):
+            self.player.record_build_action(*credit["action"])
+            credit["awarded"] = True
 
     def _check_mob_death(self, m):
         if m.hp <= 0 and m in self.mobs:
@@ -2155,6 +2169,7 @@ def main():
                         game.player.ignite_trail_tick = 0.18
                         game.visual_fx.append({
                             "kind": "fire_trail",
+                            "growth_credit": getattr(game.player, "ignite_growth_credit", None),
                             "x": game.player.x, "y": game.player.y,
                             "radius": 0.72,
                             "dmg": game.player.ignite_burn_dmg,
@@ -2214,11 +2229,15 @@ def main():
                     game.set_thought(game.pick_text(game.player.thoughts["ambient"], "player_ambient"), important=False, chance=1.0)
 
             for m in list(game.mobs):
-                m.update_ai(dt, game.player, game.dungeon, game.mobs, game.projectiles, game.sfx, game.add_popup, game.on_player_hit)
+                m.update_ai(
+                    dt, game.player, game.dungeon, game.mobs, game.projectiles, game.sfx, game.add_popup,
+                    lambda damage, is_magic=False, source=m: game.on_player_hit(damage, is_magic, source=source)
+                )
                 # Если враг наступил в огненный след Воспламенения Пиро — он поджигается!
                 for vfx in game.visual_fx:
                     if vfx["kind"] == "fire_trail" and math.hypot(m.x - vfx["x"], m.y - vfx["y"]) <= vfx["radius"]:
                         m.apply_status("burn", 2.4, game.add_popup, dmg_val=vfx["dmg"])
+                        game.record_combat_growth(m, vfx.get("growth_credit"))
                         break
                 if getattr(m, "pending_pentagram", False):
                     m.pending_pentagram = False
@@ -2226,6 +2245,7 @@ def main():
                     game.sfx.play("magic")
                     game.visual_fx.append({
                         "kind": "blood_pentagram",
+                        "source": m,
                         "x": game.player.x,
                         "y": game.player.y,
                         "radius": 1.15 if not m.is_boss else 1.40,
@@ -2276,6 +2296,7 @@ def main():
                                 is_crit = False
                                 dmg = max(1, int(math.floor(pr.mag_dmg - m.mag_def)))
 
+                            game.record_combat_growth(m, getattr(pr, "growth_credit", None))
                             m.hp -= dmg
                             m.hit_flash_timer = 0.12
                             m.hit_flash_crit = is_crit
@@ -2325,7 +2346,7 @@ def main():
                             break
                 else:
                     if math.hypot(game.player.x - pr.wx, game.player.y - pr.wy) <= 0.55:
-                        game.on_player_hit(pr.mag_dmg, is_magic=True)
+                        game.on_player_hit(pr.mag_dmg, is_magic=True, source=getattr(pr, "source", None))
                         if pr in game.projectiles:
                             game.projectiles.remove(pr)
 
@@ -2335,7 +2356,6 @@ def main():
             game.trigger_event_thought("torch_burned_out", force_important=True)
 
         from puzzle_mirrors import update_mirror_puzzles, inject_mirror_puzzle_lights
-        update_mirror_puzzles(game, dt)
         game.fx.update(dt, game.player, game.dungeon, game.mobs, game.add_popup)
 
         # Фоновая пространственная музыка активной кампании (управляется модулем миссии!)
@@ -2352,6 +2372,9 @@ def main():
         world_oy = game.player.y * TILE_H
         fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(world_ox, world_oy, game.cam_x, game.cam_y)
         game.current_visible_tiles = visible_tiles
+        if (game.world_active and not game.inv_open and not game.levelup_choices
+                and not dev_open and game.player.hp > 0):
+            update_mirror_puzzles(game, dt)
         game.player.update_illumination(game.dungeon.braziers, game.dungeon.room_lights, game.objects, player_open_tiles)
 
         game.particles = [pt for pt in game.particles if pt is not None and pt.update(dt)]
@@ -2400,7 +2423,7 @@ def main():
                             3.2, 0.38
                         ))
                     if math.hypot(game.player.x - vfx["x"], game.player.y - vfx["y"]) <= vfx["radius"]:
-                        game.on_player_hit(vfx["dmg"], is_magic=True)
+                        game.on_player_hit(vfx["dmg"], is_magic=True, source=vfx.get("source"))
 
         flicker = math.sin(t * 3.2) * 3.5 + math.cos(t * 6.7) * 1.8
         p_sx = world_ox - game.cam_x

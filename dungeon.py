@@ -1,3 +1,4 @@
+from collections import deque
 import heapq
 import math
 import random
@@ -26,7 +27,12 @@ class Lever:
 
 
 class Dungeon:
-    def __init__(self):
+    def __init__(self, puzzle_profile="procedural", puzzle_chance=0.12):
+        # The campaign opts into its fixed introduction explicitly.
+        if puzzle_profile not in ("rats", "procedural"):
+            raise ValueError("Unknown puzzle profile")
+        self.puzzle_profile = puzzle_profile
+        self.puzzle_chance = max(0.0, min(1.0, float(puzzle_chance)))
         self.floor_num = 1
         self.grid = [[1 for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
         self.rooms = []
@@ -81,6 +87,8 @@ class Dungeon:
         self.atmo_zones = []
         self.fog_zones = []
         self.boss_room = None
+        self.pre_boss_puzzle_info = None
+        self.mirror_puzzle_info = None
         self.invalidate_light_cache()
 
         # =====================================================================
@@ -211,59 +219,67 @@ class Dungeon:
 
         self.grid = [[base_wall for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
 
-        self.pre_boss_puzzle_info = None
-        reserved_boss_zone = None
+        reserved_puzzle_zone = None
 
-        if floor_num >= 4:
+        tutorial = self.puzzle_profile == "rats"
+        has_puzzle_zone = (floor_num >= 4) if tutorial else random.random() < self.puzzle_chance
+        zone_info = None
+        if has_puzzle_zone:
             # Случайно выбираем сторону света и смещение для комплекса [Зал Головоломки -> Зал Босса]
-            boss_dir = random.choice(["east", "west", "north", "south"])
-            pw, ph = 11, 9
-            if boss_dir == "east":
-                bw, bh = 18, 14
+            zone_dir = random.choice(["east", "west", "north", "south"])
+            depth = min(3, max(0, floor_num - 2))
+            pw, ph = (11, 9) if tutorial else (11 + depth * 2, 9 + depth * 2)
+            bw, bh = (18, 14) if tutorial else (7, 7)
+            if zone_dir == "east":
                 bx = MAP_COLS - bw - 3
-                by = random.randint(4, MAP_ROWS - bh - 4)
-                boss_rect = pygame.Rect(bx, by, bw, bh)
-                p_rect = pygame.Rect(bx - pw - 1, boss_rect.centery - ph // 2, pw, ph)
+                by = random.randint(max(4, ph // 2 - bh // 2 + 2),
+                                    min(MAP_ROWS - bh - 4, MAP_ROWS - 2 - bh // 2 + ph // 2 - ph))
+                sealed_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(bx - pw - 1, sealed_rect.centery - ph // 2, pw, ph)
                 entry_door_xy = (p_rect.left - 1, p_rect.centery)
-                boss_door_xy = (boss_rect.left - 1, p_rect.centery)
+                gate_door_xy = (sealed_rect.left - 1, p_rect.centery)
                 outer_entry_xy = (p_rect.left - 2, p_rect.centery)
-            elif boss_dir == "west":
-                bw, bh = 18, 14
+            elif zone_dir == "west":
                 bx = 3
-                by = random.randint(4, MAP_ROWS - bh - 4)
-                boss_rect = pygame.Rect(bx, by, bw, bh)
-                p_rect = pygame.Rect(bx + bw + 1, boss_rect.centery - ph // 2, pw, ph)
+                by = random.randint(max(4, ph // 2 - bh // 2 + 2),
+                                    min(MAP_ROWS - bh - 4, MAP_ROWS - 2 - bh // 2 + ph // 2 - ph))
+                sealed_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(bx + bw + 1, sealed_rect.centery - ph // 2, pw, ph)
                 entry_door_xy = (p_rect.right, p_rect.centery)
-                boss_door_xy = (boss_rect.right, p_rect.centery)
+                gate_door_xy = (sealed_rect.right, p_rect.centery)
                 outer_entry_xy = (p_rect.right + 1, p_rect.centery)
-            elif boss_dir == "north":
-                bw, bh = 18, 12
+            elif zone_dir == "north":
+                bw, bh = (18, 12) if tutorial else (7, 7)
                 bx = random.randint(8, MAP_COLS - bw - 8)
                 by = 3
-                boss_rect = pygame.Rect(bx, by, bw, bh)
-                p_rect = pygame.Rect(boss_rect.centerx - pw // 2, by + bh + 1, pw, ph)
+                sealed_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(sealed_rect.centerx - pw // 2, by + bh + 1, pw, ph)
                 entry_door_xy = (p_rect.centerx, p_rect.bottom)
-                boss_door_xy = (p_rect.centerx, boss_rect.bottom)
+                gate_door_xy = (p_rect.centerx, sealed_rect.bottom)
                 outer_entry_xy = (p_rect.centerx, p_rect.bottom + 1)
             else:  # "south"
-                bw, bh = 18, 12
+                bw, bh = (18, 12) if tutorial else (7, 7)
                 bx = random.randint(8, MAP_COLS - bw - 8)
                 by = MAP_ROWS - bh - 3
-                boss_rect = pygame.Rect(bx, by, bw, bh)
-                p_rect = pygame.Rect(boss_rect.centerx - pw // 2, by - ph - 1, pw, ph)
+                sealed_rect = pygame.Rect(bx, by, bw, bh)
+                p_rect = pygame.Rect(sealed_rect.centerx - pw // 2, by - ph - 1, pw, ph)
                 entry_door_xy = (p_rect.centerx, p_rect.top - 1)
-                boss_door_xy = (p_rect.centerx, boss_rect.top - 1)
+                gate_door_xy = (p_rect.centerx, sealed_rect.top - 1)
                 outer_entry_xy = (p_rect.centerx, p_rect.top - 2)
 
-            reserved_boss_zone = boss_rect.union(p_rect).inflate(4, 4)
-            self.pre_boss_puzzle_info = {
-                "dir": boss_dir,
+            reserved_puzzle_zone = sealed_rect.union(p_rect).inflate(4, 4)
+            zone_info = {
+                "dir": zone_dir,
                 "puzzle_rect": p_rect,
-                "boss_rect": boss_rect,
+                "sealed_rect": sealed_rect,
                 "entry_door": entry_door_xy,
-                "boss_door": boss_door_xy,
+                "gate_door": gate_door_xy,
                 "outer_entry": outer_entry_xy,
+                "tutorial": tutorial,
             }
+            self.mirror_puzzle_info = zone_info
+            if tutorial:
+                self.pre_boss_puzzle_info = dict(zone_info, boss_rect=sealed_rect, boss_door=gate_door_xy)
 
         attempts = 85 if floor_num >= 4 else 65
 
@@ -274,15 +290,15 @@ class Dungeon:
             y = random.randint(3, MAP_ROWS - h - 3)
             new_rect = pygame.Rect(x, y, w, h)
 
-            if reserved_boss_zone and new_rect.inflate(2, 2).colliderect(reserved_boss_zone):
+            if reserved_puzzle_zone and new_rect.inflate(2, 2).colliderect(reserved_puzzle_zone):
                 continue
 
             if not any(new_rect.inflate(2, 2).colliderect(r) for r in self.rooms):
                 bend_first_horiz = True
-                if self.rooms and reserved_boss_zone:
+                if self.rooms and reserved_puzzle_zone:
                     px, py = self.rooms[-1].center
                     cx, cy = new_rect.center
-                    inner_res = reserved_boss_zone.inflate(-2, -2)
+                    inner_res = reserved_puzzle_zone.inflate(-2, -2)
                     h1 = pygame.Rect(min(px, cx), py, abs(cx - px) + 1, 2)
                     v1 = pygame.Rect(cx, min(py, cy), 2, abs(cy - py) + 1)
                     if h1.colliderect(inner_res) or v1.colliderect(inner_res):
@@ -339,7 +355,7 @@ class Dungeon:
                             if self.grid[vy][cx] in (1, 5, 6, 7):
                                 self.grid[vy][cx] = cor_tile
                     else:
-                        for vy in range(min(py, cy), max(py, oy if False else cy) + 1):
+                        for vy in range(min(py, cy), max(py, cy) + 1):
                             if self.grid[vy][px] in (1, 5, 6, 7):
                                 self.grid[vy][px] = cor_tile
                         for hx in range(min(px, cx), max(px, cx) + 1):
@@ -349,53 +365,66 @@ class Dungeon:
                 self.rooms.append(new_rect)
 
         # Вырезаем Зал Босса и предбоссовый Зал Головоломки в выбранной стороне света!
-        if floor_num >= 4 and self.pre_boss_puzzle_info is not None:
-            info = self.pre_boss_puzzle_info
-            boss_rect = info["boss_rect"]
+        if zone_info is not None:
+            info = zone_info
+            sealed_rect = info["sealed_rect"]
             p_rect = info["puzzle_rect"]
-            bx, by, bw, bh = boss_rect.x, boss_rect.y, boss_rect.w, boss_rect.h
+            bx, by, bw, bh = sealed_rect.x, sealed_rect.y, sealed_rect.w, sealed_rect.h
 
+            zone_floor = 4 if floor_num == 2 else (0 if floor_num == 3 else 8)
             for ry in range(by, by + bh):
                 for rx in range(bx, bx + bw):
-                    dist_c = math.hypot(rx - boss_rect.centerx, ry - boss_rect.centery)
+                    dist_c = math.hypot(rx - sealed_rect.centerx, ry - sealed_rect.centery)
                     if (rx in (bx, bx + bw - 1) and ry in (by, by + bh - 1)):
                         continue
-                    self.grid[ry][rx] = 0 if dist_c <= 4.2 else 8
+                    self.grid[ry][rx] = (0 if dist_c <= 4.2 else 8) if tutorial else zone_floor
 
             for ry in range(p_rect.top, p_rect.bottom):
                 for rx in range(p_rect.left, p_rect.right):
-                    self.grid[ry][rx] = 8
+                    self.grid[ry][rx] = zone_floor
 
             ox, oy = info["outer_entry"]
-            self.grid[oy][ox] = 8
-            if self.rooms:
-                nearest_r = min(self.rooms, key=lambda r: math.hypot(r.centerx - ox, r.centery - oy))
-                px, py = nearest_r.center
-                inner_res = boss_rect.union(p_rect).inflate(2, 2)
-                h_check = pygame.Rect(min(px, ox), py, abs(ox - px) + 1, 1)
-                v_check = pygame.Rect(ox, min(py, oy), 1, abs(oy - py) + 1)
-                if not h_check.colliderect(inner_res) and not v_check.colliderect(inner_res):
-                    for hx in range(min(px, ox), max(px, ox) + 1):
-                        self.grid[py][hx] = 8
-                    for vy in range(min(py, oy), max(py, oy) + 1):
-                        self.grid[vy][ox] = 8
-                else:
-                    for vy in range(min(py, oy), max(py, oy) + 1):
-                        self.grid[vy][px] = 8
-                    for hx in range(min(px, ox), max(px, ox) + 1):
-                        self.grid[oy][hx] = 8
+            # Route outside the reserved complex; an L-shaped fallback could
+            # cut a second entrance straight through the sealed room.
+            self.grid[oy][ox] = zone_floor
+            blocked = sealed_rect.union(p_rect).inflate(2, 2)
+            start = (ox, oy)
+            q = deque([start])
+            parents = {start: None}
+            destination = None
+            room_tiles = {(x, y) for r in self.rooms
+                          for y in range(r.top, r.bottom)
+                          for x in range(r.left, r.right)
+                          if self.grid[y][x] not in (1, 5, 6, 7)}
+            while q:
+                x, y = q.popleft()
+                if (x, y) in room_tiles:
+                    destination = (x, y)
+                    break
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    pt = x + dx, y + dy
+                    if (1 <= pt[0] < MAP_COLS - 1 and 1 <= pt[1] < MAP_ROWS - 1
+                            and not blocked.collidepoint(pt) and pt not in parents):
+                        parents[pt] = (x, y)
+                        q.append(pt)
+            if destination is None:
+                raise RuntimeError("Could not connect the puzzle entrance")
+            while destination is not None:
+                x, y = destination
+                self.grid[y][x] = zone_floor
+                destination = parents[destination]
 
             ed_x, ed_y = info["entry_door"]
-            bd_x, bd_y = info["boss_door"]
-            self.grid[ed_y][ed_x] = 8
-            self.grid[bd_y][bd_x] = 8
+            bd_x, bd_y = info["gate_door"]
+            self.grid[ed_y][ed_x] = zone_floor
+            self.grid[bd_y][bd_x] = zone_floor
             self.doors[(ed_x, ed_y)] = Door(ed_x, ed_y, locked_by_lever=False)
             self.doors[(bd_x, bd_y)] = Door(bd_x, bd_y, locked_by_lever=True)
 
-            self.rooms.append(boss_rect)
-            self.boss_room = boss_rect
-            self.atmo_zones.append({"rect": boss_rect, "kind": "ash"})
-            self.fog_zones.append({"wx": float(boss_rect.centerx), "wy": float(boss_rect.centery), "radius": 4.2, "color": (0.85, 0.28, 0.32), "density": 0.40, "kind": "mist"})
+            self.rooms.append(sealed_rect)
+            self.boss_room = sealed_rect if tutorial else None
+            self.atmo_zones.append({"rect": sealed_rect, "kind": "ash"})
+            self.fog_zones.append({"wx": float(sealed_rect.centerx), "wy": float(sealed_rect.centery), "radius": 4.2, "color": (0.85, 0.28, 0.32), "density": 0.40, "kind": "mist"})
 
         self.start_pos = self.rooms[0].center if self.rooms else (6, 20)
 
@@ -426,8 +455,27 @@ class Dungeon:
             if locked_doors and len(self.rooms) >= 4:
                 for i, ld in enumerate(locked_doors):
                     target_room = self.rooms[min(len(self.rooms) - 1, i + 1)]
-                    lx, ly = target_room.left + 1, target_room.bottom - 2
-                    self.levers[(lx, ly)] = Lever(lx, ly, [ld])
+                    # A normal lever must also be on the starting side of all
+                    # locked doors, including the puzzle gate.
+                    reachable = {self.start_pos}
+                    q = deque([self.start_pos])
+                    while q:
+                        tx, ty = q.popleft()
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            pt = nx, ny = tx + dx, ty + dy
+                            door = self.doors.get(pt)
+                            if (0 <= nx < MAP_COLS and 0 <= ny < MAP_ROWS and pt not in reachable
+                                    and self.grid[ny][nx] not in (1, 5, 6, 7)
+                                    and not (door and door.locked)):
+                                reachable.add(pt)
+                                q.append(pt)
+                    candidates = sorted(reachable - self.doors.keys() - self.levers.keys() - {self.start_pos})
+                    preferred = [pt for pt in candidates if target_room.collidepoint(pt)]
+                    if preferred or candidates:
+                        lx, ly = random.choice(preferred or candidates)
+                        self.levers[(lx, ly)] = Lever(lx, ly, [ld])
+                    else:
+                        ld.locked = False
 
         # Расстановка света и жаровен по ярусам
         for idx, r in enumerate(self.rooms):

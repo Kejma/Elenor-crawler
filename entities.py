@@ -6,6 +6,13 @@ from config import (
 )
 
 
+SOLID_INTERACTABLE_KINDS = {
+    "tavern_table", "bar_counter", "wine_cask", "bed", "fireplace",
+    "shelf_bottles", "cauldron", "crate_stack", "grandfather_clock",
+    "wash_basin", "meat_rack", "firewood_pile", "armor_stand",
+}
+
+
 class Item:
     RARITY_ORDER = ("common", "uncommon", "rare", "epic", "legendary")
     RARITY_ROMAN = ("", " [II]", " [III]", " [IV]", " [V]")
@@ -1301,6 +1308,7 @@ class Enemy:
                         speed=6.5, mag_dmg=dmg,
                         color=self.proj_color, from_player=False
                     ))
+                    projectiles[-1].source = self
         else:
             if dist > 1.05:
                 self._follow_astar_path(player.x, player.y, dt, dungeon, all_mobs)

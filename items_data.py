@@ -1,4 +1,7 @@
 BASE_ITEMS_DB = {
+    # Ключи головоломок не участвуют в случайном луте. Тексты — в locales.
+    "focusing_lens": {"type": "quest_key", "rarity": "rare", "icon": "trinket"},
+
     # ИСТОЧНИКИ СВЕТА И ЩИТЫ 
     "pitch_torch": {
         "type": "equipment", "slot": "left_hand", "is_torch": True,

@@ -108,12 +108,19 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
         if not game.dungeon.is_blocking_move(mx_npc, my_npc):
             game.objects.append(InteractableCls(mx_npc, my_npc, "npc_merchant"))
 
+    puzzle_info = game.dungeon.mirror_puzzle_info
+    optional_room = puzzle_info["sealed_rect"] if puzzle_info and not puzzle_info["tutorial"] else None
+    exit_room = game.dungeon.rooms[-2] if optional_room else game.dungeon.rooms[-1]
     for idx, room in enumerate(game.dungeon.rooms[1:], start=1):
         rx, ry = room.center
-        is_last_room = (idx == len(game.dungeon.rooms) - 1)
+        if optional_room is not None and room == optional_room:
+            # An ordinary puzzle guards an optional reward area, not the exit.
+            game.objects.append(InteractableCls(rx, ry, "chest"))
+            continue
+        is_last_room = room is exit_room
 
         if is_last_room:
-            if floor_num >= 4:
+            if room is game.dungeon.boss_room:
                 # ОГРОМНЫЙ ЗАЛ КРЫСИНОГО КОРОЛЯ (2x2 тайла + свита сектантов и крыс)!
                 game.objects.append(InteractableCls(rx - 3, ry, "ritual_altar"))
                 boss = EnemyCls(rx + 2, ry, kind="rat_king", state="patrolling")
@@ -219,9 +226,9 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
                 _scale_mob_for_floor(sm, floor_num)
                 game.mobs.append(sm)
 
-    if floor_num >= 4:
-        from puzzle_mirrors import spawn_pre_boss_mirror_puzzle
-        spawn_pre_boss_mirror_puzzle(
+    if game.dungeon.mirror_puzzle_info is not None:
+        from puzzle_mirrors import spawn_floor_mirror_puzzle
+        spawn_floor_mirror_puzzle(
             game, InteractableCls,
             beam_color=(255, 45, 55),
             spawn_chance=1.0
