@@ -110,7 +110,9 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
                         m.alert_to_combat(self.sfx, self.add_popup)
 
 
-    def reset_run(self):
+    def reset_run(self, campaign=None):
+        self.campaign = campaign or getattr(self, "campaign", "rats")
+        self.fishing_catches = {}
         if hasattr(self, "fx") and self.fx:
             self.fx.disco_active = False
         self.sfx.stop_disco_track()
@@ -128,15 +130,19 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         adj_data = self.loc["adjectives"][adj_key]
         noun_data = self.loc["nouns"][noun_key]
 
-        self.dungeon.generate(floor_num=1)
-        start_x, start_y = self.dungeon.rooms[0].center
+        self.dungeon.generate(floor_num=1, campaign=self.campaign)
+        if self.campaign == "jungle":
+            start_x, start_y = self.dungeon.start_pos
+        else:
+            center_x, start_y = self.dungeon.rooms[0].center
+            start_x = center_x - 2
         appearance = {
             "hero_type": self.profile.get("hero_type", "male"),
             "skin_idx": self.profile.get("skin_idx", 0),
             "head_idx": self.profile.get("head_idx", 0),
             "outfit_idx": self.profile.get("outfit_idx", 0),
         }
-        self.player = Player(start_x - 2, start_y, adj_key, adj_data, noun_key, noun_data, self.loc["items"], appearance=appearance)
+        self.player = Player(start_x, start_y, adj_key, adj_data, noun_key, noun_data, self.loc["items"], appearance=appearance)
 
         self._populate_floor(floor_num=1)
         self.target_thought = ""
@@ -150,6 +156,8 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         intro_text = f"{self.player.full_name}{q_info} {spawn_line}"
         self.bg_thought_cd = 0.0
         self.important_thought_lock = 0.0
+        if self.campaign == "jungle":
+            intro_text = self.loc["fishing"]["intro"]
         self.set_thought(intro_text, important=True)
         self.sfx.play("ui")
 
@@ -159,7 +167,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             self.fx.disco_active = False
         self.sfx.stop_disco_track()
         next_fl = self.dungeon.floor_num + 1
-        self.dungeon.generate(floor_num=next_fl)
+        self.dungeon.generate(floor_num=next_fl, campaign=self.campaign)
         sx, sy = getattr(self.dungeon, "start_pos", self.dungeon.rooms[0].center)
         self.player.x, self.player.y = float(sx) + 0.5, float(sy) + 0.5
         self._populate_floor(floor_num=next_fl)
@@ -169,6 +177,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
     def _populate_floor(self, floor_num):
         self.world_active = False
         self.popups = []
+        self.fishing_cast = None
         self.physical_effects = []
         self.projectiles = []
         self.particles = []
@@ -189,7 +198,11 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.cam_x = self.player.x * TILE_W - VIEW_W * 0.5
         self.cam_y = self.player.y * TILE_H - VIEW_H * 0.5
 
-        populate_mission_floor(self, floor_num, Enemy, Interactable)
+        if self.campaign == "jungle":
+            from elenor.missions.jungle import populate_jungle_bank
+            populate_jungle_bank(self, Interactable)
+        else:
+            populate_mission_floor(self, floor_num, Enemy, Interactable)
 
         from elenor.puzzles.optics import MIRROR_SOLID_KINDS
         from elenor.entities import SOLID_INTERACTABLE_KINDS

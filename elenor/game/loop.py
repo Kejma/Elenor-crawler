@@ -12,6 +12,10 @@ from elenor.profile import apply_display_mode, map_window_to_logical, present_lo
 from elenor.game.controller import GameController
 from elenor.game.targeting import is_cursor_on_mob
 
+from elenor.minigames.fishing import FINISHED, cast_at, update_fishing
+from elenor.ui.fishing import draw_fishing
+
+
 def main():
     os.environ["SDL_RENDER_SCALE_QUALITY"] = "0"
     os.environ["SDL_VIDEO_CENTERED"] = "1"
@@ -19,7 +23,7 @@ def main():
 
     # Внутренний эталонный холст игры (всегда 1152x858, чтобы ни один пиксель не мылился!)
     screen = pygame.Surface((SCREEN_W, SCREEN_H))
-    pygame.display.set_caption("Dungeon Crawler — Mission 1: The Rat Cellar")
+    pygame.display.set_caption("Elenor-crawler")
     clock = pygame.time.Clock()
 
     game = GameController()
@@ -39,7 +43,7 @@ def main():
                 else:
                     if hasattr(event, "pos"):
                         event.pos = map_window_to_logical(event.pos, game.viewport_rect)
-                    game.main_menu.handle_event(event, mouse_pos)
+                    game.main_menu.handle_event(event, getattr(event, "pos", mouse_pos))
             if not running:
                 break
             game.main_menu.update(dt)
@@ -57,6 +61,22 @@ def main():
                 running = False
             if hasattr(event, "pos"):
                 event.pos = map_window_to_logical(event.pos, game.viewport_rect)
+
+            cast = game.fishing_cast
+            if cast is not None:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        game.fishing_cast = None
+                    elif event.key == pygame.K_SPACE and not getattr(event, "repeat", False):
+                        if cast.phase in FINISHED:
+                            cast_at(game, cast.spot, cast.target)
+                        else:
+                            cast.press()
+                elif event.type == pygame.KEYUP and event.key == pygame.K_SPACE:
+                    cast.reeling = False
+                elif event.type == pygame.WINDOWFOCUSLOST:
+                    cast.reeling = False
+                continue
 
             if hasattr(game, "fx") and game.fx:
                 if game.fx.handle_event(event, Enemy, Interactable):
@@ -244,6 +264,12 @@ def main():
                 if game.inv_open and game.journal_open:
                     game.journal_scroll = max(0, game.journal_scroll + event.y * 3)
 
+        # The bank is still rendered and its water animates during a cast.
+        if game.fishing_cast is not None:
+            if pygame.key.get_focused():
+                update_fishing(game, dt)
+            dt = 0.0
+
         # --- REALTIME UPDATE ---
         game.update_typewriter(dt)
 
@@ -267,7 +293,7 @@ def main():
 
         dev_open = getattr(getattr(game, "dev_panel", None), "is_open", False)
 
-        if game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open:
+        if game.fishing_cast is None and game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open:
             keys = pygame.key.get_pressed()
             dx = (1 if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) else 0) - (1 if (keys[pygame.K_a] or keys[pygame.K_LEFT]) else 0)
             dy = (1 if (keys[pygame.K_s] or keys[pygame.K_DOWN]) else 0) - (1 if (keys[pygame.K_w] or keys[pygame.K_UP]) else 0)
@@ -307,7 +333,7 @@ def main():
                             "timer": 2.4, "max_timer": 2.4
                         })
 
-        if game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open:
+        if game.fishing_cast is None and game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open:
             if game.player.pending_action is not None:
                 pa = game.player.pending_action
                 pa["timer"] -= dt
@@ -330,7 +356,7 @@ def main():
                                 (255, 200, 75), 2.8, 0.28
                             ))
 
-        if game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open and game.world_active:
+        if game.fishing_cast is None and game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open and game.world_active:
             from elenor.game.physical import update_physical
             update_physical(game, dt)
             game.update_world_reactions(dt, moved=moved)
@@ -797,6 +823,9 @@ def main():
             levelup_choices=game.levelup_choices,
             hud_lights=hud_lights
         )
+
+        if game.campaign == "jungle" and not game.inv_open:
+            draw_fishing(screen, game)
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)

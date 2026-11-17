@@ -149,9 +149,9 @@ class MainMenuController:
             if adjs:
                 self.preview_cloak_color = list(random.choice(adjs).get("color", [200, 70, 75]))
 
-        elif b_key == "start_run":
+        elif b_key in ("start_run", "start_jungle"):
             self.game.in_main_menu = False
-            self.game.reset_run()
+            self.game.reset_run(campaign="jungle" if b_key == "start_jungle" else "rats")
 
         elif b_key == "vol_down":
             prof["volume"] = round(max(0.0, prof.get("volume", 0.85) - 0.10), 2)
@@ -414,9 +414,15 @@ class MainMenuController:
         screen.blit(rew_s, (card_1.x + 22, card_1.bottom - 38))
 
         card_2 = pygame.Rect(camp_rect.x + 28, card_1.bottom + 24, camp_rect.width - 56, 110)
-        r.draw_pixel_frame(screen, card_2, (18, 15, 22), UI_BORDER_WOOD, False, 1.0)
-        screen.blit(r.font_title.render("II. СКЛЕП КОСТЯНОГО СОВЕТА", True, UI_TEXT_DIM), (card_2.x + 22, card_2.y + 22))
-        screen.blit(r.font_ui.render("[В разработке — откроется позже]", True, (130, 115, 125)), (card_2.x + 22, card_2.y + 58))
+        self.btn_rects["start_jungle"] = card_2
+        hovering_jungle = card_2.collidepoint(mouse_pos)
+        fishing_text = self.game.loc["fishing"]
+        r.draw_pixel_frame(screen, card_2, (38, 65, 47) if hovering_jungle else (26, 42, 34),
+                           UI_BORDER_GOLD, hovering_jungle, 1.0)
+        screen.blit(r.font_title.render(fishing_text["campaign"], True, (175, 238, 161)),
+                    (card_2.x + 22, card_2.y + 22))
+        screen.blit(r.font_ui.render(fishing_text["campaign_note"], True, UI_TEXT_MAIN),
+                    (card_2.x + 22, card_2.y + 58))
 
         diff_box = pygame.Rect(camp_rect.x + 28, card_2.bottom + 24, camp_rect.width - 56, 84)
         r.draw_pixel_frame(screen, diff_box, UI_PANEL_BG, UI_BORDER_WOOD, False, 1.0)
@@ -431,7 +437,7 @@ class MainMenuController:
         self.btn_rects["start_run"] = start_btn
         hov_st = start_btn.collidepoint(mouse_pos)
         r.draw_pixel_frame(screen, start_btn, (46, 92, 52) if hov_st else (32, 68, 38), UI_BORDER_GOLD, hov_st, 1.0)
-        st_lbl = r.font_popup_big.render("В ПОХОД!", True, (255, 245, 200))
+        st_lbl = r.font_popup_big.render("В КРЫСИНЫЙ ПОГРЕБ", True, (255, 245, 200))
         screen.blit(st_lbl, (start_btn.centerx - st_lbl.get_width() // 2, start_btn.centery - st_lbl.get_height() // 2))
 
     def _render_upgrade_tab(self, screen, p_rect, prof):

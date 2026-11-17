@@ -75,8 +75,9 @@ class Dungeon:
                 if 1 <= rx < MAP_COLS - 1 and 1 <= ry < MAP_ROWS - 1:
                     self.grid[ry][rx] = floor_id
 
-    def generate(self, floor_num=1):
+    def generate(self, floor_num=1, *, campaign="rats"):
         self.floor_num = floor_num
+        self.ambient_light = (0.0, 0.0, 0.0)
         self.rooms = []
         self.braziers = []
         self.room_lights = []
@@ -98,6 +99,10 @@ class Dungeon:
         # ЯРУС 1: ИНТРО — ДВОР У КОСТРА И ДОМ-ТАВЕРНА СО ВСЕМ ИНТЕРЬЕРОМ
         # =====================================================================
         self.invisible_bounds = set()
+        if campaign == "jungle":
+            from elenor.missions.jungle import generate_jungle_bank
+            generate_jungle_bank(self)
+            return
 
         # =====================================================================
         # ЯРУС 1: ЖИВОПИСНЫЙ ЛЕС С БОЛЬШОЙ ДОРОГОЙ, ТРОПОЙ И ДОМОМ-ТАВЕРНОЙ
@@ -543,7 +548,7 @@ class Dungeon:
     def is_blocking_move(self, tx, ty):
         if not (0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS):
             return True
-        if self.grid[ty][tx] in (1, 5, 6, 7, 17, 18, 19, 20, 21, 22):
+        if self.grid[ty][tx] in (1, 5, 6, 7, 17, 18, 19, 20, 21, 22, 38):
             return True
         if (tx, ty) in getattr(self, "solid_props", ()) or (tx, ty) in getattr(self, "invisible_bounds", ()):
             return True

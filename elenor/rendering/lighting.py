@@ -47,6 +47,7 @@ class GPULightShader:
             uniform sampler2D u_emissive;
 
             uniform vec2 u_cam;
+            uniform vec3 u_ambient_light;
             uniform float u_time;
             uniform vec3 u_fx_flags; // x = enable_ao, y = enable_bloom, z = enable_fog
             uniform int u_num_lights;
@@ -141,7 +142,7 @@ class GPULightShader:
                         ao_mult = 1.0 - occ;
                     }}
 
-                    vec3 mult = vec3(0.0);
+                    vec3 mult = u_ambient_light;
                     vec3 rim_add = vec3(0.0);
 
                     for (int i = 0; i < u_num_lights; ++i) {{
@@ -319,7 +320,7 @@ class GPULightShader:
         self.hud_pos_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
         self.hud_col_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, enable_fog=True, active_clouds=None, now_sec=0.0):
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, enable_fog=True, active_clouds=None, now_sec=0.0, ambient_light=(0.0, 0.0, 0.0)):
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
@@ -377,6 +378,7 @@ class GPULightShader:
             self.hud_pos_buf[j] = (hx, hy, hz, hl["radius"])
             self.hud_col_buf[j] = (hcr, hcg, hcb, 1.0)
 
+        self.prog["u_ambient_light"].value = tuple(ambient_light)
         self.prog["u_cam"].value = (float(cam_x), float(cam_y))
         self.prog["u_time"].value = float(now_sec)
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0, 1.0 if enable_fog else 0.0)

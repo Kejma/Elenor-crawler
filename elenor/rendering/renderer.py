@@ -560,6 +560,10 @@ class Renderer(UIRendererMixin):
             34: "wall_cave_crystal",
             35: "wall_marble_obsidian",
             36: "wall_temple_relief",
+            37: "floor_lake_shallow",
+            38: "floor_lake_deep",
+            39: "floor_wooden_pier",
+            40: "floor_pebble_shore",
         }
         TALL_TREE_MAP = {
             5: ("floor_3", "tall_tree"),
@@ -789,6 +793,7 @@ class Renderer(UIRendererMixin):
         self.diff_canvas.blit(tz_diff, (0, VIEW_H))
         self.norm_canvas.blit(tz_norm, (0, VIEW_H))
 
+        ambient_light = getattr(dungeon, "ambient_light", (0.0, 0.0, 0.0))
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
@@ -800,7 +805,8 @@ class Renderer(UIRendererMixin):
                 fov_mask, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
-                enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec
+                enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec,
+                ambient_light=ambient_light
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -825,6 +831,8 @@ class Renderer(UIRendererMixin):
             ty_screen = np.clip(((self.py[0, :VIEW_H] + cam_y) // TILE_H).astype(np.int32), 0, MAP_ROWS - 1)
 
 
+            for channel, ambient in zip((r_mult, g_mult, b_mult), ambient_light):
+                channel[:, :VIEW_H] = ambient
             r_mult[:, VIEW_H:] = 0.74
             g_mult[:, VIEW_H:] = 0.74
             b_mult[:, VIEW_H:] = 0.80
