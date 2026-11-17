@@ -1,6 +1,7 @@
 """The float, strike and reeling state for one cast."""
 
 from dataclasses import dataclass
+import pygame
 import math
 import random
 
@@ -256,6 +257,7 @@ def finish_cast(game, cast):
     game.fishing_cast = None
     thought = game.loc["fishing"][cast.phase]
     if cast.phase == "caught":
+        game.catch_display = (cast.fish_id, pygame.time.get_ticks())
         game.fishing_catches[cast.fish_id] = (
             game.fishing_catches.get(cast.fish_id, 0) + 1
         )

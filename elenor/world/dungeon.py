@@ -99,8 +99,8 @@ class Dungeon:
         # =====================================================================
         self.invisible_bounds = set()
         if campaign == "jungle":
-            from elenor.missions.jungle import generate_jungle_bank
-            generate_jungle_bank(self)
+            from elenor.world.jungle import generate_jungle_floor
+            generate_jungle_floor(self)
             return
 
         # =====================================================================

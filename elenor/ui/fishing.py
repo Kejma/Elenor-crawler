@@ -1,5 +1,7 @@
 """Aim marker and a line-tension gauge that stays beside the angler."""
 
+import math
+
 import pygame
 
 from elenor.config import SCALE, TILE_H, TILE_W, VIEW_H, VIEW_W
@@ -40,14 +42,41 @@ def _draw_tension(screen, player_x, player_y, cast):
 
 
 def draw_fishing(screen, game, aim, fov_mask):
+    px = round((game.player.x * TILE_W - game.cam_x) * SCALE)
+    py = round((game.player.y * TILE_H - game.cam_y) * SCALE)
+    if game.catch_display:
+        fish_id, since = game.catch_display
+        elapsed = (pygame.time.get_ticks() - since) / 1000
+        if elapsed < 1.4:
+            art = game.renderer.assets[fish_id][0]
+            angle = elapsed / 1.4 * math.tau
+            # Turn around the vertical axis like a trophy suspended over the hero.
+            width = max(2, round(art.get_width() * 2.5 * abs(math.cos(angle))))
+            icon = pygame.transform.scale(art, (width, round(art.get_height() * 2.5)))
+            if math.cos(angle) < 0:
+                icon = pygame.transform.flip(icon, True, False)
+            screen.blit(
+                icon,
+                icon.get_rect(midbottom=(px, py - 76 - round(8 * math.sin(angle / 2)))),
+            )
+        else:
+            game.catch_display = None
+
     cast = game.fishing_cast
     if cast is not None:
         if cast.phase == "reel":
-            x = round((game.player.x * TILE_W - game.cam_x) * SCALE)
-            y = round((game.player.y * TILE_H - game.cam_y) * SCALE)
-            _draw_tension(screen, x, y, cast)
+            _draw_tension(screen, px, py, cast)
+        elif cast.phase in ("wait", "bite"):
+            label = game.renderer.font_small.render(
+                game.loc["fishing"]["hook_hint"], True, (241, 224, 181)
+            )
+            rect = label.get_rect(midbottom=(VIEW_W * SCALE // 2, VIEW_H * SCALE - 16))
+            pygame.draw.rect(screen, (25, 33, 32), rect.inflate(16, 8), border_radius=5)
+            screen.blit(label, rect)
         return
 
+    if (int(game.player.x), int(game.player.y)) not in game.dungeon.fishing_edges:
+        return
     if cast_route(game.dungeon, (game.player.x, game.player.y), aim) is not None:
         x = round(aim[0] * TILE_W - game.cam_x)
         y = round(aim[1] * TILE_H - game.cam_y)

@@ -15,6 +15,9 @@ def get_required_single_ori(in_dir, out_dir):
 
 
 def get_biome_tiles(dungeon):
+    info = getattr(dungeon, "mirror_puzzle_info", None)
+    if info and "tiles" in info:
+        return info["tiles"]
     fl = getattr(dungeon, "floor_num", 3)
     if fl in (1, 2):
         return 6, 4

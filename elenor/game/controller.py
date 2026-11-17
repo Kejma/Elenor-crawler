@@ -178,6 +178,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.world_active = False
         self.popups = []
         self.fishing_cast = None
+        self.catch_display = None
         self.physical_effects = []
         self.projectiles = []
         self.particles = []
@@ -199,8 +200,8 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.cam_y = self.player.y * TILE_H - VIEW_H * 0.5
 
         if self.campaign == "jungle":
-            from elenor.missions.jungle import populate_jungle_bank
-            populate_jungle_bank(self, Interactable)
+            from elenor.missions.jungle import populate_jungle_floor
+            populate_jungle_floor(self, Interactable)
         else:
             populate_mission_floor(self, floor_num, Enemy, Interactable)
 
