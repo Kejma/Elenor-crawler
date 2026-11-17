@@ -46,15 +46,15 @@ class Renderer(UIRendererMixin):
 
         hud_y = CANVAS_H * SCALE
         # Центрируем весь боевой пояс ([Q/E] + [1..4] + [5 пассивок]) ровно по центру экрана 1920px!
-        belt_total_w = (2 * 58) + 18 + (4 * 58) + 24 + (5 * 54)
+        belt_total_w = (4 * 58) + 18 + (4 * 58)
         belt_start_x = (SCREEN_W - belt_total_w) // 2
         ab_x = belt_start_x
-        hb_x = ab_x + 2 * 58 + 18
+        hb_x = ab_x + 4 * 58 + 18
         ps_x = hb_x + 4 * 58 + 24
 
-        self.ability_rects = [pygame.Rect(ab_x + i * 58, hud_y + 22, 54, 56) for i in range(2)]
+        self.ability_rects = [pygame.Rect(ab_x + i * 58, hud_y + 22, 54, 56) for i in range(4)]
         self.hotbar_rects = [pygame.Rect(hb_x + i * 58, hud_y + 22, 54, 56) for i in range(4)]
-        self.passive_slot_rects = [pygame.Rect(ps_x + i * 54, hud_y + 24, 48, 52) for i in range(5)]
+        self.passive_slot_rects = []
         self.bag_btn_rect = pygame.Rect(SCREEN_W - 176, hud_y + 22, 156, 56)
         self.inv_slot_rects = []
         self.equip_slot_rects = {}
@@ -872,6 +872,11 @@ class Renderer(UIRendererMixin):
             visibility = overlay_visibility(fov_mask, lights, cam_x, cam_y)
             render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, visibility)
 
+        if game_ref is not None and getattr(game_ref, "physical_effects", None):
+            from elenor.rendering.physical import render_physical
+            from elenor.rendering.visibility import overlay_visibility
+            render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask,lights,cam_x,cam_y))
+
         # 5. Пылинки и споры, видимые ТОЛЬКО когда они пролетают сквозь лучи света!
         if fx_mgr and fx_mgr.flags.get("dust_motes", True):
             for dm in fx_mgr.dust_motes:
@@ -1387,7 +1392,7 @@ class Renderer(UIRendererMixin):
         from elenor.data.economy import format_copper_Trigger
         self.draw_pixel_frame(screen, (262, hud_y + 22, 88, 58), UI_SLOT_BG, UI_BORDER_WOOD, False, player.illumination)
         torch = player.get_active_torch()
-        t_str = "[F] ВКЛ" if (torch and player.torch_on) else "[F] ТЕНЬ"
+        t_str = "[T] ВКЛ" if (torch and player.torch_on) else "[T] ТЕНЬ"
         t_col = (255, 200, 75) if (torch and player.torch_on) else (130, 175, 235)
         screen.blit(self.font_small.render(t_str, True, t_col), (270, hud_y + 29))
         coin_s = self.font_small.render(format_copper_Trigger(player.gold, compact=True), True, (255, 215, 80))
@@ -1395,7 +1400,7 @@ class Renderer(UIRendererMixin):
 
         # 4A. Active Ability Slots [Q] and [E] (с серо-синим фильтром Warcraft 3 при нехватке маны!)
         hovered_hud_item = None
-        key_labels = ("Q", "E")
+        key_labels = ("Q", "E", "R", "F")
         for i, rect in enumerate(self.ability_rects):
             is_hov = rect.collidepoint(hover_pos)
             item = player.ability_slots[i]

@@ -159,7 +159,7 @@ class UIRendererMixin:
             banner_txt = f"НОВЫЙ УРОВЕНЬ ({player.level})! Защита от случайного клика: {lock_timer:.1f} сек..."
             b_col = (180, 175, 190)
         else:
-            banner_txt = f"НОВЫЙ УРОВЕНЬ ({player.level})! ВЫБЕРИ ДАР [Акт: {len(player.active_perks)}/2 | Пасс: {len(player.passive_perks)}/5]"
+            banner_txt = f"НОВЫЙ УРОВЕНЬ ({player.level})! ВЫБЕРИ ДАР [Акт: {len(player.active_perks)}/4]"
             b_col = UI_BORDER_HIGHLIGHT
 
         b_surf = self.font_title.render(banner_txt, True, b_col)
@@ -192,7 +192,7 @@ class UIRendererMixin:
                 lvl_str = f"СТЕРЕТЬ (Ур.{cur_lvl})"
                 l_col = (255, 95, 95)
             else:
-                lvl_str = f"Ур.{cur_lvl} -> {cur_lvl + 1}" if cur_lvl > 0 else ("АКТИВ [Q/E]" if perk.get("type") == "active" else "ПАССИВ")
+                lvl_str = f"Ур.{cur_lvl} -> {cur_lvl + 1}" if cur_lvl > 0 else ("АКТИВ [Q/E/R/F]" if perk.get("type") == "active" else "ПАССИВ")
                 l_col = (130, 240, 160) if cur_lvl > 0 else ((110, 210, 255) if perk.get("type") == "active" else UI_TEXT_DIM)
 
             l_surf = self.font_small.render(lvl_str, True, l_col)
@@ -288,7 +288,7 @@ class UIRendererMixin:
             ("Уклонение", f"{int(player.dodge_chance*100)}%"),
             (ui_texts["noise"], f"{int(player.noise_factor*100)}%"),
             (ui_texts["vision"], f"{int(player.torch_light_radius)}/{int(player.dark_vision_radius)}"),
-            ("Способности", f"Акт:{len(player.active_perks)}/2 Пасс:{len(player.passive_perks)}/5"),
+            ("Способности", f"Акт:{len(player.active_perks)}/4"),
         ]
         for idx, (k_txt, v_txt) in enumerate(derived):
             ly = ledger_y + idx * 27

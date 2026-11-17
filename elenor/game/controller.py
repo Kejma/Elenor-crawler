@@ -90,6 +90,8 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
 
 
     def emit_noise(self, wx, wy, base_radius):
+        if getattr(self.player,"stealth_timer",0)>0:
+            base_radius *= .15
         """
         Global Noise System: Actions (attacks, lighting torch, lockpicking, levers, barrels)
         emit a sound wave that wakes sleeping mobs and alerts nearby enemies!
@@ -167,6 +169,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
     def _populate_floor(self, floor_num):
         self.world_active = False
         self.popups = []
+        self.physical_effects = []
         self.projectiles = []
         self.particles = []
         self.visual_fx = []

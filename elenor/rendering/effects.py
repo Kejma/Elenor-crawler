@@ -174,6 +174,8 @@ class FXManager:
         self.shake_timer = max(self.shake_timer, float(duration))
 
     def update(self, dt, player, dungeon, mobs=None, add_popup=None):
+        if dt <= 0:
+            return
         if self.shake_timer > 0.0 and self.flags["screenshake"]:
             self.shake_timer = max(0.0, self.shake_timer - dt)
             fade = self.shake_timer / self.shake_max_timer
@@ -205,8 +207,11 @@ class FXManager:
                 if cld["tick"] <= 0.0:
                     cld["tick"] = 0.65
                     for m in list(mobs):
-                        if math.hypot(m.x - cld["wx"], m.y - cld["wy"]) <= cld["radius"]:
-                            m.apply_status("poison", 2.5, add_popup, dmg_val=cld["dmg"])
+                        if (math.hypot(m.x - cld["wx"], m.y - cld["wy"]) <= cld["radius"]
+                                and dungeon.has_line_of_sight(cld["wx"],cld["wy"],m.x,m.y,cld["radius"]+.5)):
+                            if "growth_credit" not in cld:
+                                m.apply_status("poison", 2.5, add_popup, dmg_val=cld["dmg"])
+                            self.game.record_combat_growth(m,cld.get("growth_credit"))
                             m.hp -= cld["dmg"]
                             add_popup(m.x, m.y, f"-{cld['dmg']}", (110, 245, 95))
                             self.game._check_mob_death(m)

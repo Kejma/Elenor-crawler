@@ -35,7 +35,19 @@ def draw_ability_icon(surface, name, x, y, size):
                 [(b[0] - 3, b[1] + 1), (b[0] + 1, b[1] - 3), (b[0] + 2, b[1] + 2)],
             )
 
-        if glyph in ("firebolt", "ignite"):
+        if glyph == "hamstring":
+            line(white,[(12,4),(12,19),(24,24)],5)
+            line(green,[(5,27),(26,27),(21,22)],2)
+        elif glyph == "fan_blades":
+            pygame.draw.arc(icon,white,(3,9,26,15),0,math.pi,2)
+            for px in (5,10,15,20,25):line(white,[(px,17),(px,11)],2)
+        elif glyph == "venom_strike":
+            pygame.draw.polygon(icon,(100,140,195),[(16,3),(6,10),(3,28),(29,28),(26,10)],2)
+            line(white,[(11,13),(14,13)]);line(white,[(18,13),(21,13)])
+        elif glyph == "piercing_shot":
+            blade((8,25),(23,5))
+            line((235,90,80),[(4,7),(10,7),(7,4),(7,11)])
+        elif glyph in ("firebolt", "ignite"):
             pygame.draw.polygon(
                 icon,
                 warm,

@@ -74,7 +74,7 @@ def main():
                         game.in_main_menu = True
                     game.sfx.play("ui")
                     continue
-                elif event.key == pygame.K_r:
+                elif event.key == pygame.K_F5:
                     game.reset_run()
                 elif event.key in (pygame.K_i, pygame.K_TAB):
                     game.inv_open = not game.inv_open
@@ -92,13 +92,13 @@ def main():
                     game.drag_item = None
                     game.drag_source = None
                     game.sfx.play("ui")
-                elif event.key == pygame.K_f:
+                elif event.key == pygame.K_t:
                     game.trigger_torch_toggle()
                 elif event.key == pygame.K_SPACE:
                     game.try_interact_or_melee(world_mx, world_my, via_mouse=False)
-                elif event.key in (pygame.K_q, pygame.K_e):
+                elif event.key in (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f):
                     if not game.inv_open and not game.levelup_choices:
-                        ab_idx = 0 if event.key == pygame.K_q else 1
+                        ab_idx = (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f).index(event.key)
                         game.use_or_equip_item(game.player.ability_slots[ab_idx], world_mx, world_my, from_hotbar=True)
                 elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5):
                     slot_idx = event.key - pygame.K_1
@@ -188,8 +188,6 @@ def main():
                                 if itm:
                                     game.drop_item_on_floor(itm)
                                 break
-                    elif game.player.ability_slots[0]:
-                        game.use_or_equip_item(game.player.ability_slots[0], world_mx, world_my, from_hotbar=True)
 
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 if game.drag_item:
@@ -333,7 +331,8 @@ def main():
                             ))
 
         if game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open and game.world_active:
-            game.update_auto_perks(dt)
+            from elenor.game.physical import update_physical
+            update_physical(game, dt)
             game.update_world_reactions(dt, moved=moved)
 
             for obj in game.objects:
@@ -482,13 +481,13 @@ def main():
                         if pr in game.projectiles:
                             game.projectiles.remove(pr)
 
-        evt_code = game.player.update_timers(dt)
+        evt_code = game.player.update_timers(dt if not game.inv_open and not game.levelup_choices and not dev_open else 0)
         if evt_code == "torch_burned_out":
             game.sfx.play("hurt")
             game.trigger_event_thought("torch_burned_out", force_important=True)
 
         from elenor.puzzles.mirrors import update_mirror_puzzles, inject_mirror_puzzle_lights
-        game.fx.update(dt, game.player, game.dungeon, game.mobs, game.add_popup)
+        game.fx.update(dt if not game.inv_open and not game.levelup_choices and not dev_open else 0, game.player, game.dungeon, game.mobs, game.add_popup)
 
         # Фоновая пространственная музыка активной кампании (управляется модулем миссии!)
         if not getattr(game.fx, "disco_active", False):

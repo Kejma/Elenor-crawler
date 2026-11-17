@@ -30,7 +30,7 @@ class CombatMixin:
                     self.record_combat_growth(m, getattr(self.player, "ignite_growth_credit", None))
 
         defense = self.player.mag_defense if is_magic else self.player.phys_defense
-        dmg = max(1, int(math.floor(raw_dmg - defense)))
+        dmg = max(1, int(math.floor((raw_dmg - defense) * (.55 if getattr(self.player,"guard_timer",0)>0 else 1))))
         self.player.hp = max(0.0, self.player.hp - dmg)
         self.sfx.play("hurt")
         self.add_log("combat", f"Получен урон: -{dmg} ХП ({'магия' if is_magic else 'физ. удар'}).", (255, 110, 110))
@@ -331,6 +331,8 @@ class CombatMixin:
         px, py = self.player.x, self.player.y
         weap = self.player.equipment["right_hand"]
 
+        hidden_strike = getattr(self.player,"stealth_timer",0)>0
+        self.player.stealth_timer = 0
         style = weap.weap_style if weap else "fist"
         reach = weap.reach if weap else 1.38
         arc_deg = weap.arc_deg if weap else 50.0
@@ -453,7 +455,7 @@ class CombatMixin:
                 bs_bonus = getattr(weap, "backstab_bonus", 0.0) if weap else 0.0
                 is_vulnerable = (m.state != "combat" or m.stun_timer > 0 or m.root_timer > 0 or m.slow_timer > 0)
                 if m.state != "combat":
-                    dmg = int(dmg * max(self.player.backstab_mult, bs_bonus))
+                    dmg = int(dmg * (1 if hidden_strike else max(self.player.backstab_mult, bs_bonus)))
                     is_crit = True
                     m.alert_to_combat(self.sfx, self.add_popup)
                 elif bs_bonus > 1.0 and is_vulnerable:
@@ -472,6 +474,8 @@ class CombatMixin:
                     dmg = max(1, int(dmg * 0.50))
 
                 eff_def = max(0, m.phys_def - armor_pierce)
+                if hidden_strike:
+                    dmg = int(dmg * 1.35)
                 final_dmg = max(1, dmg - eff_def)
                 m.hp -= final_dmg
 
@@ -547,7 +551,10 @@ class CombatMixin:
     def _execute_skill_or_spell(self, item, target_wx, target_wy):
         self.player.cast_glow_color = None
         px, py = self.player.x, self.player.y
-        self.emit_noise(px, py, 7.2)
+        if getattr(item,"shape",None) not in ("stealth","trap","evade"):
+            self.emit_noise(px, py, 7.2)
+        if getattr(item,"shape",None) not in ("stealth","trap","evade","guard"):
+            self.player.stealth_timer = 0
         is_combat = (item.type == "combat_skill")
         if item.type == "consumable_spell":
             total_pwr = int(math.floor(item.power * 1.65 + self.player.mag_attack * 1.5))

@@ -254,7 +254,8 @@ class Enemy:
             p_tile = dungeon.grid[int(player.y)][int(player.x)]
             surface_noise = 1.5 if p_tile == 2 else (0.55 if p_tile == 3 else 1.0)
 
-            eff_range = self.detect_range * (0.45 + player.illumination * 0.85) * state_mult
+            stealth_factor = .15 if getattr(player,"stealth_timer",0)>0 else 1
+            eff_range = stealth_factor * self.detect_range * (0.45 + player.illumination * 0.85) * state_mult
             can_sense = False
 
             hear_range = 2.8 * player.noise_factor * surface_noise

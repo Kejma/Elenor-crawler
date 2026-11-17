@@ -46,8 +46,8 @@ class Player:
 
         # Max 2 Active abilities ([Q], [E]) and max 5 Passive perks!
         self.perks = {}              # perk_id -> level
-        self.active_perks = {}       # perk_id -> level (max 2 keys)
-        self.passive_perks = {}      # perk_id -> level (max 5 keys)
+        self.active_perks = {}       # perk_id -> level (max 4 keys)
+        self.passive_perks = {}      # perk_id -> level (disabled)
         self.perk_timers = {"storm_aura": 1.5}
         self.cooldowns = {}          # item_or_perk_id -> remaining cooldown seconds
         self.pending_action = None   # Holds windup action dict before strike/cast fires!
@@ -110,7 +110,8 @@ class Player:
         }
 
         # Q and E slots for Active Abilities; 1..4 slots for Consumables!
-        self.ability_slots = [None, None]
+        self.ability_slots = [None] * 4
+        self.guard_timer = self.evade_timer = self.stealth_timer = 0.0
         self.hotbar = [None] * 4
 
     @property
@@ -351,6 +352,8 @@ class Player:
     def apply_perk(self, perk_id, perks_db, upgrade_roll=None):
         p_data = perks_db.get(perk_id, {})
         p_type = p_data.get("type", "passive")
+        if p_type != "active" or (perk_id not in self.active_perks and all(self.ability_slots)):
+            return
 
         new_lvl = self.perks.get(perk_id, 0) + 1
         self.perks[perk_id] = new_lvl
@@ -374,11 +377,14 @@ class Player:
                 spell_item_data["name"] = f"{p_data['name']} (Ур.{new_lvl})"
                 spell_item_data["type"] = "combat_skill" if s_kind == "combat" else "permanent_spell"
                 sp_item = Item(perk_id, spell_item_data)
+                budget = {"common":0,"uncommon":.12,"rare":.24,"epic":.4,"legendary":.6}[sp_item.rarity]
+                for stat in sp_item.upgradable_stats:
+                    sp_item.stat_bonuses_pct[stat] = budget / len(sp_item.upgradable_stats)
                 self.recalculate_spell_from_base(sp_item)
-                if self.ability_slots[0] is None:
-                    self.ability_slots[0] = sp_item
-                elif self.ability_slots[1] is None:
-                    self.ability_slots[1] = sp_item
+                for index, slot in enumerate(self.ability_slots):
+                    if slot is None:
+                        self.ability_slots[index] = sp_item
+                        break
         else:
             self.passive_perks[perk_id] = new_lvl
             if perk_id == "tough_skin":
@@ -415,7 +421,7 @@ class Player:
         self.active_perks.pop(perk_id, None)
         self.passive_perks.pop(perk_id, None)
 
-        for i in range(2):
+        for i in range(len(self.ability_slots)):
             if self.ability_slots[i] and self.ability_slots[i].id == perk_id:
                 self.ability_slots[i] = None
 
@@ -539,6 +545,8 @@ class Player:
             spd_mult *= 1.15
         if self.throw_slowdown_timer > 0.0:
             spd_mult *= 0.50
+        if self.evade_timer > 0:
+            spd_mult *= 1.3
         step = PLAYER_BASE_SPEED * spd_mult * dt
 
         rad = 0.28
@@ -663,6 +671,8 @@ class Player:
         self.lunge_vy *= decay
 
     def update_timers(self, dt):
+        for name in ("guard_timer", "evade_timer", "stealth_timer"):
+            setattr(self, name, max(0, getattr(self,name,0)-dt))
         self.anim_timer += dt
         fps = 8.0 if self.is_moving else 2.0
         if self.anim_timer >= 1.0 / fps:

@@ -12,8 +12,8 @@ class ProgressionMixin:
     def _is_perk_eligible(self, pid, pdata):
         ptype = pdata.get("type", "passive")
         if ptype == "active":
-            return (pid in self.player.active_perks) or (len(self.player.active_perks) < 2)
-        return (pid in self.player.passive_perks) or (len(self.player.passive_perks) < 5)
+            return (pid in self.player.active_perks) or (len(self.player.active_perks) < 4)
+        return False
 
 
     def _get_perk_branch(self, pid, pdata):
@@ -45,11 +45,11 @@ class ProgressionMixin:
         """
         tiers = ["common", "uncommon", "rare", "epic", "legendary"]
         pct_table = {
-            "common": 0.12,
-            "uncommon": 0.24,
-            "rare": 0.48,
-            "epic": 0.96,
-            "legendary": 1.92,
+            "common": 0.06,
+            "uncommon": 0.12,
+            "rare": 0.20,
+            "epic": 0.32,
+            "legendary": 0.48,
         }
         max_stats_table = {
             "common": 1,
@@ -91,7 +91,7 @@ class ProgressionMixin:
                 break
             cand_weights = []
             for pid, pdata in candidates:
-                base_w = r_weights.get(pdata.get("rarity", "common"), 10.0)
+                base_w = 1.0
                 branch = self._get_perk_branch(pid, pdata)
                 branch_share = aff.get(branch, 0.0) / total_aff
                 affinity_mult = 1.0 + 1.45 * branch_share
@@ -102,6 +102,7 @@ class ProgressionMixin:
             used_ids.add(picked_pid)
             p_copy = dict(picked_data)
             p_copy["id"] = picked_pid
+            p_copy["rarity"] = random.choices(tiers, weights=tier_weights_list, k=1)[0]
 
             if picked_pid in self.player.perks and picked_data.get("type") == "active":
                 upg_rar, upg_roll = self._roll_spell_upgrade_stats(picked_data, tier_weights_list)
@@ -150,7 +151,7 @@ class ProgressionMixin:
             self.levelup_choices = None
             return
 
-        self.player.apply_perk(perk["id"], self.loc.get("perks", {}), perk.get("upgrade_roll"))
+        self.player.apply_perk(perk["id"], {perk["id"]: perk}, perk.get("upgrade_roll"))
         self.player.pending_perk_rolls = max(0, self.player.pending_perk_rolls - 1)
         self.sfx.play("heal")
         self.add_popup(self.player.x, self.player.y - 0.4, f"+{perk['name']}", (255, 225, 95))
