@@ -18,6 +18,11 @@ SOLID_INTERACTABLE_KINDS = {
     "marble_statue", "serpent_statue", "sun_gong", "marble_bench",
     "marble_lectern", "incense_burner", "marble_obelisk", "temple_sundial",
     "holy_fire_bowl", "fallen_colossus", "marble_fountain", "marble_sarcophagus",
+    "bone_totem_altar", "leviathan_rib_arch", "giant_beast_skull", "spine_pillar",
+    "bone_throne", "bone_cage_hanging", "corpse_pitcher_plant", "impaled_skeleton",
+    "bone_spike_barricade", "necrotic_brazier", "sacrificial_bone_table", "bone_wind_chimes",
+    "spider_cocoon", "giant_cave_mushroom", "amethyst_geode", "sulfur_geyser",
+    "stalagnate_column", "minecart_wreck", "bat_roost_rock", "abyssal_fissure",
 }
 
 

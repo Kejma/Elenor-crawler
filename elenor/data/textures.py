@@ -83,6 +83,21 @@ ASSET_CATALOG = {
             "floor_pebble_shore": ("Берег: Речная галька", (16, 16)),
             "floor_reed_mud": ("Берег: Ил и корни камыша", (16, 16)),
             "floor_wooden_pier": ("Берег: Доски рыбацкого пирса", (16, 16)),
+            "floor_tar_pit": ("Костяные джунгли: Кипящая смола (3 кадра)", (16, 16)),
+            "floor_acid_pool": ("Пещера: Кислотная лужа (3 кадра)", (16, 16)),
+            "floor_bone_grass": ("Костяные джунгли: Мёртвая трава", (16, 16)),
+            "floor_bone_grave": ("Костяные джунгли: Костяная крошка", (16, 16)),
+            "floor_blood_marsh": ("Костяные джунгли: Кровавая трясина", (16, 16)),
+            "floor_bone_bridge": ("Костяные джунгли: Мост из костей", (16, 16)),
+            "floor_cave_fungus": ("Пещера: Грибной мицелий", (16, 16)),
+            "floor_cave_obsidian": ("Пещера: Колотый обсидиан", (16, 16)),
+            "wall_bone_ribs": ("Костяные джунгли: Стена из рёбер", (16, 16)),
+            "wall_skull_catacomb": ("Костяные джунгли: Стена черепов", (16, 16)),
+            "wall_corrupted_wood": ("Костяные джунгли: Гнилой частокол", (16, 16)),
+            "wall_cave_web": ("Пещера: Скала в паутине", (16, 16)),
+            "wall_cave_magma": ("Пещера: Магмовая порода", (16, 16)),
+            "tree_bone": ("Костяное дерево (иконка)", (16, 16)),
+            "tree_dead_mangrove": ("Мёртвый мангр (иконка)", (16, 16)),
         }
     },
     "overlays": {
@@ -111,6 +126,14 @@ ASSET_CATALOG = {
             "ov_duckweed": ("Озеро: Пятна ряски", (16, 16)),
             "ov_fish_shadows": ("Озеро: Тени косяка рыб", (16, 16)),
             "ov_bobber_ripples": ("Озеро: Поплавок на воде", (16, 16)),
+            "ov_ribcage_remains": ("Костяные джунгли: Грудная клетка", (16, 16)),
+            "ov_blood_vines": ("Костяные джунгли: Кровавые лозы", (16, 16)),
+            "ov_spider_web": ("Пещера: Густая паутина", (16, 16)),
+            "ov_guano_droppings": ("Пещера: Следы нетопырей", (16, 16)),
+            "ov_sulfur_cracks": ("Пещера: Серные трещины", (16, 16)),
+            "ov_bone_spikes_floor": ("Костяные джунгли: Костяные шипы", (16, 16)),
+            "ov_corrupted_spores": ("Костяные джунгли: Пятна гнили", (16, 16)),
+            "ov_shattered_skulls": ("Костяные джунгли: Битые черепа", (16, 16)),
         }
     },
     "mobs": {
@@ -222,6 +245,32 @@ ASSET_CATALOG = {
             "lever_off": ("Рычаг (Выкл)", (16, 20)),
             "lever_on": ("Рычаг (Вкл)", (16, 20)),
             "loot": ("Мешочек с лутом", (16, 20)),
+            "tall_bone_tree": ("Костяные джунгли: Костяное дерево (24x38)", (24, 38)),
+            "tall_dead_mangrove": ("Костяные джунгли: Мёртвый мангр (24x38)", (24, 38)),
+            "bone_totem_altar": ("Костяные джунгли: Тотем черепов", (16, 20)),
+            "leviathan_rib_arch": ("Костяные джунгли: Рёбра левиафана (2x1)", (32, 20)),
+            "giant_beast_skull": ("Костяные джунгли: Череп чудовища (2x1)", (32, 20)),
+            "spine_pillar": ("Костяные джунгли: Столб позвонков", (16, 20)),
+            "bone_throne": ("Костяные джунгли: Костяной трон", (16, 20)),
+            "bone_cage_hanging": ("Костяные джунгли: Клетка из рёбер", (16, 20)),
+            "blood_thorn_bush": ("Костяные джунгли: Кровавый терновник", (16, 20)),
+            "corpse_pitcher_plant": ("Костяные джунгли: Хищный кувшиночник", (16, 20)),
+            "impaled_skeleton": ("Костяные джунгли: Скелет на пиках", (16, 20)),
+            "bone_spike_barricade": ("Костяные джунгли: Костяные колья", (16, 20)),
+            "necrotic_brazier": ("Костяные джунгли: Некро-жаровня", (16, 20)),
+            "ossuary_chest": ("Костяные джунгли: Сундук-оссуарий", (16, 20)),
+            "sacrificial_bone_table": ("Костяные джунгли: Стол из лопатки", (16, 20)),
+            "bone_wind_chimes": ("Костяные джунгли: Ловцы душ", (16, 20)),
+            "spider_cocoon": ("Пещера: Паучий кокон с жертвой", (16, 20)),
+            "spider_egg_sac": ("Пещера: Кладка яиц паука", (16, 20)),
+            "giant_cave_mushroom": ("Пещера: Гигантский светящийся гриб", (16, 20)),
+            "amethyst_geode": ("Пещера: Аметистовая жеода", (16, 20)),
+            "sulfur_geyser": ("Пещера: Серный гейзер", (16, 20)),
+            "stalagnate_column": ("Пещера: Колонна-сталагнат", (16, 20)),
+            "minecart_wreck": ("Пещера: Разбитая вагонетка", (16, 20)),
+            "miner_skeleton": ("Пещера: Скелет рудокопа", (16, 20)),
+            "bat_roost_rock": ("Пещера: Гнездо нетопырей", (16, 20)),
+            "abyssal_fissure": ("Пещера: Разлом бездны (2x1)", (32, 20)),
         }
     },
     "hero": {
@@ -259,6 +308,10 @@ DEFAULT_RANDOM_ROT_ROLES = {
     "ov_petals_gold", "ov_bamboo_leaves", "ov_mangrove_roots", "ov_bones",
     "ov_mud_puddle", "ov_gold_filigree", "floor_wet_sand", "floor_pebble_shore", "floor_reed_mud",
     "ov_shells_starfish", "ov_duckweed",
+    "floor_bone_grass", "floor_bone_grave", "floor_blood_marsh",
+    "floor_cave_fungus", "floor_cave_obsidian",
+    "ov_blood_vines", "ov_spider_web", "ov_guano_droppings",
+    "ov_sulfur_cracks", "ov_corrupted_spores", "ov_shattered_skulls",
 }
 
 
@@ -482,6 +535,14 @@ def bootstrap_assets_if_needed(procedural_assets, hero_builder_fn=None):
             if need_bake:
                 if role_id == "floor_2" and "_water_frames" in procedural_assets:
                     save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_water_frames"], fps=4, random_rot=rrot_flag)
+                    changed = True
+                    continue
+                elif role_id == "floor_tar_pit" and "_tar_pit_frames" in procedural_assets:
+                    save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_tar_pit_frames"], fps=4, random_rot=rrot_flag)
+                    changed = True
+                    continue
+                elif role_id == "floor_acid_pool" and "_acid_pool_frames" in procedural_assets:
+                    save_dtex_frames(dtex_path, role_id, file_stem, manifest[role_id]["name"], cat_key, procedural_assets["_acid_pool_frames"], fps=4, random_rot=rrot_flag)
                     changed = True
                     continue
                 elif role_id == "floor_lake_shallow" and "_lake_shallow_frames" in procedural_assets:

@@ -2768,5 +2768,544 @@
     ],
     "random_rot": false,
     "rev": 5
+  },
+  "floor_tar_pit": {
+    "file": "floor_tar_pit",
+    "name": "Костяные джунгли: Кипящая смола (3 кадра)",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "floor_acid_pool": {
+    "file": "floor_acid_pool",
+    "name": "Пещера: Кислотная лужа (3 кадра)",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "floor_bone_grass": {
+    "file": "floor_bone_grass",
+    "name": "Костяные джунгли: Мёртвая трава",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "floor_bone_grave": {
+    "file": "floor_bone_grave",
+    "name": "Костяные джунгли: Костяная крошка",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "floor_blood_marsh": {
+    "file": "floor_blood_marsh",
+    "name": "Костяные джунгли: Кровавая трясина",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "floor_bone_bridge": {
+    "file": "floor_bone_bridge",
+    "name": "Костяные джунгли: Мост из костей",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "floor_cave_fungus": {
+    "file": "floor_cave_fungus",
+    "name": "Пещера: Грибной мицелий",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "floor_cave_obsidian": {
+    "file": "floor_cave_obsidian",
+    "name": "Пещера: Колотый обсидиан",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "wall_bone_ribs": {
+    "file": "wall_bone_ribs",
+    "name": "Костяные джунгли: Стена из рёбер",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "wall_skull_catacomb": {
+    "file": "wall_skull_catacomb",
+    "name": "Костяные джунгли: Стена черепов",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "wall_corrupted_wood": {
+    "file": "wall_corrupted_wood",
+    "name": "Костяные джунгли: Гнилой частокол",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "wall_cave_web": {
+    "file": "wall_cave_web",
+    "name": "Пещера: Скала в паутине",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "wall_cave_magma": {
+    "file": "wall_cave_magma",
+    "name": "Пещера: Магмовая порода",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "tree_bone": {
+    "file": "tree_bone",
+    "name": "Костяное дерево (иконка)",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "tree_dead_mangrove": {
+    "file": "tree_dead_mangrove",
+    "name": "Мёртвый мангр (иконка)",
+    "cat": "tiles",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "ov_ribcage_remains": {
+    "file": "ov_ribcage_remains",
+    "name": "Костяные джунгли: Грудная клетка",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "ov_blood_vines": {
+    "file": "ov_blood_vines",
+    "name": "Костяные джунгли: Кровавые лозы",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_spider_web": {
+    "file": "ov_spider_web",
+    "name": "Пещера: Густая паутина",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_guano_droppings": {
+    "file": "ov_guano_droppings",
+    "name": "Пещера: Следы нетопырей",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_sulfur_cracks": {
+    "file": "ov_sulfur_cracks",
+    "name": "Пещера: Серные трещины",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_bone_spikes_floor": {
+    "file": "ov_bone_spikes_floor",
+    "name": "Костяные джунгли: Костяные шипы",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "ov_corrupted_spores": {
+    "file": "ov_corrupted_spores",
+    "name": "Костяные джунгли: Пятна гнили",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "ov_shattered_skulls": {
+    "file": "ov_shattered_skulls",
+    "name": "Костяные джунгли: Битые черепа",
+    "cat": "overlays",
+    "size": [
+      16,
+      16
+    ],
+    "random_rot": true,
+    "rev": 5
+  },
+  "tall_bone_tree": {
+    "file": "tall_bone_tree",
+    "name": "Костяные джунгли: Костяное дерево (24x38)",
+    "cat": "props",
+    "size": [
+      24,
+      38
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "tall_dead_mangrove": {
+    "file": "tall_dead_mangrove",
+    "name": "Костяные джунгли: Мёртвый мангр (24x38)",
+    "cat": "props",
+    "size": [
+      24,
+      38
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bone_totem_altar": {
+    "file": "bone_totem_altar",
+    "name": "Костяные джунгли: Тотем черепов",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "leviathan_rib_arch": {
+    "file": "leviathan_rib_arch",
+    "name": "Костяные джунгли: Рёбра левиафана (2x1)",
+    "cat": "props",
+    "size": [
+      32,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "giant_beast_skull": {
+    "file": "giant_beast_skull",
+    "name": "Костяные джунгли: Череп чудовища (2x1)",
+    "cat": "props",
+    "size": [
+      32,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "spine_pillar": {
+    "file": "spine_pillar",
+    "name": "Костяные джунгли: Столб позвонков",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bone_throne": {
+    "file": "bone_throne",
+    "name": "Костяные джунгли: Костяной трон",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bone_cage_hanging": {
+    "file": "bone_cage_hanging",
+    "name": "Костяные джунгли: Клетка из рёбер",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "blood_thorn_bush": {
+    "file": "blood_thorn_bush",
+    "name": "Костяные джунгли: Кровавый терновник",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "corpse_pitcher_plant": {
+    "file": "corpse_pitcher_plant",
+    "name": "Костяные джунгли: Хищный кувшиночник",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "impaled_skeleton": {
+    "file": "impaled_skeleton",
+    "name": "Костяные джунгли: Скелет на пиках",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bone_spike_barricade": {
+    "file": "bone_spike_barricade",
+    "name": "Костяные джунгли: Костяные колья",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "necrotic_brazier": {
+    "file": "necrotic_brazier",
+    "name": "Костяные джунгли: Некро-жаровня",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "ossuary_chest": {
+    "file": "ossuary_chest",
+    "name": "Костяные джунгли: Сундук-оссуарий",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "sacrificial_bone_table": {
+    "file": "sacrificial_bone_table",
+    "name": "Костяные джунгли: Стол из лопатки",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bone_wind_chimes": {
+    "file": "bone_wind_chimes",
+    "name": "Костяные джунгли: Ловцы душ",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "spider_cocoon": {
+    "file": "spider_cocoon",
+    "name": "Пещера: Паучий кокон с жертвой",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "spider_egg_sac": {
+    "file": "spider_egg_sac",
+    "name": "Пещера: Кладка яиц паука",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "giant_cave_mushroom": {
+    "file": "giant_cave_mushroom",
+    "name": "Пещера: Гигантский светящийся гриб",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "amethyst_geode": {
+    "file": "amethyst_geode",
+    "name": "Пещера: Аметистовая жеода",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "sulfur_geyser": {
+    "file": "sulfur_geyser",
+    "name": "Пещера: Серный гейзер",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "stalagnate_column": {
+    "file": "stalagnate_column",
+    "name": "Пещера: Колонна-сталагнат",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "minecart_wreck": {
+    "file": "minecart_wreck",
+    "name": "Пещера: Разбитая вагонетка",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "miner_skeleton": {
+    "file": "miner_skeleton",
+    "name": "Пещера: Скелет рудокопа",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bat_roost_rock": {
+    "file": "bat_roost_rock",
+    "name": "Пещера: Гнездо нетопырей",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "abyssal_fissure": {
+    "file": "abyssal_fissure",
+    "name": "Пещера: Разлом бездны (2x1)",
+    "cat": "props",
+    "size": [
+      32,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
   }
 }

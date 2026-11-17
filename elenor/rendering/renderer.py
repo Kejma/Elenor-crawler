@@ -530,11 +530,13 @@ class Renderer(UIRendererMixin):
 
         tall_trees_to_draw = []
         TILE_ROLE_MAP = {
+            # Базовые тайлы
             1: "wall",
             6: "wall_wood",
             7: "wall_cave",
             8: "floor_5",
             9: "floor_6",
+            # Джунгли, Хижины и Мраморный Храм (Пак 1: 10..20)
             10: "floor_jungle_grass",
             11: "floor_jungle_mud",
             12: "floor_jungle_soil",
@@ -546,6 +548,7 @@ class Renderer(UIRendererMixin):
             18: "wall_tribal_wood",
             19: "wall_marble_temple",
             20: "wall_marble_ruined",
+            # Джунгли и Мраморный Храм (Пак 2: 23..36)
             23: "floor_jungle_swamp",
             24: "floor_jungle_cobble",
             25: "floor_river_sand",
@@ -560,15 +563,34 @@ class Renderer(UIRendererMixin):
             34: "wall_cave_crystal",
             35: "wall_marble_obsidian",
             36: "wall_temple_relief",
+            # Озеро и Рыбалка (37..42)
             37: "floor_lake_shallow",
             38: "floor_lake_deep",
             39: "floor_wooden_pier",
             40: "floor_pebble_shore",
+            41: "floor_wet_sand",
+            42: "floor_reed_mud",
+            # Костяные Джунгли и Глубокие Пещеры (43..55)
+            43: "floor_tar_pit",
+            44: "floor_acid_pool",
+            45: "floor_bone_grass",
+            46: "floor_bone_grave",
+            47: "floor_blood_marsh",
+            48: "floor_bone_bridge",
+            49: "floor_cave_fungus",
+            50: "floor_cave_obsidian",
+            51: "wall_bone_ribs",
+            52: "wall_skull_catacomb",
+            53: "wall_corrupted_wood",
+            54: "wall_cave_web",
+            55: "wall_cave_magma",
         }
         TALL_TREE_MAP = {
             5: ("floor_3", "tall_tree"),
             21: ("floor_jungle_grass", "tall_jungle_tree"),
             22: ("floor_jungle_grass", "tall_palm_tree"),
+            56: ("floor_bone_grass", "tall_bone_tree"),
+            57: ("floor_blood_marsh", "tall_dead_mangrove"),
         }
 
         tall_trees_to_draw = []

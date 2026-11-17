@@ -1806,3 +1806,827 @@ def register_jungle_assets(assets):
                 fc_d.set_at((x, y), col)
                 fc_n.set_at((x, y), nc)
     assets["fallen_colossus"] = enforce_crisp_rim_normals(fc_d, fc_n)
+
+# =========================================================================
+    # 13. КОСТЯНЫЕ ДЖУНГЛИ И ГЛУБОКИЕ ПЕЩЕРЫ: ПОЛЫ, ЖИДКОСТИ, СТЕНЫ, ДЕРЕВЬЯ
+    # =========================================================================
+    tau_b = 2.0 * math.pi / 16.0
+
+    # 13.1 Кипящая смоляная яма (floor_tar_pit, 3 кадра анимации)
+    tar_frames = []
+    for fi in range(3):
+        ph = fi * (2.0 * math.pi / 3.0)
+        td, tn = make_pair(16, 16, opaque=True)
+        for y in range(16):
+            for x in range(16):
+                w1 = math.sin(x * tau_b + y * tau_b + ph)
+                w2 = math.cos(x * tau_b - y * tau_b + ph)
+                wv = (w1 + w2) * 0.5
+                v_c = int(18 + (wv + 1.0) * 10)
+                col = (v_c, v_c - 2, v_c + 4, 255)
+                nc = N_UP if w1 > 0.45 else (N_DOWN if w1 < -0.45 else N_FLAT)
+                # Вязкие смоляные пузыри с фиолетовым нефтяным бликом
+                b_x = 5 if fi != 2 else 6
+                b_y = 6 if fi != 1 else 5
+                if math.hypot(x - b_x, y - b_y) <= (1.2 + fi * 0.4) or math.hypot(x - 11, y - 11) <= (2.0 - fi * 0.4):
+                    col = (68, 58, 82, 255) if (x + y) % 2 == 0 else (38, 34, 48, 255)
+                    nc = N_UP
+                td.set_at((x, y), col)
+                tn.set_at((x, y), nc)
+        tar_frames.append((td, tn))
+    assets["floor_tar_pit"] = tar_frames[0]
+    assets["_tar_pit_frames"] = tar_frames
+
+    # 13.2 Кислотная пещерная лужа (floor_acid_pool, 3 кадра анимации)
+    acid_frames = []
+    for fi in range(3):
+        ph = fi * (2.0 * math.pi / 3.0)
+        ad, an = make_pair(16, 16, opaque=True)
+        for y in range(16):
+            for x in range(16):
+                w1 = math.sin(x * tau_b + y * tau_b + ph)
+                w2 = math.cos(x * tau_b - y * tau_b * 2.0 - ph)
+                wv = (w1 + w2) * 0.5
+                cr = int(42 + (wv + 1.0) * 28)
+                cg = int(135 + (wv + 1.0) * 48)
+                cb = int(28 + (wv + 1.0) * 18)
+                if wv > 0.58:
+                    cr, cg, cb = 195, 255, 110
+                nc = N_UP if w1 > 0.35 else (N_DOWN if w1 < -0.35 else N_FLAT)
+                ad.set_at((x, y), (cr, cg, cb, 255))
+                an.set_at((x, y), nc)
+        acid_frames.append((ad, an))
+    assets["floor_acid_pool"] = acid_frames[0]
+    assets["_acid_pool_frames"] = acid_frames
+
+    # 13.3 Мёртвая трава костяных джунглей с осколками костей и багровой росой (floor_bone_grass)
+    bg_d, bg_n = make_pair(16, 16, opaque=True)
+    for y in range(16):
+        for x in range(16):
+            h = ((x * 73 + y * 139 + x * y * 19) % 29)
+            if h in (0, 1):
+                col, nc = (195, 186, 162, 255), N_FLAT  # Осколок белой кости в траве
+            elif h == 2:
+                col, nc = (158, 38, 48, 255), N_FLAT    # Капля багровой смолы/крови
+            elif h in (3, 4, 5):
+                col, nc = (28, 30, 26, 255), N_DEEP
+            else:
+                sh = (h % 4) * 3
+                col, nc = (48 + sh, 54 + sh, 42 + sh, 255), N_FLAT
+            bg_d.set_at((x, y), col)
+            bg_n.set_at((x, y), nc)
+    assets["floor_bone_grass"] = (bg_d, bg_n)
+
+    # 13.4 Утоптанная костяная крошка и черепа (floor_bone_grave)
+    bgr_d, bgr_n = make_pair(16, 16, opaque=True)
+    for y in range(16):
+        for x in range(16):
+            h = ((x * 61 + y * 107 + (x ^ y) * 23) % 23)
+            if h in (0, 1, 2):
+                col, nc = (212, 202, 178, 255), N_FLAT
+            elif h in (3, 4, 5):
+                col, nc = (168, 156, 134, 255), N_FLAT
+            elif h in (6, 7):
+                col, nc = (42, 34, 32, 255), N_DEEP
+            else:
+                sh = (h % 4) * 3
+                col, nc = (86 + sh, 76 + sh, 66 + sh, 255), N_FLAT
+            bgr_d.set_at((x, y), col)
+            bgr_n.set_at((x, y), nc)
+    assets["floor_bone_grave"] = (bgr_d, bgr_n)
+
+    # 13.5 Кроваво-бурая трясина костяных джунглей (floor_blood_marsh)
+    bm_d, bm_n = make_pair(16, 16, opaque=True)
+    for y in range(16):
+        for x in range(16):
+            h = ((x * 89 + y * 131 + x * y * 13) % 25)
+            if (x - 6) ** 2 + (y - 7) ** 2 <= 3.2:
+                col, nc = (148, 28, 38, 255), N_FLAT
+            elif h in (0, 1):
+                col, nc = (185, 42, 52, 255), N_FLAT
+            elif h in (2, 3, 4):
+                col, nc = (34, 18, 22, 255), N_DEEP
+            else:
+                sh = (h % 4) * 2
+                col, nc = (56 + sh, 28 + sh, 30 + sh, 255), N_FLAT
+            bm_d.set_at((x, y), col)
+            bm_n.set_at((x, y), nc)
+    assets["floor_blood_marsh"] = (bm_d, bm_n)
+
+    # 13.6 Мостки из связанных позвоночников и бедренных костей (floor_bone_bridge)
+    bb_d, bb_n = make_pair(16, 16, opaque=True)
+    for y in range(16):
+        bone_row = y % 4
+        for x in range(16):
+            if bone_row == 0:
+                bb_d.set_at((x, y), (26, 20, 24, 255))
+                bb_n.set_at((x, y), N_DEEP)
+            elif x in (2, 13):
+                # Жилы и кожаные ремни, стягивающие кости
+                bb_d.set_at((x, y), (138, 38, 44, 255))
+                bb_n.set_at((x, y), N_FLAT)
+            else:
+                is_joint = x in (0, 1, 7, 8, 14, 15)
+                if bone_row == 1:
+                    col = (228, 220, 198, 255) if is_joint else (208, 198, 175, 255)
+                elif bone_row == 2:
+                    col = (195, 185, 162, 255)
+                else:
+                    col = (148, 138, 118, 255)
+                bb_d.set_at((x, y), col)
+                bb_n.set_at((x, y), N_FLAT)
+    assets["floor_bone_bridge"] = (bb_d, bb_n)
+
+    # 13.7 Пещерный пол, заросший биолюминесцентным фиолетовым мицелием (floor_cave_fungus)
+    cf_d, cf_n = make_pair(16, 16, opaque=True)
+    for y in range(16):
+        for x in range(16):
+            h = ((x * 79 + y * 127 + (x ^ y) * 31) % 27)
+            vein = ((x + y * 2) % 9 == 0) or ((x * 2 - y) % 11 == 0)
+            if vein:
+                col, nc = (138, 72, 215, 255), N_FLAT
+            elif h == 0:
+                col, nc = (195, 135, 255, 255), N_FLAT
+            elif h in (1, 2, 3):
+                col, nc = (28, 22, 38, 255), N_DEEP
+            else:
+                sh = (h % 4) * 2
+                col, nc = (44 + sh, 36 + sh, 58 + sh, 255), N_FLAT
+            cf_d.set_at((x, y), col)
+            cf_n.set_at((x, y), nc)
+    assets["floor_cave_fungus"] = (cf_d, cf_n)
+
+    # 13.8 Острый колотый обсидиановый пол глубокой пещеры (floor_cave_obsidian)
+    co_d, co_n = make_pair(16, 16, opaque=True)
+    for y in range(16):
+        for x in range(16):
+            shard = ((x * 3 + y * 5) % 14 == 0)
+            glint = ((x - y * 2) % 17 == 0)
+            if shard:
+                col, nc = (18, 14, 26, 255), N_DEEP
+            elif glint:
+                col, nc = (92, 78, 128, 255), N_FLAT
+            else:
+                sh = ((x * 19 + y * 37) % 5) - 2
+                col, nc = (34 + sh, 30 + sh, 46 + sh, 255), N_FLAT
+            co_d.set_at((x, y), col)
+            co_n.set_at((x, y), nc)
+    assets["floor_cave_obsidian"] = (co_d, co_n)
+
+    # 13.9 Стена из гигантских переплетённых рёбер и багровых жил (wall_bone_ribs)
+    wbr_d, wbr_n = make_pair(16, 16, opaque=True)
+    wbr_d.fill((48, 20, 26, 255))
+    wbr_n.fill(N_DEEP)
+    for y in range(16):
+        for x in range(16):
+            # Центральный вертикальный позвоночный столб
+            if 6 <= x <= 9:
+                is_disc = (y % 4 == 0)
+                col = (128, 34, 42, 255) if is_disc else ((228, 218, 195, 255) if x in (7, 8) else (175, 164, 142, 255))
+                nc = N_DEEP if is_disc else (N_LEFT if x == 6 else (N_RIGHT if x == 9 else N_UP))
+                wbr_d.set_at((x, y), col)
+                wbr_n.set_at((x, y), nc)
+            # Дуги массивных рёбер по бокам
+            rib_y = (y + int(abs(x - 7.5) * 0.45)) % 4
+            if rib_y in (1, 2):
+                col = (232, 224, 202, 255) if rib_y == 1 else (178, 168, 145, 255)
+                nc = N_UP if rib_y == 1 else N_DOWN
+                wbr_d.set_at((x, y), col)
+                wbr_n.set_at((x, y), nc)
+    assets["wall_bone_ribs"] = (wbr_d, wbr_n)
+
+    # 13.10 Стена-оссуарий, сложенная из черепов и тёмного камня (wall_skull_catacomb)
+    wsc_d, wsc_n = make_pair(16, 16, opaque=True)
+    wsc_d.fill((28, 22, 26, 255))
+    wsc_n.fill(N_DEEP)
+    skulls = [(1, 1), (6, 1), (11, 1), (3, 6), (9, 6), (1, 11), (6, 11), (11, 11)]
+    for sx, sy in skulls:
+        for dy in range(4):
+            for dx in range(4):
+                if dy == 3 and dx in (0, 3):
+                    continue
+                is_socket = (dy == 2 and dx in (1, 2))
+                if is_socket:
+                    col, nc = (32, 20, 24, 255), N_DEEP
+                elif dy == 0:
+                    col, nc = (228, 218, 195, 255), N_UP
+                else:
+                    col = (205, 195, 172, 255) if dx < 2 else (168, 158, 136, 255)
+                    nc = N_LEFT if dx == 0 else (N_RIGHT if dx == 3 else N_FLAT)
+                wsc_d.set_at((sx + dx, sy + dy), col)
+                wsc_n.set_at((sx + dx, sy + dy), nc)
+    assets["wall_skull_catacomb"] = (wsc_d, wsc_n)
+
+    # 13.11 Сгнивший чёрный частокол в кровавых шипастых лозах (wall_corrupted_wood)
+    wcw_d, wcw_n = make_pair(16, 16, opaque=True)
+    for y in range(16):
+        for x in range(16):
+            px_mod = x % 4
+            if px_mod == 0:
+                wcw_d.set_at((x, y), (22, 16, 20, 255))
+                wcw_n.set_at((x, y), N_DEEP)
+            else:
+                col = (68, 56, 58, 255) if px_mod == 1 else ((54, 44, 46, 255) if px_mod == 2 else (40, 32, 34, 255))
+                nc = N_LEFT if px_mod == 1 else (N_RIGHT if px_mod == 3 else N_FLAT)
+                wcw_d.set_at((x, y), col)
+                wcw_n.set_at((x, y), nc)
+    # Диагональные пульсирующие кровавые лозы с шипами
+    for i in range(16):
+        vy1 = (i + 3) % 16
+        vy2 = (15 - i) % 16
+        for vx, vy in ((i, vy1), (i, vy2)):
+            wcw_d.set_at((vx, vy), (195, 34, 48, 255))
+            wcw_n.set_at((vx, vy), N_UP)
+            if (vx + vy) % 3 == 0 and vy > 0:
+                wcw_d.set_at((vx, vy - 1), (238, 185, 175, 255))  # Белый костяной шип
+    assets["wall_corrupted_wood"] = (wcw_d, wcw_n)
+
+    # 13.12 Скальная стена пещеры, затянутая густой паутиной (wall_cave_web)
+    wcwb_d = assets["wall_cave"][0].copy()
+    wcwb_n = assets["wall_cave"][1].copy()
+    for y in range(16):
+        for x in range(16):
+            if (x + y in (5, 9, 13, 18, 22)) or (x - y in (-9, -4, 4, 9)):
+                wcwb_d.set_at((x, y), (215, 220, 230, 255) if (x + y) % 2 == 0 else (162, 168, 180, 255))
+                wcwb_n.set_at((x, y), N_UP)
+    assets["wall_cave_web"] = (wcwb_d, wcwb_n)
+
+    # 13.13 Базальтовая стена пещеры с раскалёнными лавовыми трещинами (wall_cave_magma)
+    wcm_d = assets["wall_cave"][0].copy()
+    wcm_n = assets["wall_cave"][1].copy()
+    for y in range(16):
+        for x in range(16):
+            r, g, b, _ = wcm_d.get_at((x, y))
+            wcm_d.set_at((x, y), (max(18, r - 18), max(16, g - 16), max(20, b - 10), 255))
+    magma_px = [(2, 3), (3, 4), (4, 5), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 11), (11, 12), (12, 13), (6, 8), (5, 10), (4, 12)]
+    for mx_p, my_p in magma_px:
+        wcm_d.set_at((mx_p, my_p), (255, 215, 70, 255) if (mx_p + my_p) % 2 == 0 else (245, 95, 30, 255))
+        wcm_n.set_at((mx_p, my_p), N_UP)
+    assets["wall_cave_magma"] = (wcm_d, wcm_n)
+
+    # 13.14 Высокое костяное дерево с черепами и багровой листвой (tall_bone_tree 24x38 + tree_bone 16x16)
+    bt_d, bt_n = make_pair(24, 38)
+    for y in range(3, 38):
+        for x in range(2, 22):
+            # Ствол из сросшихся белых позвонков и костей (y=18..37)
+            spread = max(0, (y - 30) // 2)
+            if y >= 18 and (9 - spread <= x <= 14 + spread):
+                is_joint = (y % 3 == 0)
+                col = (148, 136, 116) if is_joint else ((228, 220, 198) if x < 12 else (188, 178, 155))
+                nc = N_DOWN if is_joint else (N_LEFT if x < 11 else (N_RIGHT if x > 12 else N_FLAT))
+                bt_d.set_at((x, y), col)
+                bt_n.set_at((x, y), nc)
+            # Крона из костяных ветвей-фаланг и багровых шипов (y=3..22)
+            if y <= 22:
+                d_c = math.hypot((x - 11.5) * 0.85, (y - 12.0) * 1.05)
+                if d_c <= 8.8:
+                    is_bone_branch = (abs((x - 11.5) - (y - 14)) <= 1.2) or (abs((11.5 - x) - (y - 14)) <= 1.2)
+                    if is_bone_branch and y >= 9:
+                        col, nc = (228, 220, 198), N_UP
+                    elif (x * 5 + y * 7) % 3 != 0:
+                        col = (195, 38, 52) if y < 11 else ((138, 24, 36) if y < 17 else (82, 16, 26))
+                        nc = N_UP if y < 11 else N_DOWN
+                    else:
+                        continue
+                    bt_d.set_at((x, y), col)
+                    bt_n.set_at((x, y), nc)
+    # Подвешенные на ветвях черепа со светящимися зелёными глазами
+    for sk_x, sk_y in ((6, 20), (17, 19)):
+        for dy in range(3):
+            for dx in range(-1, 2):
+                bt_d.set_at((sk_x + dx, sk_y + dy), (225, 215, 192))
+                bt_n.set_at((sk_x + dx, sk_y + dy), N_UP)
+        bt_d.set_at((sk_x - 1, sk_y + 1), (95, 255, 135))
+        bt_d.set_at((sk_x + 1, sk_y + 1), (95, 255, 135))
+    assets["tall_bone_tree"] = bt_d, bt_n
+
+    bti_d, bti_n = make_pair(16, 16)
+    for y in range(2, 15):
+        for x in range(2, 14):
+            if y >= 9 and 6 <= x <= 9:
+                bti_d.set_at((x, y), (222, 212, 190) if x <= 7 else (178, 168, 146))
+                bti_n.set_at((x, y), N_LEFT if x <= 7 else N_RIGHT)
+            elif math.hypot(x - 7.5, y - 6.5) <= 5.2:
+                bti_d.set_at((x, y), (195, 38, 52) if (x + y) % 2 == 0 else (225, 215, 192))
+                bti_n.set_at((x, y), N_UP)
+    assets["tree_bone"] = (bti_d, bti_n)
+
+    # 13.15 Высокий мёртвый пепельный мангр в паутине и кровавых лозах (tall_dead_mangrove 24x38 + tree_dead_mangrove 16x16)
+    dm_d, dm_n = make_pair(24, 38)
+    # Корни-ходули у основания (y=26..37)
+    for r_dir in (-1.0, -0.45, 0.45, 1.0):
+        for y in range(26, 37):
+            rx = int(round(11.5 + r_dir * ((y - 25) * 0.65)))
+            for dx in (0, 1):
+                if 2 <= rx + dx < 22:
+                    dm_d.set_at((rx + dx, y), (78, 66, 72) if dx == 0 else (52, 42, 48))
+                    dm_n.set_at((rx + dx, y), N_LEFT if dx == 0 else N_RIGHT)
+    # Искорёженный ствол и сухие корявые ветви с паутиной (y=4..27)
+    for y in range(14, 28):
+        for x in range(9, 15):
+            dm_d.set_at((x, y), (82, 70, 76) if x < 12 else (56, 46, 52))
+            dm_n.set_at((x, y), N_LEFT if x < 11 else N_RIGHT)
+    branches = [(-0.9, 6), (-0.5, 4), (0.0, 3), (0.5, 4), (0.9, 6)]
+    for b_dir, top_y in branches:
+        for y in range(top_y, 17):
+            bx = int(round(11.5 + b_dir * (17 - y) * 0.75))
+            for dx in (-1, 0, 1):
+                if 1 <= bx + dx < 23:
+                    col = (195, 200, 212) if (y + dx) % 4 == 0 else (74, 62, 68)
+                    dm_d.set_at((bx + dx, y), col)
+                    dm_n.set_at((bx + dx, y), N_UP)
+    # Свисающие кровавые лозы
+    for lx in (5, 9, 14, 18):
+        for ly in range(12, 26):
+            if (lx + ly) % 2 == 0:
+                dm_d.set_at((lx, ly), (185, 34, 48))
+                dm_n.set_at((lx, ly), N_UP)
+    assets["tall_dead_mangrove"] = (dm_d, dm_n)
+
+    dmi_d, dmi_n = make_pair(16, 16)
+    for y in range(2, 15):
+        for x in range(3, 13):
+            if (6 <= x <= 9 and y >= 7) or abs(x - 7.5) == (10 - y):
+                dmi_d.set_at((x, y), (82, 70, 76))
+                dmi_n.set_at((x, y), N_UP)
+    assets["tree_dead_mangrove"] = (dmi_d, dmi_n)
+
+    # =========================================================================
+    # 14. ОВЕРЛЕИ КОСТЯНЫХ ДЖУНГЛЕЙ И ГЛУБОКИХ ПЕЩЕР (16x16, opaque=False)
+    # =========================================================================
+
+    # 14.1 Полузасыпанная грудная клетка скелета (ov_ribcage_remains)
+    orr_d, orr_n = make_pair(16, 16, opaque=False)
+    for y in range(3, 13):
+        orr_d.set_at((7, y), (205, 195, 172, 240))
+        orr_n.set_at((7, y), N_FLAT)
+        if y % 2 == 0:
+            for x in range(4, 12):
+                orr_d.set_at((x, y), (225, 215, 192, 240))
+                orr_n.set_at((x, y), N_FLAT)
+    assets["ov_ribcage_remains"] = (orr_d, orr_n)
+
+    # 14.2 Ползучие кровавые шипастые лозы (ov_blood_vines)
+    obv_d, obv_n = make_pair(16, 16, opaque=False)
+    for i in range(2, 14):
+        vy = int(round(7.5 + math.sin(i * 0.65) * 3.5))
+        obv_d.set_at((i, vy), (185, 28, 42, 235))
+        obv_n.set_at((i, vy), N_FLAT)
+        if i % 3 == 0:
+            obv_d.set_at((i, max(1, vy - 1)), (235, 225, 205, 245))
+            obv_n.set_at((i, max(1, vy - 1)), N_FLAT)
+    assets["ov_blood_vines"] = (obv_d, obv_n)
+
+    # 14.3 Густая напольная паутина (ov_spider_web)
+    osw_d, osw_n = make_pair(16, 16, opaque=False)
+    for y in range(2, 14):
+        for x in range(2, 14):
+            d = math.hypot(x - 7.5, y - 7.5)
+            if d <= 5.8 and (x == 7 or y == 7 or abs(x - y) <= 0 or abs(x + y - 15) <= 0 or int(d) in (3, 5)):
+                osw_d.set_at((x, y), (215, 222, 232, 185))
+                osw_n.set_at((x, y), N_FLAT)
+    assets["ov_spider_web"] = (osw_d, osw_n)
+
+    # 14.4 Пещерный гуано и мелкие косточки под гнездом нетопырей (ov_guano_droppings)
+    ogd_d, ogd_n = make_pair(16, 16, opaque=False)
+    for gx, gy, r_g in ((5.5, 6.0, 2.5), (10.5, 10.5, 3.0), (10.0, 5.0, 1.8)):
+        for y in range(16):
+            for x in range(16):
+                if math.hypot(x - gx, y - gy) <= r_g:
+                    col = (218, 212, 195, 215) if (x + y) % 3 == 0 else (128, 118, 108, 195)
+                    ogd_d.set_at((x, y), col)
+                    ogd_n.set_at((x, y), N_FLAT)
+    assets["ov_guano_droppings"] = (ogd_d, ogd_n)
+
+    # 14.5 Жёлто-зелёные серные трещины в полу пещеры (ov_sulfur_cracks)
+    osc_d, osc_n = make_pair(16, 16, opaque=False)
+    s_px = [(2, 4), (3, 5), (4, 6), (5, 6), (6, 7), (7, 8), (8, 8), (9, 9), (10, 10), (11, 12), (7, 9), (6, 11)]
+    for cx_p, cy_p in s_px:
+        osc_d.set_at((cx_p, cy_p), (225, 215, 55, 235))
+        osc_n.set_at((cx_p, cy_p), N_DEEP)
+        if cx_p + 1 < 15:
+            osc_d.set_at((cx_p + 1, cy_p), (118, 158, 42, 195))
+            osc_n.set_at((cx_p + 1, cy_p), N_FLAT)
+    assets["ov_sulfur_cracks"] = (osc_d, osc_n)
+
+    # 14.6 Костяные шипы, пробивающиеся сквозь землю (ov_bone_spikes_floor)
+    obs_d, obs_n = make_pair(16, 16, opaque=False)
+    for sx, sy in ((4, 6), (11, 5), (6, 12), (12, 11)):
+        for dy in range(3):
+            obs_d.set_at((sx, sy - dy), (235, 228, 210, 245) if dy == 2 else (178, 168, 146, 235))
+            obs_n.set_at((sx, sy - dy), N_FLAT)
+        obs_d.set_at((sx - 1, sy), (128, 32, 38, 215))
+        obs_d.set_at((sx + 1, sy), (128, 32, 38, 215))
+    assets["ov_bone_spikes_floor"] = (obs_d, obs_n)
+
+    # 14.7 Багрово-фиолетовые споры некротической плесени (ov_corrupted_spores)
+    ocs_d, ocs_n = make_pair(16, 16, opaque=False)
+    for sx, sy in ((4, 4), (10, 5), (6, 10), (11, 11), (8, 7)):
+        for dx, dy in ((0, 0), (1, 0), (0, 1), (-1, 0)):
+            ocs_d.set_at((sx + dx, sy + dy), (128, 36, 82, 210))
+            ocs_n.set_at((sx + dx, sy + dy), N_FLAT)
+        ocs_d.set_at((sx, sy), (235, 75, 135, 245))
+    assets["ov_corrupted_spores"] = (ocs_d, ocs_n)
+
+    # 14.8 Расколотые черепа и челюсти на земле (ov_shattered_skulls)
+    ossk_d, ossk_n = make_pair(16, 16, opaque=False)
+    for sx, sy in ((3, 4), (9, 9)):
+        for dy in range(4):
+            for dx in range(4):
+                if (dx, dy) in ((1, 2), (3, 2)):
+                    col = (28, 22, 26, 235)
+                else:
+                    col = (218, 208, 185, 240)
+                ossk_d.set_at((sx + dx, sy + dy), col)
+                ossk_n.set_at((sx + dx, sy + dy), N_FLAT)
+    assets["ov_shattered_skulls"] = (ossk_d, ossk_n)
+
+    # =========================================================================
+    # 15. ПРОПСЫ КОСТЯНЫХ ДЖУНГЛЕЙ (16x20 и 32x20)
+    # =========================================================================
+
+    # 15.1 Костяной тотем-алтарь из трёх рогатых черепов с кровавыми свечами (bone_totem_altar)
+    bta_d, bta_n = make_pair(16, 20)
+    for y in range(2, 19):
+        for x in range(3, 13):
+            if y in (4, 10, 15) and x in (3, 4, 11, 12):
+                bta_d.set_at((x, y), (168, 156, 134))
+                bta_n.set_at((x, y), N_UP)
+            elif 5 <= x <= 10:
+                if y in (5, 11, 16) and x in (6, 9):
+                    col, nc = (245, 55, 65), N_UP
+                elif y in (2, 3) and x in (6, 9):
+                    col, nc = (255, 215, 75), N_UP  # Пламя свечей на макушке
+                else:
+                    col = (228, 218, 195) if x < 8 else (182, 172, 148)
+                    nc = N_LEFT if x == 5 else (N_RIGHT if x == 10 else N_FLAT)
+                bta_d.set_at((x, y), col)
+                bta_n.set_at((x, y), nc)
+    assets["bone_totem_altar"] = enforce_crisp_rim_normals(bta_d, bta_n)
+
+    # 15.2 Гигантская арка из рёбер древнего левиафана (leviathan_rib_arch, 32x20 — 2x1 тайла!)
+    lra_d, lra_n = make_pair(32, 20)
+    for x in range(2, 30):
+        arch_y = int(round(3.0 + ((x - 15.5) / 13.5) ** 2 * 15.0))
+        for rib_off in (-3, 0, 3):
+            rx = x + rib_off
+            if 1 <= rx < 31 and 1 <= arch_y < 19:
+                for dy in range(3):
+                    if arch_y + dy < 19:
+                        col = (232, 224, 202) if dy == 0 else ((195, 185, 162) if dy == 1 else (142, 132, 112))
+                        nc = N_UP if dy == 0 else (N_LEFT if rx < 16 else N_RIGHT)
+                        lra_d.set_at((rx, arch_y + dy), col)
+                        lra_n.set_at((rx, arch_y + dy), nc)
+    assets["leviathan_rib_arch"] = enforce_crisp_rim_normals(lra_d, lra_n)
+
+    # 15.3 Огромный череп доисторического зверя с некро-огнём в пасти (giant_beast_skull, 32x20 — 2x1 тайла!)
+    gbs_d, gbs_n = make_pair(32, 20)
+    for y in range(3, 19):
+        for x in range(2, 30):
+            # Изогнутые саблезубые бивни по бокам
+            if 6 <= y <= 17 and x in (2, 3, 4, 27, 28, 29):
+                gbs_d.set_at((x, y), (242, 236, 218) if y < 12 else (195, 185, 162))
+                gbs_n.set_at((x, y), N_UP)
+            elif math.hypot((x - 15.5) * 0.72, (y - 11.0) * 1.05) <= 8.2:
+                # Огромные глазницы со светящимся некро-зелёным огнём
+                if 8 <= y <= 11 and (9 <= x <= 12 or 19 <= x <= 22):
+                    col = (115, 255, 135) if (x + y) % 2 == 0 else (38, 128, 62)
+                    nc = N_DEEP
+                # Зубастая пасть внизу
+                elif y >= 15 and 9 <= x <= 22:
+                    col = (245, 240, 225) if x % 2 == 0 else (42, 24, 30)
+                    nc = N_UP if x % 2 == 0 else N_DEEP
+                else:
+                    col = (232, 224, 202) if y <= 8 else ((205, 195, 172) if x < 16 else (168, 158, 136))
+                    nc = N_UP if y <= 8 else (N_LEFT if x < 13 else (N_RIGHT if x > 18 else N_FLAT))
+                gbs_d.set_at((x, y), col)
+                gbs_n.set_at((x, y), nc)
+    assets["giant_beast_skull"] = enforce_crisp_rim_normals(gbs_d, gbs_n)
+
+    # 15.4 Колонна из сросшихся позвонков гиганта (spine_pillar)
+    sp_d, sp_n = make_pair(16, 20)
+    for y in range(1, 19):
+        is_vertebra = (y % 3 != 0)
+        hw = 5 if is_vertebra else 3
+        for x in range(8 - hw, 8 + hw):
+            if not is_vertebra:
+                col, nc = (148, 36, 46), N_DEEP
+            else:
+                col = (232, 224, 202) if x < 8 else (188, 178, 155)
+                nc = N_LEFT if x < 6 else (N_RIGHT if x > 9 else N_UP)
+            sp_d.set_at((x, y), col)
+            sp_n.set_at((x, y), nc)
+    assets["spine_pillar"] = enforce_crisp_rim_normals(sp_d, sp_n)
+
+    # 15.5 Трон костяного шамана из черепов и рёбер (bone_throne)
+    bth_d, bth_n = make_pair(16, 20)
+    for y in range(2, 19):
+        hw = 4 if y < 11 else 6
+        for x in range(8 - hw, 8 + hw):
+            if 11 <= y <= 14 and 5 <= x <= 10:
+                col, nc = (168, 32, 44), N_FLAT  # Багровая шкура на сиденье
+            elif y == 4 and x in (6, 9):
+                col, nc = (245, 65, 65), N_UP
+            else:
+                col = (228, 218, 195) if (x + y) % 2 == 0 else (182, 172, 148)
+                nc = N_UP if y <= 5 else N_FLAT
+            bth_d.set_at((x, y), col)
+            bth_n.set_at((x, y), nc)
+    assets["bone_throne"] = enforce_crisp_rim_normals(bth_d, bth_n)
+
+    # 15.6 Подвесная клетка из рёбер на костяной балке (bone_cage_hanging)
+    bch_d, bch_n = make_pair(16, 20)
+    for y in range(1, 19):
+        if y <= 3 or x == 3:
+            for bx in range(3, 13):
+                bch_d.set_at((bx, 2), (168, 156, 134))
+                bch_n.set_at((bx, 2), N_UP)
+        if 6 <= y <= 17:
+            for x in range(4, 12):
+                if y in (6, 17) or x in (4, 6, 9, 11):
+                    bch_d.set_at((x, y), (225, 215, 192))
+                    bch_n.set_at((x, y), N_UP if y == 6 else N_FLAT)
+    bch_d.set_at((7, 4), (145, 135, 115))
+    bch_d.set_at((7, 5), (145, 135, 115))
+    assets["bone_cage_hanging"] = enforce_crisp_rim_normals(bch_d, bch_n)
+
+    # 15.7 Куст кровавого терновника с белыми костяными шипами (blood_thorn_bush)
+    btb_d, btb_n = make_pair(16, 20)
+    for y in range(6, 19):
+        for x in range(1, 15):
+            if math.hypot((x - 7.5) * 0.9, (y - 13.0) * 1.05) <= 6.0:
+                sh = (x * 3 + y * 5) % 5
+                if sh == 0:
+                    col, nc = (238, 230, 210), N_UP  # Острый костяной шип
+                elif sh == 1:
+                    col, nc = (235, 48, 62), N_UP    # Кровавый бутон
+                else:
+                    col, nc = (92, 22, 32) if y < 13 else (54, 14, 22), N_FLAT
+                btb_d.set_at((x, y), col)
+                btb_n.set_at((x, y), nc)
+    assets["blood_thorn_bush"] = enforce_crisp_rim_normals(btb_d, btb_n)
+
+    # 15.8 Плотоядный гигантский кувшиночник с кислотой и костью внутри (corpse_pitcher_plant)
+    cpp_d, cpp_n = make_pair(16, 20)
+    for y in range(5, 19):
+        hw = 4 if y in (6, 7) else (3 if y < 11 else 5)
+        for x in range(8 - hw, 8 + hw):
+            if y in (6, 7) and 5 <= x <= 10:
+                col, nc = (135, 255, 85), N_UP  # Кислотный пищеварительный сок внутри
+            elif y in (3, 4, 5) and x in (7, 8):
+                col, nc = (235, 228, 210), N_UP  # Торчащая из кувшина кость жертвы
+            else:
+                vein = (x + y) % 3 == 0
+                col = (168, 38, 62) if vein else (68, 118, 48)
+                nc = N_LEFT if x < 7 else (N_RIGHT if x > 8 else N_FLAT)
+            cpp_d.set_at((x, y), col)
+            cpp_n.set_at((x, y), nc)
+    assets["corpse_pitcher_plant"] = enforce_crisp_rim_normals(cpp_d, cpp_n)
+
+    # 15.9 Скелет на скрещённых костяных пиках (impaled_skeleton)
+    is_d, is_n = make_pair(16, 20)
+    for i in range(2, 19):
+        sx1 = max(2, min(13, 3 + (i - 2) // 2))
+        sx2 = max(2, min(13, 12 - (i - 2) // 2))
+        is_d.set_at((sx1, i), (142, 96, 52))
+        is_n.set_at((sx1, i), N_UP)
+        is_d.set_at((sx2, i), (142, 96, 52))
+        is_n.set_at((sx2, i), N_UP)
+    for y in range(4, 15):
+        for x in range(5, 11):
+            if 4 <= y <= 8 and 6 <= x <= 9:
+                col = (32, 24, 28) if (y == 6 and x in (6, 9)) else (228, 218, 195)
+                is_d.set_at((x, y), col)
+                is_n.set_at((x, y), N_UP)
+            elif y % 2 == 0 or x in (7, 8):
+                is_d.set_at((x, y), (202, 192, 168))
+                is_n.set_at((x, y), N_FLAT)
+    assets["impaled_skeleton"] = enforce_crisp_rim_normals(is_d, is_n)
+
+    # 15.10 Заграждение из заострённых бивней и костей (bone_spike_barricade)
+    bsb_d, bsb_n = make_pair(16, 20)
+    for sx, top_y in ((3, 6), (6, 4), (9, 5), (12, 6)):
+        for y in range(top_y, 19):
+            for dx in (-1, 0, 1):
+                if y <= top_y + 2 and dx != 0:
+                    continue
+                col = (185, 34, 44) if y in (11, 12) else ((232, 224, 202) if dx <= 0 else (178, 168, 146))
+                bsb_d.set_at((sx + dx, y), col)
+                bsb_n.set_at((sx + dx, y), N_UP if y <= top_y + 3 else N_FLAT)
+    assets["bone_spike_barricade"] = enforce_crisp_rim_normals(bsb_d, bsb_n)
+
+    # 15.11 Костяная жаровня с мертвецким фиолетово-зелёным огнём (necrotic_brazier)
+    nb_d, nb_n = make_pair(16, 20)
+    for y in range(4, 19):
+        for x in range(3, 13):
+            if y <= 10 and math.hypot(x - 7.5, y - 8.0) <= 3.8:
+                col = (195, 255, 215) if abs(x - 7.5) <= 1.2 else ((95, 245, 135) if (x + y) % 2 == 0 else (155, 65, 235))
+                nb_d.set_at((x, y), col)
+                nb_n.set_at((x, y), N_UP)
+            elif 11 <= y <= 18 and abs(x - 7.5) <= (4.5 if y <= 13 else 3.0):
+                col = (225, 215, 192) if x < 8 else (175, 165, 142)
+                nb_d.set_at((x, y), col)
+                nb_n.set_at((x, y), N_LEFT if x < 7 else N_RIGHT)
+    assets["necrotic_brazier"] = enforce_crisp_rim_normals(nb_d, nb_n)
+
+    # 15.12 Костяной сундук-оссуарий из рёбер с замком-черепом (ossuary_chest)
+    oc_d, oc_n = make_pair(16, 20)
+    for y in range(8, 19):
+        for x in range(2, 14):
+            if x in (2, 13) or y in (8, 12, 18) or x % 2 == 0:
+                col = (228, 218, 195) if y < 13 else (188, 178, 155)
+            else:
+                col = (138, 28, 38)  # Багровый бархат/плоть под рёбрами
+            if 6 <= x <= 9 and 10 <= y <= 13:
+                col = (95, 255, 135) if (y == 11 and x in (6, 9)) else (242, 236, 218)
+            oc_d.set_at((x, y), col)
+            oc_n.set_at((x, y), N_FLAT)
+    assets["ossuary_chest"] = enforce_crisp_rim_normals(oc_d, oc_n)
+
+    # 15.13 Жертвенный стол из огромной плоской кости-лопатки (sacrificial_bone_table)
+    sbt_d, sbt_n = make_pair(16, 20)
+    for y in range(8, 19):
+        for x in range(1, 15):
+            if 8 <= y <= 12:
+                is_blood = (5 <= x <= 10 and 9 <= y <= 11)
+                col = (188, 28, 38) if is_blood else (225, 215, 192)
+                sbt_d.set_at((x, y), col)
+                sbt_n.set_at((x, y), N_FLAT)
+            elif x in (3, 4, 11, 12):
+                sbt_d.set_at((x, y), (175, 165, 142))
+                sbt_n.set_at((x, y), N_FLAT)
+    assets["sacrificial_bone_table"] = enforce_crisp_rim_normals(sbt_d, sbt_n)
+
+    # 15.14 Вешала «ловцов душ» с подвешенными черепами и костями (bone_wind_chimes)
+    bwc_d, bwc_n = make_pair(16, 20)
+    for y in range(2, 19):
+        for x in (2, 13):
+            bwc_d.set_at((x, y), (168, 156, 134))
+            bwc_n.set_at((x, y), N_UP)
+    for x in range(2, 14):
+        bwc_d.set_at((x, 3), (218, 208, 185))
+        bwc_n.set_at((x, 3), N_UP)
+    for cx_c in (5, 8, 11):
+        for y in range(4, 15):
+            col = (95, 245, 185) if y == 8 else (225, 215, 192)
+            bwc_d.set_at((cx_c, y), col)
+            bwc_n.set_at((cx_c, y), N_UP)
+    assets["bone_wind_chimes"] = enforce_crisp_rim_normals(bwc_d, bwc_n)
+
+    # =========================================================================
+    # 16. ПРОПСЫ ГЛУБОКИХ ПЕЩЕР (16x20 и 32x20)
+    # =========================================================================
+
+    # 16.1 Кокон гигантского паука с оплетённой жертвой (spider_cocoon)
+    spc_d, spc_n = make_pair(16, 20)
+    for y in range(3, 19):
+        hw = 2 if y in (3, 4, 17, 18) else (3 if y in (5, 15, 16) else 4)
+        for x in range(8 - hw, 8 + hw):
+            if 6 <= y <= 8 and 6 <= x <= 9:
+                col = (245, 55, 55) if (y == 7 and x in (6, 9)) else (168, 162, 148)
+            else:
+                web_line = (x + y) % 3 == 0
+                col = (238, 242, 248) if web_line else (188, 195, 208)
+            nc = N_LEFT if x < 7 else (N_RIGHT if x > 8 else N_UP)
+            spc_d.set_at((x, y), col)
+            spc_n.set_at((x, y), nc)
+    assets["spider_cocoon"] = enforce_crisp_rim_normals(spc_d, spc_n)
+
+    # 16.2 Гнездо светящихся паучьих яиц в паутине (spider_egg_sac)
+    ses_d, ses_n = make_pair(16, 20)
+    for ex, ey, er in ((5.5, 14.0, 3.2), (10.5, 14.5, 3.0), (8.0, 11.0, 3.4)):
+        for y in range(6, 19):
+            for x in range(2, 14):
+                d = math.hypot(x - ex, y - ey)
+                if d <= er:
+                    col = (185, 255, 125) if d <= 1.2 else (218, 226, 235)
+                    ses_d.set_at((x, y), col)
+                    ses_n.set_at((x, y), N_UP if d <= 1.5 else N_FLAT)
+    assets["spider_egg_sac"] = enforce_crisp_rim_normals(ses_d, ses_n)
+
+    # 16.3 Гигантский биолюминесцентный пещерный гриб (giant_cave_mushroom)
+    gcm_d, gcm_n = make_pair(16, 20)
+    for y in range(2, 19):
+        if y <= 9:
+            hw = max(2, int(math.sin(((y - 1) / 9.0) * math.pi) * 6.5))
+            for x in range(8 - hw, 8 + hw):
+                spot = (x * 3 + y * 5) % 6 == 0
+                col = (195, 245, 255) if spot else ((138, 65, 225) if y < 7 else (88, 38, 158))
+                gcm_d.set_at((x, y), col)
+                gcm_n.set_at((x, y), N_UP if y <= 6 else N_DOWN)
+        else:
+            for x in range(6, 10):
+                gcm_d.set_at((x, y), (205, 198, 222) if x < 8 else (162, 154, 182))
+                gcm_n.set_at((x, y), N_LEFT if x < 8 else N_RIGHT)
+    assets["giant_cave_mushroom"] = enforce_crisp_rim_normals(gcm_d, gcm_n)
+
+    # 16.4 Расколотая аметистовая жеода с кристаллами внутри (amethyst_geode)
+    ag_d, ag_n = make_pair(16, 20)
+    for y in range(5, 19):
+        for x in range(2, 14):
+            d = math.hypot((x - 7.5) * 0.9, (y - 12.0) * 0.85)
+            if d <= 5.6:
+                if d <= 3.6 and y <= 15:
+                    col = (238, 185, 255) if (x + y) % 2 == 0 else (168, 68, 235)
+                    nc = N_DEEP
+                else:
+                    col = (88, 82, 96) if x < 8 else (62, 56, 70)
+                    nc = N_LEFT if x < 6 else (N_RIGHT if x > 9 else N_UP)
+                ag_d.set_at((x, y), col)
+                ag_n.set_at((x, y), nc)
+    assets["amethyst_geode"] = enforce_crisp_rim_normals(ag_d, ag_n)
+
+    # 16.5 Кипящий серный гейзер / фумарол пещеры (sulfur_geyser)
+    sgy_d, sgy_n = make_pair(16, 20)
+    for y in range(3, 19):
+        if y <= 9:
+            sx = int(round(7.5 + math.sin(y * 0.8) * 1.8))
+            for dx in (-1, 0, 1):
+                sgy_d.set_at((sx + dx, y), (195, 235, 95) if dx == 0 else (128, 168, 58))
+                sgy_n.set_at((sx + dx, y), N_UP)
+        else:
+            hw = 3 + (y - 10) // 2
+            for x in range(8 - hw, 8 + hw):
+                col = (235, 215, 55) if y in (10, 11) else ((96, 88, 72) if x < 8 else (68, 62, 50))
+                sgy_d.set_at((x, y), col)
+                sgy_n.set_at((x, y), N_UP if y <= 11 else N_FLAT)
+    assets["sulfur_geyser"] = enforce_crisp_rim_normals(sgy_d, sgy_n)
+
+    # 16.6 Сросшаяся пещерная колонна-сталагнат (stalagnate_column)
+    stc_d, stc_n = make_pair(16, 20)
+    for y in range(0, 20):
+        hw = max(2, int(5.5 - math.sin((y / 19.0) * math.pi) * 3.2))
+        for x in range(8 - hw, 8 + hw):
+            col = (118, 106, 98) if x < 8 else (78, 68, 64)
+            if y % 4 == 0:
+                col = (94, 84, 78)
+            nc = N_LEFT if x < 7 else (N_RIGHT if x > 8 else N_FLAT)
+            stc_d.set_at((x, y), col)
+            stc_n.set_at((x, y), nc)
+    assets["stalagnate_column"] = enforce_crisp_rim_normals(stc_d, stc_n)
+
+    # 16.7 Опрокинутая шахтёрская вагонетка с золотой рудой (minecart_wreck)
+    mw_d2, mw_n2 = make_pair(16, 20)
+    for y in range(8, 19):
+        for x in range(2, 14):
+            if y >= 16 and x in (4, 5, 10, 11):
+                col, nc = (52, 56, 66), N_UP  # Чугунные колёса
+            elif 8 <= y <= 10 and 4 <= x <= 11:
+                col = (245, 202, 68) if (x + y) % 2 == 0 else (88, 82, 92)  # Самородки руды
+                nc = N_UP
+            elif 10 <= y <= 16:
+                col = (112, 74, 54) if y in (10, 16) or x in (2, 13) else (76, 82, 94)
+                nc = N_FLAT
+            else:
+                continue
+            mw_d2.set_at((x, y), col)
+            mw_n2.set_at((x, y), nc)
+    assets["minecart_wreck"] = enforce_crisp_rim_normals(mw_d2, mw_n2)
+
+    # 16.8 Скелет погибшего рудокопа с киркой и каской (miner_skeleton)
+    msk_d, msk_n = make_pair(16, 20)
+    for y in range(7, 19):
+        for x in range(2, 14):
+            if 7 <= y <= 11 and 5 <= x <= 10:
+                col = (235, 185, 55) if y <= 8 else (225, 215, 192)  # Жёлтая каска на черепе
+                msk_d.set_at((x, y), col)
+                msk_n.set_at((x, y), N_UP)
+            elif 12 <= y <= 17 and 4 <= x <= 11 and (x + y) % 2 == 0:
+                msk_d.set_at((x, y), (195, 185, 162))
+                msk_n.set_at((x, y), N_FLAT)
+            elif x == 12 and 9 <= y <= 17:
+                msk_d.set_at((x, y), (185, 195, 210) if y <= 11 else (128, 86, 44))  # Кирка рядом
+                msk_n.set_at((x, y), N_UP)
+    assets["miner_skeleton"] = enforce_crisp_rim_normals(msk_d, msk_n)
+
+    # 16.9 Скальный зубец со стаей спящих нетопырей (bat_roost_rock)
+    brr_d, brr_n = make_pair(16, 20)
+    for y in range(2, 19):
+        hw = 5 if y <= 8 else 3
+        for x in range(8 - hw, 8 + hw):
+            if 5 <= y <= 9 and x in (4, 5, 8, 9, 11):
+                is_eye = (y == 7)
+                col, nc = (255, 48, 58) if is_eye else (34, 28, 42), N_UP
+            else:
+                col = (98, 90, 86) if x < 8 else (68, 62, 58)
+                nc = N_LEFT if x < 7 else N_RIGHT
+            brr_d.set_at((x, y), col)
+            brr_n.set_at((x, y), nc)
+    assets["bat_roost_rock"] = enforce_crisp_rim_normals(brr_d, brr_n)
+
+    # 16.10 Провал в Бездну со светящимся разломом (abyssal_fissure, 32x20 — 2x1 тайла!)
+    af_d, af_n = make_pair(32, 20)
+    for y in range(5, 18):
+        for x in range(2, 30):
+            jag = int(math.sin(x * 0.65) * 1.8)
+            dy = abs(y - (11 + jag))
+            if dy <= 4 and 4 <= x <= 27:
+                if dy == 0:
+                    col, nc = (215, 145, 255), N_DEEP
+                elif dy <= 2:
+                    col, nc = (98, 38, 168), N_DEEP
+                else:
+                    col, nc = (32, 18, 48), N_DOWN if y < 11 else N_UP
+                af_d.set_at((x, y), col)
+                af_n.set_at((x, y), nc)
+    assets["abyssal_fissure"] = enforce_crisp_rim_normals(af_d, af_n)

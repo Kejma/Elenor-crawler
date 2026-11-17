@@ -548,7 +548,7 @@ class Dungeon:
     def is_blocking_move(self, tx, ty):
         if not (0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS):
             return True
-        if self.grid[ty][tx] in (1, 5, 6, 7, 17, 18, 19, 20, 21, 22, 38):
+        if self.grid[ty][tx] in (1, 5, 6, 7, 17, 18, 19, 20, 21, 22, 33, 34, 35, 36, 51, 52, 53, 54, 55, 56, 57):
             return True
         if (tx, ty) in getattr(self, "solid_props", ()) or (tx, ty) in getattr(self, "invisible_bounds", ()):
             return True
@@ -560,8 +560,8 @@ class Dungeon:
     def is_blocking_sight(self, tx, ty):
         if not (0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS):
             return True
-        # Деревья (5, 21, 22) блокируют движение, но НЕ являются квадратными каменными стенами для света!
-        if self.grid[ty][tx] in (1, 6, 7, 17, 18, 19, 20):
+        # Деревья (5, 21, 22, 56, 57) блокируют движение, но НЕ являются квадратными стенами для света!
+        if self.grid[ty][tx] in (1, 6, 7, 17, 18, 19, 20, 33, 34, 35, 36, 51, 52, 53, 54, 55):
             return True
         door = self.doors.get((tx, ty))
         if door and not door.is_open:
@@ -704,7 +704,7 @@ class Dungeon:
             for ry in range(MAP_ROWS):
                 row = self.grid[ry]
                 for rx in range(MAP_COLS):
-                    if row[rx] in (1, 6, 7, 17, 18, 19, 20):
+                    if row[rx] in (1, 6, 7, 17, 18, 19, 20, 33, 34, 35, 36, 51, 52, 53, 54, 55):
                         base_bg[rx, ry] = True
             self._base_block_grid = base_bg
 
