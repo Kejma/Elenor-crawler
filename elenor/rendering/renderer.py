@@ -339,6 +339,9 @@ class Renderer(UIRendererMixin):
             pygame.draw.rect(surface, UI_BORDER_GOLD, (rx, ry, 3, 3))
 
     def draw_item_icon(self, surface, icon_name, x, y, size=32):
+        from elenor.rendering.ability_icons import draw_ability_icon
+        if draw_ability_icon(surface, icon_name, x, y, size):
+            return
         cx, cy = x + size // 2, y + size // 2
         if icon_name == "torch":
             pygame.draw.line(surface, (140, 90, 45), (cx - 4, cy + 9), (cx + 2, cy - 2), 4)

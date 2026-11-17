@@ -9,6 +9,8 @@ class Item:
     RARITY_ROMAN = ("", " [II]", " [III]", " [IV]", " [V]")
 
     def __init__(self, item_id, data, rarity_override=None):
+        self.branch = data.get("branch", "mind")
+        self.shape = data.get("shape", "target")
         self.id = item_id
         self.base_name = data["name"]
         self.type = data["type"]

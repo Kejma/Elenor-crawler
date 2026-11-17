@@ -1,3 +1,4 @@
+from elenor.data.abilities import perk_branch
 import math
 import random
 from elenor.config import PLAYER_BASE_SPEED, TORCH_BASE_RADIUS, DARK_VISION_RADIUS
@@ -277,7 +278,7 @@ class Player:
             "persephone_rejuvenation": "mind", "persephone_entangle": "mind"
         }
         for pid, lvl in self.perks.items():
-            tag = perk_tags.get(pid, "body")
+            tag = perk_branch(pid) or perk_tags.get(pid, "body")
             scores[tag] += lvl * 3.0
         return scores
 

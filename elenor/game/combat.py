@@ -553,13 +553,17 @@ class CombatMixin:
             total_pwr = int(math.floor(item.power * 1.65 + self.player.mag_attack * 1.5))
             growth = ("mind", 0.30)
         elif is_combat:
-            total_pwr = int(math.floor(item.power + self.player.phys_attack))
-            growth = ("cunning" if item.id in ("throw_knife", "poison_flask") else "body", 0.30)
+            total_pwr = int(math.floor(item.power + (self.player.cunning + self.player.perk_phys_atk if item.branch == "cunning" else self.player.phys_attack)))
+            growth = (item.branch, 0.30)
         else:
             total_pwr = int(math.floor(item.power + self.player.mag_attack))
             growth = ("mind", 0.35)
         growth_credit = {"action": growth, "awarded": False}
         c_type = getattr(item, "cast_type", "projectile")
+
+        if c_type == "physical":
+            self._execute_physical_ability(item, total_pwr, target_wx, target_wy, growth_credit)
+            return
 
         if item.life_steal > 0:
             self.player.hp = min(float(self.player.max_hp), self.player.hp + item.life_steal)
@@ -741,14 +745,17 @@ class CombatMixin:
                 "color": item.color, "timer": 0.30, "max_timer": 0.30
             })
             for m in list(self.mobs):
-                if math.hypot(m.x - px, m.y - py) <= 2.55:
+                if (math.hypot(m.x - px, m.y - py) <= item.aoe_radius
+                        and math.cos(math.atan2(m.y-py, m.x-px)-base_a) >= .5
+                        and self.dungeon.has_line_of_sight(px,py,m.x,m.y,item.aoe_radius+1)):
                     m.alert_to_combat(self.sfx, self.add_popup)
-                    m.hp -= total_pwr
+                    total_damage = max(1, total_pwr - m.phys_def)
+                    m.hp -= total_damage
                     k_dx, k_dy = m.x - px, m.y - py
                     kl = max(0.001, math.hypot(k_dx, k_dy))
                     m.apply_knockback(k_dx / kl, k_dy / kl, item.knockback)
                     m.apply_status(item.status, item.status_dur, self.add_popup)
-                    self.add_popup(m.x, m.y, f"-{total_pwr}", item.color)
+                    self.add_popup(m.x, m.y, f"-{total_damage}", item.color)
                     self.record_combat_growth(m, growth_credit)
                     self._check_mob_death(m)
             return
@@ -934,3 +941,7 @@ class CombatMixin:
                 spd = random.uniform(0.8, 3.2)
                 self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, (220, 210, 195), 3.0, 0.45))
 
+
+    def _execute_physical_ability(self, item, power, tx, ty, credit):
+        from elenor.game.physical import execute_physical
+        execute_physical(self, item, power, tx, ty, credit)

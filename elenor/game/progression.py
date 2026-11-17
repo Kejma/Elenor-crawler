@@ -1,3 +1,4 @@
+from elenor.data.abilities import perk_branch
 import math
 import random
 
@@ -16,6 +17,9 @@ class ProgressionMixin:
 
 
     def _get_perk_branch(self, pid, pdata):
+        declared = perk_branch(pid, pdata)
+        if declared:
+            return declared
         perk_tags = {
             "tough_skin": "body", "iron_grip": "body", "stone_ribs": "body",
             "titan_blood": "body", "blood_hunger": "body", "whirlwind": "body", "earth_slam": "body",

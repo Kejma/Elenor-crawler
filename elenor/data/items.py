@@ -37,7 +37,7 @@ BASE_ITEMS_DB = {
     },
     "katar_dagger": {
         "type": "equipment", "slot": "right_hand", "two_handed": False, "weap_style": "dagger",
-        "dmg_min": 2, "dmg_max": 3, "atk_cd": 0.30, "windup": 0.0, "reach": 1.38, "arc_deg": 35.0,
+        "dmg_min": 2, "dmg_max": 3, "atk_cd": 0.38, "windup": 0.0, "reach": 1.38, "arc_deg": 35.0,
         "max_targets": 1, "armor_pierce": 1, "crit_bonus": 0.06, "multi_hit": 2, "knockback": 0.15, "icon": "weapon_katar"
     },
     "cinquedea": {

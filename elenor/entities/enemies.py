@@ -99,6 +99,8 @@ class Enemy:
         self.path_timer = 0.0
         self.kb_vx = 0.0
         self.kb_vy = 0.0
+        self.bleed_timer = self.bleed_tick = 0.0
+        self.bleed_dmg = 1
         self.poison_timer = 0.0
         self.poison_tick = 0.0
         self.poison_dmg = 2
@@ -142,6 +144,9 @@ class Enemy:
     def apply_status(self, status_name, duration, add_popup, dmg_val=3):
         if not status_name or duration <= 0.0:
             return
+        if status_name == "bleed":
+            self.bleed_timer = max(self.bleed_timer, duration)
+            self.bleed_dmg = max(1, int(dmg_val))
         if status_name == "poison":
             self.poison_timer = max(self.poison_timer, duration)
             self.poison_dmg = max(1, int(math.floor(dmg_val)))
@@ -199,6 +204,13 @@ class Enemy:
         # 2. Process Status Effects
         self.glow_timer = max(0.0, self.glow_timer - dt)
         self.hit_flash_timer = max(0.0, self.hit_flash_timer - dt)
+        if self.bleed_timer > 0:
+            self.bleed_timer = max(0, self.bleed_timer - dt)
+            self.bleed_tick += dt
+            if self.bleed_tick >= .65:
+                self.bleed_tick = 0
+                self.hp -= self.bleed_dmg
+                add_popup(self.x, self.y, f"-{self.bleed_dmg}", (220, 65, 65))
         if self.poison_timer > 0.0:
             self.poison_timer = max(0.0, self.poison_timer - dt)
             self.poison_tick += dt
