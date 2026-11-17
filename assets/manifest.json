@@ -766,5 +766,49 @@
     ],
     "random_rot": false,
     "rev": 5
+  },
+  "merchant_counter": {
+    "file": "merchant_counter",
+    "name": "Прилавок скупщика",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "merchant_shelves": {
+    "file": "merchant_shelves",
+    "name": "Полки скупщика",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "merchant_goods": {
+    "file": "merchant_goods",
+    "name": "Витрина самоцветов",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "merchant_sign": {
+    "file": "merchant_sign",
+    "name": "Вывеска с весами",
+    "cat": "props",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
   }
 }

@@ -166,6 +166,13 @@ class CombatMixin:
         cand_objs.sort(key=lambda o: math.hypot(ref_wx - (o.x + 0.5), ref_wy - (o.y + 0.5)))
         obj = cand_objs[0]
 
+        if obj.kind == "merchant_counter":
+            self.interact_with_merchant(obj.merchant_owner)
+            return True
+        if obj.kind in ("merchant_shelves", "merchant_goods", "merchant_sign"):
+            self.set_thought(self.loc.get("merchant_room", {}).get(obj.kind, ""), important=False)
+            return True
+
         if obj.kind == "npc_merchant":
             self.interact_with_merchant(obj)
             return True

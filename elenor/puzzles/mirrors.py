@@ -129,6 +129,9 @@ def find_safe_accessible_tile_for_puzzle_item(game, puzzle_rect, forbidden_rects
     dungeon = game.dungeon
     start = int(game.player.x), int(game.player.y)
     forbidden = list(forbidden_rects or []) + [puzzle_rect.inflate(2, 2)]
+    merchant_room = getattr(dungeon, "merchant_room", None)
+    if merchant_room is not None:
+        forbidden.append(merchant_room)
     occupied = {(o.x, o.y) for o in game.objects if not o.used}
     occupied.update(dungeon.doors)
     occupied.update(dungeon.levers)
@@ -955,6 +958,9 @@ def _update_puzzle_ambush_spawner(game, ctrl, dt):
     )
     candidates = []
     for tx, ty in sorted(reachable - occupied):
+        merchant_room = getattr(dungeon, "merchant_room", None)
+        if merchant_room is not None and merchant_room.collidepoint(tx, ty):
+            continue
         # Check neighbouring tiles as well: a sprite may extend into a visible tile.
         if any((tx + dx, ty + dy) in vis_tiles for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
             continue

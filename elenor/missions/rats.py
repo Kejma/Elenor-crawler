@@ -100,18 +100,13 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
     # =========================================================================
     # ЯРУСЫ 2, 3, 4: ДЕРЕВЯННЫЙ ПОДВАЛ -> КАМЕННЫЙ ПОДВАЛ -> ПЕЩЕРЫ С БОССОМ
     # =========================================================================
-    # Размещаем Скупщика Шныря в укромном углу стартовой комнаты каждого этажа!
-    if game.dungeon.rooms:
-        r0 = game.dungeon.rooms[0]
-        mx_npc, my_npc = r0.left + 1, r0.top + 1
-        if not game.dungeon.is_blocking_move(mx_npc, my_npc):
-            game.objects.append(InteractableCls(mx_npc, my_npc, "npc_merchant"))
-
     puzzle_info = game.dungeon.mirror_puzzle_info
     optional_room = puzzle_info["sealed_rect"] if puzzle_info and not puzzle_info["tutorial"] else None
     exit_room = game.dungeon.rooms[-2] if optional_room else game.dungeon.rooms[-1]
     for idx, room in enumerate(game.dungeon.rooms[1:], start=1):
         rx, ry = room.center
+        if room is game.dungeon.merchant_room:
+            continue
         if optional_room is not None and room == optional_room:
             # An ordinary puzzle guards an optional reward area, not the exit.
             game.objects.append(InteractableCls(rx, ry, "chest"))
@@ -224,6 +219,9 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
             for sm in spawned:
                 _scale_mob_for_floor(sm, floor_num)
                 game.mobs.append(sm)
+
+    from elenor.world.merchant import populate_merchant_room
+    populate_merchant_room(game, InteractableCls)
 
     if game.dungeon.mirror_puzzle_info is not None:
         from elenor.puzzles.mirrors import spawn_floor_mirror_puzzle

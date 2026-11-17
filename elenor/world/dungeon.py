@@ -1,3 +1,4 @@
+from elenor.config import MERCHANT_ROOM_CHANCE
 from collections import deque
 import heapq
 import math
@@ -24,12 +25,13 @@ class Lever:
 
 
 class Dungeon:
-    def __init__(self, puzzle_profile="procedural", puzzle_chance=0.12):
+    def __init__(self, puzzle_profile="procedural", puzzle_chance=0.12, merchant_chance=MERCHANT_ROOM_CHANCE):
         # The campaign opts into its fixed introduction explicitly.
         if puzzle_profile not in ("rats", "procedural"):
             raise ValueError("Unknown puzzle profile")
         self.puzzle_profile = puzzle_profile
         self.puzzle_chance = max(0.0, min(1.0, float(puzzle_chance)))
+        self.merchant_chance = max(0.0, min(1.0, float(merchant_chance)))
         self.floor_num = 1
         self.grid = [[1 for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
         self.rooms = []
@@ -84,6 +86,7 @@ class Dungeon:
         self.carpets = set()
         self.atmo_zones = []
         self.fog_zones = []
+        self.merchant_room = None
         self.boss_room = None
         self.pre_boss_puzzle_info = None
         self.mirror_puzzle_info = None
@@ -475,8 +478,13 @@ class Dungeon:
                     else:
                         ld.locked = False
 
+        from elenor.world.merchant import reserve_merchant_room
+        reserve_merchant_room(self)
+
         # Расстановка света и жаровен по ярусам
         for idx, r in enumerate(self.rooms):
+            if r is self.merchant_room:
+                continue
             if r is self.boss_room:
                 b_col = (1.30, 0.42, 0.38)
                 self.room_lights.append({

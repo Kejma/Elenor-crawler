@@ -1236,6 +1236,9 @@ def create_placeholder_assets():
                 br_norm.set_at((x, y), (75 if x < 7 else 180, 160, 220))
     assets["brazier"] = (br_diff, br_norm)
 
+    from elenor.rendering.merchant import register_merchant_assets
+    register_merchant_assets(assets)
+
     from elenor.rendering.mirrors import register_mirror_puzzle_assets
     register_mirror_puzzle_assets(assets)
 
