@@ -46,6 +46,126 @@ MOB_PROFILES = {
         "phys_def": 4, "mag_def": 1, "detect_range": 4.8, "perception": 0.85,
         "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 24,
     },
+    "tribal_warrior": {
+        "sprite": "tribal_warrior", "hp": 26, "speed": 2.85, "dmg_min": 6, "dmg_max": 10,
+        "phys_def": 2, "mag_def": 1, "detect_range": 5.8, "perception": 1.10,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 20,
+    },
+    "tribal_hunter": {
+        "sprite": "tribal_hunter", "hp": 20, "speed": 3.05, "dmg_min": 5, "dmg_max": 9,
+        "phys_def": 1, "mag_def": 1, "detect_range": 6.8, "perception": 1.25,
+        "is_ranged": True, "proj_color": (95, 245, 125), "is_boss": False, "size_tiles": 1, "xp": 22,
+    },
+    "tribal_shaman": {
+        "sprite": "tribal_shaman", "hp": 28, "speed": 2.35, "dmg_min": 7, "dmg_max": 12,
+        "phys_def": 1, "mag_def": 4, "detect_range": 6.5, "perception": 1.20,
+        "is_ranged": True, "proj_color": (85, 250, 165), "is_boss": False, "size_tiles": 1, "xp": 28,
+    },
+    "croc_warrior": {
+        "sprite": "croc_warrior", "hp": 42, "speed": 2.25, "dmg_min": 8, "dmg_max": 13,
+        "phys_def": 4, "mag_def": 2, "detect_range": 5.2, "perception": 0.95,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 30,
+    },
+    "croc_juggernaut": {
+        "sprite": "croc_juggernaut", "hp": 185, "speed": 2.10, "dmg_min": 13, "dmg_max": 19,
+        "phys_def": 6, "mag_def": 3, "detect_range": 7.2, "perception": 1.15,
+        "is_ranged": False, "is_boss": True, "size_tiles": 2, "xp": 135,
+    },
+    "vedalken_mage": {
+        "sprite": "vedalken_mage", "hp": 26, "speed": 2.40, "dmg_min": 7, "dmg_max": 12,
+        "phys_def": 2, "mag_def": 5, "detect_range": 6.8, "perception": 1.25,
+        "is_ranged": True, "proj_color": (110, 235, 255), "is_boss": False, "size_tiles": 1, "xp": 28,
+    },
+    "vedalken_four_armed": {
+        "sprite": "vedalken_four_armed", "hp": 36, "speed": 2.60, "dmg_min": 9, "dmg_max": 14,
+        "phys_def": 3, "mag_def": 6, "detect_range": 7.0, "perception": 1.30,
+        "is_ranged": True, "proj_color": (185, 115, 255), "is_boss": False, "size_tiles": 1, "xp": 36,
+    },
+    "vedalken_arbiter": {
+        "sprite": "vedalken_arbiter", "hp": 280, "speed": 2.30, "dmg_min": 13, "dmg_max": 19,
+        "phys_def": 5, "mag_def": 8, "detect_range": 8.8, "perception": 1.50,
+        "is_ranged": True, "proj_color": (115, 245, 255), "is_boss": True, "size_tiles": 2, "xp": 190,
+    },
+    "swamp_lurker": {
+        "sprite": "swamp_lurker", "hp": 30, "speed": 2.30, "dmg_min": 6, "dmg_max": 10,
+        "phys_def": 3, "mag_def": 2, "detect_range": 5.0, "perception": 0.95,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 22,
+    },
+    "jungle_gremlin": {
+        "sprite": "jungle_gremlin", "hp": 16, "speed": 3.45, "dmg_min": 4, "dmg_max": 8,
+        "phys_def": 1, "mag_def": 1, "detect_range": 6.0, "perception": 1.25,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 16,
+    },
+    "jungle_viper": {
+        "sprite": "jungle_viper", "hp": 18, "speed": 3.25, "dmg_min": 5, "dmg_max": 9,
+        "phys_def": 1, "mag_def": 1, "detect_range": 5.5, "perception": 1.15,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 18,
+    },
+    "giant_scorpion": {
+        "sprite": "giant_scorpion", "hp": 32, "speed": 2.55, "dmg_min": 7, "dmg_max": 12,
+        "phys_def": 4, "mag_def": 1, "detect_range": 5.2, "perception": 1.00,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 26,
+    },
+    "myconid_shambler": {
+        "sprite": "myconid_shambler", "hp": 34, "speed": 1.95, "dmg_min": 6, "dmg_max": 11,
+        "phys_def": 2, "mag_def": 4, "detect_range": 5.4, "perception": 1.00,
+        "is_ranged": True, "proj_color": (195, 115, 255), "is_boss": False, "size_tiles": 1, "xp": 25,
+    },
+    "thorn_treant": {
+        "sprite": "thorn_treant", "hp": 44, "speed": 1.80, "dmg_min": 8, "dmg_max": 13,
+        "phys_def": 5, "mag_def": 3, "detect_range": 4.8, "perception": 0.90,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 30,
+    },
+    "giant_wasp": {
+        "sprite": "giant_wasp", "hp": 18, "speed": 3.60, "dmg_min": 5, "dmg_max": 9,
+        "phys_def": 1, "mag_def": 1, "detect_range": 6.4, "perception": 1.20,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 20,
+    },
+    "rust_monster": {
+        "sprite": "rust_monster", "hp": 30, "speed": 2.75, "dmg_min": 6, "dmg_max": 10,
+        "phys_def": 4, "mag_def": 2, "detect_range": 5.8, "perception": 1.15,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 26,
+    },
+    "cave_piercer": {
+        "sprite": "cave_piercer", "hp": 28, "speed": 1.65, "dmg_min": 9, "dmg_max": 15,
+        "phys_def": 5, "mag_def": 1, "detect_range": 4.5, "perception": 0.90,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 24,
+    },
+    "cave_angler": {
+        "sprite": "cave_angler", "hp": 34, "speed": 2.50, "dmg_min": 8, "dmg_max": 13,
+        "phys_def": 3, "mag_def": 2, "detect_range": 6.2, "perception": 1.20,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 28,
+    },
+    "marble_golem": {
+        "sprite": "marble_golem", "hp": 52, "speed": 1.85, "dmg_min": 9, "dmg_max": 15,
+        "phys_def": 6, "mag_def": 4, "detect_range": 5.0, "perception": 0.95,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 36,
+    },
+    "jade_scarab": {
+        "sprite": "jade_scarab", "hp": 22, "speed": 3.15, "dmg_min": 5, "dmg_max": 9,
+        "phys_def": 4, "mag_def": 3, "detect_range": 5.6, "perception": 1.05,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 22,
+    },
+    "skull_spider": {
+        "sprite": "skull_spider", "hp": 26, "speed": 3.10, "dmg_min": 6, "dmg_max": 11,
+        "phys_def": 3, "mag_def": 2, "detect_range": 6.0, "perception": 1.15,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 24,
+    },
+    "bone_jaguar": {
+        "sprite": "bone_jaguar", "hp": 32, "speed": 3.50, "dmg_min": 8, "dmg_max": 13,
+        "phys_def": 2, "mag_def": 2, "detect_range": 6.6, "perception": 1.30,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 28,
+    },
+    "bone_constrictor": {
+        "sprite": "bone_constrictor", "hp": 34, "speed": 2.65, "dmg_min": 7, "dmg_max": 12,
+        "phys_def": 3, "mag_def": 2, "detect_range": 5.6, "perception": 1.10,
+        "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 26,
+    },
+    "ossuary_behemoth": {
+        "sprite": "ossuary_behemoth", "hp": 260, "speed": 2.15, "dmg_min": 14, "dmg_max": 20,
+        "phys_def": 6, "mag_def": 5, "detect_range": 8.5, "perception": 1.40,
+        "is_ranged": True, "proj_color": (95, 250, 135), "is_boss": True, "size_tiles": 2, "xp": 180,
+    },
 }
 
 

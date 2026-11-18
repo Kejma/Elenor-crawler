@@ -1248,6 +1248,9 @@ def create_placeholder_assets():
     from elenor.rendering.fishing import register_fishing_assets
     register_fishing_assets(assets)
 
+    from elenor.rendering.jungle_bestiary import register_jungle_bestiary_assets
+    register_jungle_bestiary_assets(assets)
+
     from elenor.data.textures import bootstrap_assets_if_needed, load_custom_dtex_animations
 
     bootstrap_assets_if_needed(assets, build_hero_sprite)

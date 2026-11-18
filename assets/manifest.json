@@ -3307,5 +3307,269 @@
     ],
     "random_rot": false,
     "rev": 5
+  },
+  "tribal_warrior": {
+    "file": "tribal_warrior",
+    "name": "Абориген: Воин с макуауитлем",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "tribal_hunter": {
+    "file": "tribal_hunter",
+    "name": "Абориген: Охотник с трубкой",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "tribal_shaman": {
+    "file": "tribal_shaman",
+    "name": "Абориген: Шаман духов",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "croc_warrior": {
+    "file": "croc_warrior",
+    "name": "Рептилия: Воин-полукрокодил",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "croc_juggernaut": {
+    "file": "croc_juggernaut",
+    "name": "Рептилия: Крокодил-Джаггернаут (2x2)",
+    "cat": "mobs",
+    "size": [
+      32,
+      36
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "vedalken_mage": {
+    "file": "vedalken_mage",
+    "name": "Ведалкен: Хрономаг",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "vedalken_four_armed": {
+    "file": "vedalken_four_armed",
+    "name": "Ведалкен: Четырёхрукий архонт",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "vedalken_arbiter": {
+    "file": "vedalken_arbiter",
+    "name": "Ведалкен: Верховный Демиург (Босс 2x2)",
+    "cat": "mobs",
+    "size": [
+      32,
+      36
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "swamp_lurker": {
+    "file": "swamp_lurker",
+    "name": "Дикие: Трясинный болотник",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "jungle_gremlin": {
+    "file": "jungle_gremlin",
+    "name": "Дикие: Джунглевый гремлин",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "jungle_viper": {
+    "file": "jungle_viper",
+    "name": "Дикие: Изумрудная кобра",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "giant_scorpion": {
+    "file": "giant_scorpion",
+    "name": "Дикие: Гигантский скорпион",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "myconid_shambler": {
+    "file": "myconid_shambler",
+    "name": "Дикие: Гриболюд-миконид",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "thorn_treant": {
+    "file": "thorn_treant",
+    "name": "Дикие: Древолюд-шиповик",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "giant_wasp": {
+    "file": "giant_wasp",
+    "name": "Дикие: Огромная шершень-пчела",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "rust_monster": {
+    "file": "rust_monster",
+    "name": "Пещера: Ржавник (D&D)",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "cave_piercer": {
+    "file": "cave_piercer",
+    "name": "Пещера: Пронзатель (D&D)",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "cave_angler": {
+    "file": "cave_angler",
+    "name": "Пещера: Глубинный удильщик",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "marble_golem": {
+    "file": "marble_golem",
+    "name": "Храм: Мраморный голем-страж",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "jade_scarab": {
+    "file": "jade_scarab",
+    "name": "Храм: Нефритовый скарабей",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "skull_spider": {
+    "file": "skull_spider",
+    "name": "Костяные джунгли: Черепопаук",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bone_jaguar": {
+    "file": "bone_jaguar",
+    "name": "Костяные джунгли: Костяной ягуар",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "bone_constrictor": {
+    "file": "bone_constrictor",
+    "name": "Костяные джунгли: Костяной удав",
+    "cat": "mobs",
+    "size": [
+      16,
+      20
+    ],
+    "random_rot": false,
+    "rev": 5
+  },
+  "ossuary_behemoth": {
+    "file": "ossuary_behemoth",
+    "name": "Костяные джунгли: Исполин Оссуария (Босс 2x2)",
+    "cat": "mobs",
+    "size": [
+      32,
+      36
+    ],
+    "random_rot": false,
+    "rev": 5
   }
 }
