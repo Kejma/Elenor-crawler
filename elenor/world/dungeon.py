@@ -367,7 +367,6 @@ class Dungeon:
                                 elif d_p <= w_rad + 1.05 and floor_num == 3:
                                     self.grid[ry][rx] = 3
                         self.atmo_zones.append({"rect": new_rect, "kind": "spores"})
-                        self.fog_zones.append({"wx": px_c, "wy": py_c, "radius": w_rad + 1.4, "color": (0.48, 0.72, 0.85), "density": 0.48, "kind": "mist"})
                     elif feat_roll < 0.68:
                         corner_x = x if random.random() < 0.5 else (x + w - 1)
                         corner_y = y if random.random() < 0.5 else (y + h - 1)
@@ -460,7 +459,6 @@ class Dungeon:
             self.rooms.append(sealed_rect)
             self.boss_room = sealed_rect if tutorial else None
             self.atmo_zones.append({"rect": sealed_rect, "kind": "ash"})
-            self.fog_zones.append({"wx": float(sealed_rect.centerx), "wy": float(sealed_rect.centery), "radius": 4.2, "color": (0.85, 0.28, 0.32), "density": 0.40, "kind": "mist"})
 
         self.start_pos = self.rooms[0].center if self.rooms else (6, 20)
 
@@ -572,6 +570,25 @@ class Dungeon:
                         self.overlays[(rx, ry)] = "ov_cracks"
                     elif h_ov < 56:
                         self.overlays[(rx, ry)] = "ov_moss"
+
+        self._place_cellar_mist()
+
+    def _place_cellar_mist(self):
+        # Atmosphere has its own stream. It must not shift a seeded layout or its loot.
+        rng = random.Random(0)
+        rng.setstate(random.getstate())
+        if rng.random() >= .50:
+            return
+        candidates = [room for room in self.rooms[1:]
+                      if room != self.merchant_room and min(room.size) >= 4]
+        for room in rng.sample(candidates, min(len(candidates), rng.randint(1, 2))):
+            center_x = room.left + room.width * .5
+            center_y = room.top + room.height * .5
+            color = (.60, .65, .75) if room != self.boss_room else (.72, .49, .48)
+            self.fog_zones.append(dict(
+                wx=center_x, wy=center_y, radius=math.hypot(*room.size) * .52,
+                color=color, density=rng.uniform(.60, .78), kind="mist", bounds=tuple(room),
+            ))
 
     def is_blocking_move(self, tx, ty):
         if not (0 <= tx < self.width and 0 <= ty < self.height):

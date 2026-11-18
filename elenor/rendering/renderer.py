@@ -8,6 +8,7 @@ from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
+from elenor.rendering.fog import FogRenderer
 from elenor.rendering.lighting import GPULightShader
 from elenor.rendering.pixel_fx import PixelLayer
 from elenor.rendering.physical import render_ground_traps, render_physical
@@ -33,6 +34,7 @@ class Renderer(UIRendererMixin):
         pygame.draw.ellipse(self._shadow_small, (8, 6, 12, 120), (0, 0, 10, 4))
         self._shadow_big = pygame.Surface((20, 6), pygame.SRCALPHA)
         pygame.draw.ellipse(self._shadow_big, (8, 6, 12, 120), (0, 0, 20, 6))
+        self.fog_renderer = FogRenderer()
         self.gpu_shader = None
         try:
             self.gpu_shader = GPULightShader()
@@ -921,14 +923,12 @@ class Renderer(UIRendererMixin):
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
-            en_fog = fx_mgr.flags.get("volumetric_fog", True) if fx_mgr else True
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
                 scene_fov, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
-                enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec,
                 temple_exposure=dungeon.interior == "temple",
             )
             r_mult = g_mult = b_mult = None
@@ -1026,16 +1026,6 @@ class Renderer(UIRendererMixin):
             out[:, :, 0] = np.where(rim_add_r > 0.5, np.minimum(228.0, base_r * 1.25 + rim_add_r * scene_fov), base_r)
             out[:, :, 1] = np.where(rim_add_g > 0.5, np.minimum(222.0, base_g * 1.25 + rim_add_g * scene_fov), base_g)
             out[:, :, 2] = np.where(rim_add_b > 0.5, np.minimum(220.0, base_b * 1.25 + rim_add_b * scene_fov), base_b)
-            for cloud in clouds:
-                if cloud["kind"] != "mist":
-                    continue
-                x = self.px - (cloud["wx"]*TILE_W-cam_x)
-                y = self.py[:, :VIEW_H] - (cloud["wy"]*TILE_H-cam_y)
-                radius = cloud["radius"] * TILE_W
-                falloff = np.maximum(0, 1-(x*x+y*y)/(radius*radius))
-                wisps = .6 + .4*np.sin(x*.13 + np.cos(y*.12) + now_sec)
-                glow = (falloff*wisps*cloud["density"]*(r_mult+g_mult+b_mult)[:, :VIEW_H]).clip(0,1)
-                out[:, :VIEW_H] += glow[:,:,None] * np.asarray(cloud["color"])*65
             if dungeon.interior == "temple":
                 ground = out[:, :VIEW_H]
                 peak = ground.max(axis=-1)
@@ -1050,6 +1040,10 @@ class Renderer(UIRendererMixin):
             seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y)
             remember_tiles(dungeon, seen, objects)
 
+        if clouds:
+            fog_lights = ui_texts.get("_fog_lights", ())
+            self.fog_renderer.render(lit_surf, dungeon, clouds, fog_lights, fov_mask,
+                                     self.entity_y_canvas, cam_x, cam_y, now_sec)
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))
 

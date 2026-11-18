@@ -1079,6 +1079,31 @@ def validate_floor(plan, start):
         raise LayoutError("The mirror vault must have a single accessible gate")
 
 
+def add_jungle_mist(plan, start):
+    """Spread extra banks of mist across damp ground and shaded clearings."""
+    interior = bool(plan.d.interior)
+    open_ground = plan.floor - plan.occupied
+    if not interior:
+        open_ground -= plan.structure
+    damp = open_ground & (dilate(plan.water, 3) | {p for p in open_ground if plan.tile(p) in (11, 23, 32, 46)})
+    dry = open_ground - damp
+    covered = [(cloud["wx"] - .5, cloud["wy"] - .5) for cloud in plan.d.fog_zones]
+    spacing = 4.0 if interior else 6.5
+    count = 4 if interior else 11
+    for candidates in (damp, dry):
+        points = sorted(candidates)
+        plan.rng.shuffle(points)
+        for point in points:
+            if distance(point, start) < 2.6 or any(distance(point, old) < spacing for old in covered):
+                continue
+            plan.mist(point, plan.rng.uniform(3.2, 4.6) if interior else plan.rng.uniform(4.4, 6.5),
+                      density=plan.rng.uniform(.48, .67))
+            covered.append(point)
+            count -= 1
+            if not count:
+                return
+
+
 def generate_jungle_floor(dungeon):
     """Construct and validate a progression route before committing the floor."""
     rng = random.Random(random.getrandbits(64))
@@ -1111,5 +1136,6 @@ def generate_jungle_floor(dungeon):
             if attempt == 5:
                 raise
         else:
+            add_jungle_mist(plan, start)
             dungeon.start_pos = start
             return

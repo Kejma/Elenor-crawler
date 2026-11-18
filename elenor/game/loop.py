@@ -738,6 +738,7 @@ def main():
                 "color": (0.38, 0.48, 0.72)
             }
         ]
+        fog_lights = []
         if game.player.has_lit_torch:
             lights.append({
                 "pos": (p_sx + 4, p_sy - 2, TORCH_Z_HEIGHT),
@@ -745,6 +746,8 @@ def main():
                 "radius": game.player.torch_light_radius + flicker,
                 "color": (1.15, 0.80, 0.40)
             })
+
+            fog_lights.append(lights[-1])
 
         # Свечение игрока во время подготовки каста, Воспламенения Пиро или Омоложения Персефоны!
         if getattr(game.player, "cast_glow_color", None) and game.player.pending_action:
@@ -799,6 +802,11 @@ def main():
                 "color": (1.4, 1.15, 0.45)
             })
 
+        def register_fog_light(wx_px, wy_px, z, radius, color):
+            sx, sy = wx_px - game.cam_x, wy_px - game.cam_y
+            if -radius <= sx <= VIEW_W + radius and -radius <= sy <= VIEW_H + radius:
+                fog_lights.append(dict(pos=(sx, sy, z), radius=radius, color=color))
+
         def register_world_and_hud_light(wx_px, wy_px, foot_wy_px, z_h, rad, col, allowed_set, ignore_d=False):
             sx, sy = wx_px - game.cam_x, wy_px - game.cam_y
             if -rad <= sx <= VIEW_W + rad and -rad <= sy <= VIEW_H + rad:
@@ -845,6 +853,7 @@ def main():
             rad = br["radius"] + flicker * 0.5
             if (abs(lx_w - world_ox) > VIEW_W + rad or abs(ly_w - world_oy) > VIEW_H + rad):
                 continue
+            register_fog_light(lx_w, ly_w, 22.0, rad, br["color"])
             l_open = game.dungeon.get_light_open_tiles(br["x"], br["y"], br["radius"])
             allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
             if allowed is not None:
@@ -863,6 +872,7 @@ def main():
                 if allowed is not None:
                     register_world_and_hud_light(lx_w, ly_w, foot_w, 24.0, rad, rl["color"], allowed, ignore_d=False)
                 continue
+            register_fog_light(lx_w, ly_w, 32.0, rad, rl["color"])
             l_open = game.dungeon.get_light_open_tiles(rl["x"], rl["y"], rad)
             allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
             if allowed is not None:
@@ -873,6 +883,7 @@ def main():
                 lx_w, ly_w = obj.x * TILE_W + 8, obj.y * TILE_H + 8
                 foot_w = (obj.y + 0.5) * TILE_H
                 rad = 115.0 + flicker * 0.8
+                register_fog_light(lx_w, ly_w, 24.0, rad, (1.20, 0.72, 0.32))
                 l_open = game.dungeon.get_light_open_tiles(obj.x, obj.y, 115.0)
                 allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
                 if allowed is not None:
@@ -942,6 +953,7 @@ def main():
         ui_bundle["_show_map_hud"] = (
             not game.inv_open and not game.levelup_choices and game.fishing_cast is None and not dev_open
         )
+        ui_bundle["_fog_lights"] = fog_lights
         ui_bundle["_visual_fx"] = game.visual_fx
         ui_bundle["_fx_mgr"] = game.fx
         ui_bundle["_journal_open"] = game.journal_open

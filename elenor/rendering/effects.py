@@ -110,6 +110,7 @@ class FXManager:
                 "color": tuple(fz.get("color", (0.50, 0.68, 0.85))),
                 "density": float(fz.get("density", 0.45)),
                 "kind": fz.get("kind", "mist"),
+                "bounds": fz.get("bounds"),
                 "timer": None,
                 "max_timer": None,
                 "dmg": 0,

@@ -4,10 +4,9 @@ from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MA
 
 
 class GPULightShader:
-    """Аппаратный 2.5D-шейдер освещения, нормалей, AO, точечного Emissive Bloom и 3D-Объёмного Тумана."""
+    """Аппаратный 2.5D-шейдер освещения, нормалей, AO и точечного Emissive Bloom."""
     MAX_LIGHTS = 48
     MAX_HUD_LIGHTS = 32
-    MAX_FOGS = 16
 
     def __init__(self):
         import moderngl
@@ -47,17 +46,12 @@ class GPULightShader:
             uniform sampler2D u_emissive;
 
             uniform vec2 u_cam;
-            uniform float u_time;
             uniform bool u_temple_exposure;
-            uniform vec3 u_fx_flags; // x = enable_ao, y = enable_bloom, z = enable_fog
+            uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
             uniform int u_num_lights;
             uniform vec4 u_light_pos_rad[{self.MAX_LIGHTS}];
             uniform vec4 u_light_col_foot[{self.MAX_LIGHTS}];
             uniform vec2 u_light_flags[{self.MAX_LIGHTS}];
-
-            uniform int u_num_fogs;
-            uniform vec4 u_fog_pos_rad[{self.MAX_FOGS}];
-            uniform vec4 u_fog_col_dens[{self.MAX_FOGS}];
 
             uniform int u_num_hud_lights;
             uniform vec4 u_hud_pos_rad[{self.MAX_HUD_LIGHTS}];
@@ -80,13 +74,6 @@ class GPULightShader:
                 float m01 = texelFetch(u_light_masks, ivec2(x0, base_y + y1), 0).r;
                 float m11 = texelFetch(u_light_masks, ivec2(x1, base_y + y1), 0).r;
                 return mix(mix(m00, m10, fx), mix(m01, m11, fx), fy);
-            }}
-
-            float volumetric_fog_noise(vec2 wp, float t) {{
-                float n1 = sin(wp.x * 0.17 + t * 1.3 + cos(wp.y * 0.14 - t * 0.9));
-                float n2 = cos(wp.y * 0.23 - t * 1.1 + sin(wp.x * 0.21 + t * 0.8));
-                float n3 = sin((wp.x + wp.y) * 0.31 - t * 1.7) * 0.5;
-                return clamp((n1 + n2 + n3) * 0.22 + 0.58, 0.15, 1.0);
             }}
 
             void main() {{
@@ -219,56 +206,6 @@ class GPULightShader:
                         rim_add.b > (0.5 / 255.0) ? min(220.0 / 255.0, base_c.b * 1.25 + rim_add.b) : base_c.b
                     );
 
-                    // 3. 3D ОБЪЁМНЫЙ ТУМАН С РАССЕИВАНИЕМ СВЕТА ПО ГРЕБНЯМ КЛУБОВ ДЫМА
-                    if (u_fx_flags.z > 0.5 && fov > 0.05 && is_wall_tile < 0.5) {{
-                        vec2 wp = vec2(wx_px, wy_px);
-                        float wisp = volumetric_fog_noise(wp, u_time);
-                        // Вычисляем 3D-нормаль каждого клуба тумана по градиенту плотности!
-                        float w_rx = volumetric_fog_noise(wp + vec2(2.5, 0.0), u_time);
-                        float w_uy = volumetric_fog_noise(wp - vec2(0.0, 2.5), u_time);
-                        vec3 fog_N = normalize(vec3((wisp - w_rx) * 3.2, (w_uy - wisp) * 3.2, 0.52));
-
-                        float height_mask = 1.0;
-                        if (ent_y > -9000.0) {{
-                            float h_above_feet = max(0.0, ent_y - float(p.y));
-                            height_mask = clamp(1.0 - (h_above_feet - 3.0) / 9.0, 0.12, 1.0);
-                        }}
-                        for (int f = 0; f < u_num_fogs; ++f) {{
-                            vec4 f_pr = u_fog_pos_rad[f];
-                            float f_rad = f_pr.z;
-                            float f_dist = distance(wp, f_pr.xy);
-                            if (f_dist < f_rad) {{
-                                vec4 f_cd = u_fog_col_dens[f];
-                                float radial = pow(1.0 - f_dist / f_rad, 1.30);
-                                float fog_alpha = clamp(radial * wisp * f_cd.w * height_mask, 0.0, 0.82);
-
-                                // Считаем объёмное рассеивание света внутри тумана (гребни клубов вспыхивают со стороны факела!)
-                                vec3 vol_light = (f_pr.w > 0.5) ? vec3(0.28, 0.52, 0.28) : vec3(0.10, 0.13, 0.20);
-                                for (int i = 0; i < u_num_lights; ++i) {{
-                                    vec4 l_pr = u_light_pos_rad[i];
-                                    float l_rad = l_pr.w * 1.15;
-                                    float l_dx = l_pr.x - float(p.x);
-                                    float l_dy = -(l_pr.y - float(p.y));
-                                    float l_d2 = sqrt(l_dx * l_dx + l_dy * l_dy);
-                                    if (l_d2 < l_rad) {{
-                                        float m_w = (u_light_flags[i].y > 0.5) ? sample_light_mask_smooth(i, wx_px, wy_px) : 1.0;
-                                        if (m_w > 0.02) {{
-                                            vec3 L_dir = normalize(vec3(l_dx, l_dy, 14.0));
-                                            // Обращённый к свету край клуба дыма ярко бликует, а тыльная сторона клуба в тени!
-                                            float puff_shade = clamp(dot(fog_N, L_dir) * 0.65 + 0.45, 0.15, 1.35);
-                                            float scatter = pow(1.0 - l_d2 / l_rad, 1.45) * m_w;
-                                            // Ореол рассеивания (Mie halo) вблизи источника света
-                                            float halo = pow(clamp(1.0 - l_d2 / (l_rad * 0.55), 0.0, 1.0), 2.0) * 0.55;
-                                            vol_light += u_light_col_foot[i].rgb * scatter * (puff_shade * 1.15 + halo);
-                                        }}
-                                    }}
-                                }}
-                                vec3 fog_lit = clamp(f_cd.rgb * vol_light, 0.0, 1.45);
-                                lit_out = mix(lit_out, fog_lit, fog_alpha * fov);
-                            }}
-                        }}
-                    }}
-
                     if (u_temple_exposure && ent_y < -9000.0) {{
                         float peak = max(lit_out.r, max(lit_out.g, lit_out.b)) * 255.0;
                         float excess = max(peak - 164.0, 0.0);
@@ -319,13 +256,11 @@ class GPULightShader:
         self.flags_buf = np.zeros((self.MAX_LIGHTS, 2), dtype=np.float32)
         self.masks_buf = np.zeros((self.MAX_LIGHTS, MAP_ROWS, MAP_COLS), dtype=np.float32)
 
-        self.fog_pos_buf = np.zeros((self.MAX_FOGS, 4), dtype=np.float32)
-        self.fog_col_buf = np.zeros((self.MAX_FOGS, 4), dtype=np.float32)
 
         self.hud_pos_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
         self.hud_col_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, enable_fog=True, active_clouds=None, now_sec=0.0, temple_exposure=False):
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False):
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
@@ -366,20 +301,6 @@ class GPULightShader:
         if any_masks:
             self.tex_masks.write(self.masks_buf[:n_lgt].tobytes(), viewport=(0, 0, self.tex_walls.width, n_lgt*self.tex_walls.height))
 
-        clouds = active_clouds or []
-        n_fog = min(len(clouds), self.MAX_FOGS)
-        self.fog_pos_buf.fill(0.0)
-        self.fog_col_buf.fill(0.0)
-        for f_i in range(n_fog):
-            cld = clouds[f_i]
-            fade = 1.0
-            if cld.get("timer") is not None and cld.get("max_timer"):
-                fade = min(1.0, cld["timer"] / min(1.2, cld["max_timer"]))
-            is_p = 1.0 if cld.get("kind") == "poison" else 0.0
-            self.fog_pos_buf[f_i] = (cld["wx"] * TILE_W, cld["wy"] * TILE_H, cld["radius"] * TILE_W, is_p)
-            fc = cld["color"]
-            self.fog_col_buf[f_i] = (fc[0], fc[1], fc[2], cld.get("density", 0.5) * fade)
-
         n_hud = min(len(hud_lights), self.MAX_HUD_LIGHTS)
         self.hud_pos_buf.fill(0.0)
         self.hud_col_buf.fill(0.0)
@@ -391,17 +312,13 @@ class GPULightShader:
             self.hud_col_buf[j] = (hcr, hcg, hcb, 1.0)
 
         self.prog["u_cam"].value = (float(cam_x), float(cam_y))
-        self.prog["u_time"].value = float(now_sec)
         self.prog["u_temple_exposure"].value = temple_exposure
-        self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0, 1.0 if enable_fog else 0.0)
+        self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
         self.prog["u_num_lights"].value = n_lgt
         self.prog["u_light_pos_rad"].write(self.pos_rad_buf.tobytes())
         self.prog["u_light_col_foot"].write(self.col_foot_buf.tobytes())
         self.prog["u_light_flags"].write(self.flags_buf.tobytes())
 
-        self.prog["u_num_fogs"].value = n_fog
-        self.prog["u_fog_pos_rad"].write(self.fog_pos_buf.tobytes())
-        self.prog["u_fog_col_dens"].write(self.fog_col_buf.tobytes())
 
         self.prog["u_num_hud_lights"].value = n_hud
         self.prog["u_hud_pos_rad"].write(self.hud_pos_buf.tobytes())
