@@ -75,6 +75,8 @@ def main():
                 break
             if game.in_main_menu:
                 continue
+            if event.type == pygame.WINDOWFOCUSLOST:
+                game.player.buffered_combat = None
 
             key_down = event.type == pygame.KEYDOWN and not getattr(event, "repeat", False)
             if game.map_open:
@@ -86,6 +88,7 @@ def main():
             if (key_down and event.key == pygame.K_m
                     and not game.inv_open and not game.levelup_choices and game.fishing_cast is None):
                 game.map_open = True
+                game.player.buffered_combat = None
                 map_chart = chart_surface(game.dungeon)
                 game.sfx.play("ui")
                 continue
@@ -132,10 +135,12 @@ def main():
                 player_tile = int(game.player.x), int(game.player.y)
                 if player_tile in game.dungeon.fishing_edges and not game.inv_open and not game.levelup_choices:
                     if (click_world or mouse_pos[1] < VIEW_H * SCALE) and start_fishing(game, *aim):
+                        game.player.buffered_combat = None
                         continue
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    game.player.buffered_combat = None
                     if game.inv_open:
                         game.inv_open = False
                     else:
@@ -147,12 +152,14 @@ def main():
                     game.reset_run()
                 elif event.key in (pygame.K_i, pygame.K_TAB):
                     game.inv_open = not game.inv_open
+                    game.player.buffered_combat = None
                     if not game.inv_open:
                         game.journal_open = False
                     game.drag_item = None
                     game.drag_source = None
                     game.sfx.play("ui")
                 elif event.key == pygame.K_j:
+                    game.player.buffered_combat = None
                     if not game.inv_open:
                         game.inv_open = True
                         game.journal_open = True
@@ -163,9 +170,9 @@ def main():
                     game.sfx.play("ui")
                 elif event.key == pygame.K_t:
                     game.trigger_torch_toggle()
-                elif event.key == pygame.K_SPACE:
+                elif press_space and not game.levelup_choices:
                     game.try_interact_or_melee(world_mx, world_my, via_mouse=False)
-                elif event.key in (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f):
+                elif key_down and event.key in (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f):
                     if not game.inv_open and not game.levelup_choices:
                         ab_idx = (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f).index(event.key)
                         game.use_or_equip_item(game.player.ability_slots[ab_idx], world_mx, world_my, from_hotbar=True)
@@ -192,30 +199,31 @@ def main():
                 if event.button == 1:
                     if game.levelup_choices:
                         for idx, card_r in enumerate(game.renderer.perk_card_rects):
-                            if card_r.collidepoint(mouse_pos):
+                            if card_r.collidepoint(event.pos):
                                 game.select_perk_choice(idx)
                                 break
                         continue
-                    if game.renderer.bag_btn_rect.collidepoint(mouse_pos):
+                    if game.renderer.bag_btn_rect.collidepoint(event.pos):
                         game.inv_open = not game.inv_open
+                        game.player.buffered_combat = None
                         game.drag_item = None
                         game.drag_source = None
                         game.sfx.play("ui")
                     else:
                         clicked_ui = False
                         for i, ar in enumerate(game.renderer.ability_rects):
-                            if ar.collidepoint(mouse_pos):
+                            if ar.collidepoint(event.pos):
                                 game.use_or_equip_item(game.player.ability_slots[i], world_mx, world_my, from_hotbar=True)
                                 clicked_ui = True
                                 break
                         for i, hr in enumerate(game.renderer.hotbar_rects):
-                            if hr.collidepoint(mouse_pos):
+                            if hr.collidepoint(event.pos):
                                 game.use_or_equip_item(game.player.hotbar[i], world_mx, world_my, from_hotbar=True)
                                 clicked_ui = True
                                 break
                         if game.inv_open:
                             clicked_ui = True
-                            if game.renderer.journal_btn_rect.collidepoint(mouse_pos):
+                            if game.renderer.journal_btn_rect.collidepoint(event.pos):
                                 game.journal_open = not game.journal_open
                                 game.journal_scroll = 0
                                 game.drag_item = None
@@ -223,21 +231,21 @@ def main():
                                 game.sfx.play("ui")
                             elif game.journal_open:
                                 for f_key, f_rect in game.renderer.journal_filter_rects.items():
-                                    if f_rect.collidepoint(mouse_pos):
+                                    if f_rect.collidepoint(event.pos):
                                         game.journal_filters[f_key] = not game.journal_filters.get(f_key, True)
                                         game.journal_scroll = 0
                                         game.sfx.play("ui")
                                         break
                             else:
                                 for s_key, s_rect in game.renderer.equip_slot_rects.items():
-                                    if s_key != "bag" and s_rect.collidepoint(mouse_pos):
+                                    if s_key != "bag" and s_rect.collidepoint(event.pos):
                                         itm = game.player.equipment.get(s_key)
                                         if itm:
                                             game.drag_item = itm
                                             game.drag_source = ("equip", s_key)
                                         break
                                 for i, sr in enumerate(game.renderer.inv_slot_rects):
-                                    if i < game.player.unlocked_slots and sr.collidepoint(mouse_pos):
+                                    if i < game.player.unlocked_slots and sr.collidepoint(event.pos):
                                         itm = game.player.inventory[i]
                                         if itm:
                                             game.drag_item = itm
@@ -252,7 +260,7 @@ def main():
                         game.sfx.play("ui")
                     elif game.inv_open:
                         for i, sr in enumerate(game.renderer.inv_slot_rects):
-                            if i < game.player.unlocked_slots and sr.collidepoint(mouse_pos):
+                            if i < game.player.unlocked_slots and sr.collidepoint(event.pos):
                                 itm = game.player.inventory[i]
                                 if itm:
                                     game.drop_item_on_floor(itm)
@@ -402,6 +410,7 @@ def main():
                 pa["timer"] -= dt
                 if pa["timer"] <= 0.0:
                     game.player.pending_action = None
+                    game.player.cast_glow_color = None
                     game.world_active = True
                     if pa["kind"] == "melee":
                         game._execute_melee_swing(pa["tx"], pa["ty"])
@@ -571,6 +580,10 @@ def main():
                             game.projectiles.remove(pr)
 
         evt_code = game.player.update_timers(dt if not game.inv_open and not game.levelup_choices and not dev_open else 0)
+        if game.fishing_cast is not None or game.player.hp <= 0 or game.inv_open or game.levelup_choices or dev_open:
+            game.player.buffered_combat = None
+        else:
+            game.update_buffered_combat(dt)
         if evt_code == "torch_burned_out":
             game.sfx.play("hurt")
             game.trigger_event_thought("torch_burned_out", force_important=True)

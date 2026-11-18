@@ -52,6 +52,7 @@ class Player:
         self.perk_timers = {"storm_aura": 1.5}
         self.cooldowns = {}          # item_or_perk_id -> remaining cooldown seconds
         self.pending_action = None   # Holds windup action dict before strike/cast fires!
+        self.buffered_combat = None
         self.overflow_drops = []     # Items displaced by 2H weapons when pockets are full
         self.levelup_delay_timer = 0.0
         self.shine_timer = 0.0
@@ -199,7 +200,7 @@ class Player:
         while self.xp >= self.max_xp:
             self.xp -= self.max_xp
             self.level += 1
-            self.max_xp = int(self.max_xp * 1.55)
+            self.max_xp = 120 if self.level == 2 else int(self.max_xp * 1.55)
             self.pending_perk_rolls += 1
             self.hp = min(float(self.max_hp), self.hp + 6.0)
             self.mp = min(float(self.max_mp), self.mp + 4.0)
@@ -536,7 +537,7 @@ class Player:
             return False
         if abs(dx) > 0.05:
             self.facing = 1 if dx > 0 else -1
-        self.is_moving = True
+        start_x, start_y = self.x, self.y
         length = math.hypot(dx, dy)
         nx, ny = dx / length, dy / length
 
@@ -569,7 +570,8 @@ class Player:
         ):
             self.y = target_y
 
-        return True
+        self.is_moving = (self.x, self.y) != (start_x, start_y)
+        return self.is_moving
 
     def add_item_to_inventory(self, item):
         placed = False

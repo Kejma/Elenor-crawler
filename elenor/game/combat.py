@@ -3,6 +3,7 @@ import random
 
 from elenor.entities import Enemy, Interactable, Projectile, Particle
 from elenor.entities.objects import JUNGLE_CHESTS, JUNGLE_KEY_COLORS, JUNGLE_VASES
+from elenor.config import COMBAT_INPUT_WINDOW
 from elenor.missions.rats import get_mission_texts, handle_mission_object_interaction
 from elenor.profile import save_profile
 
@@ -395,15 +396,50 @@ class CombatMixin:
         return True
 
 
-    def _perform_melee_attack(self, target_wx, target_wy):
-        if self.player.attack_cd > 0.0 or self.player.pending_action is not None:
+    def buffer_combat_input(self, wait, tx, ty, item=None):
+        if 0.0 < wait <= COMBAT_INPUT_WINDOW:
+            self.player.buffered_combat = {"timer": COMBAT_INPUT_WINDOW, "tx": tx, "ty": ty, "item": item}
+            return True
+        return False
+
+    def update_buffered_combat(self, dt):
+        player = self.player
+        buffered = player.buffered_combat
+        if buffered is None:
             return
+
+        item = buffered["item"]
+        cooldown = player.attack_cd if item is None else player.cooldowns.get(item.id, 0.0)
+        if player.pending_action is None and cooldown <= 0.0:
+            player.buffered_combat = None
+            tx, ty = buffered["tx"], buffered["ty"]
+            if item is None:
+                self._perform_melee_attack(tx, ty)
+            elif any(slot is item for slot in (*player.ability_slots, *player.hotbar)):
+                self.use_or_equip_item(item, tx, ty, from_hotbar=True)
+        else:
+            buffered["timer"] -= dt
+            if buffered["timer"] <= 0.0:
+                player.buffered_combat = None
+
+    def _perform_melee_attack(self, target_wx, target_wy):
+        pending = self.player.pending_action
+        wait = max(self.player.attack_cd, pending["timer"] if pending is not None else 0.0)
+        if self.player.attack_cd > 0.0 or pending is not None:
+            self.buffer_combat_input(wait, target_wx, target_wy)
+            return
+        self.player.buffered_combat = None
+        self.world_active = True
         weap = self.player.equipment["right_hand"]
         windup = weap.windup if weap else 0.0
         atk_cd = weap.atk_cd if weap else 0.30
         self.player.attack_cd = atk_cd + windup
 
         if windup > 0.0:
+            dx, dy = target_wx - self.player.x, target_wy - self.player.y
+            length = max(0.001, math.hypot(dx, dy))
+            self.player.trigger_bump(dx / length * 0.22, dy / length * 0.22)
+            self.sfx.play("skill_windup")
             self.player.pending_action = {
                 "kind": "melee",
                 "timer": windup,

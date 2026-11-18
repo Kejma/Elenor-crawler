@@ -241,7 +241,16 @@ class InventoryMixin:
 
 
     def use_or_equip_item(self, item, target_wx=None, target_wy=None, from_hotbar=False):
-        if not item or self.player.hp <= 0 or self.player.pending_action is not None:
+        if not item or self.player.hp <= 0:
+            return
+        pending = self.player.pending_action
+        cd_rem = self.player.cooldowns.get(item.id, 0.0)
+        is_ability = item.type in ("consumable_spell", "combat_skill", "spell", "permanent_spell")
+        if from_hotbar and is_ability and not self.inv_open:
+            wait = max(cd_rem, pending["timer"] if pending is not None else 0.0)
+            if self.buffer_combat_input(wait, target_wx, target_wy, item):
+                return
+        if pending is not None:
             return
         ev = self.loc["events"]
 
@@ -251,7 +260,6 @@ class InventoryMixin:
             return
 
         # 2. Если способность на перезарядке — тихий отклик без мусорных всплывашек "КД 0.3с"
-        cd_rem = self.player.cooldowns.get(item.id, 0.0)
         if cd_rem > 0.0 and item.type in ("consumable", "consumable_spell", "permanent_spell", "combat_skill"):
             self.sfx.play("ui")
             return
@@ -277,7 +285,7 @@ class InventoryMixin:
                 self.player.remove_item_everywhere(item)
             return
 
-        if item.type in ("consumable_spell", "combat_skill", "spell", "permanent_spell"):
+        if is_ability:
             if item.type in ("spell", "permanent_spell") and self.player.mp < item.mp_cost:
                 self.set_thought(ev["no_mana"])
                 self.sfx.play("ui")
@@ -304,6 +312,8 @@ class InventoryMixin:
 
             if item.type in ("spell", "permanent_spell"):
                 self.player.mp -= item.mp_cost
+            self.player.buffered_combat = None
+            self.world_active = True
             self.player.cooldowns[item.id] = item.cooldown
 
             if item.type == "combat_skill":

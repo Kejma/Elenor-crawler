@@ -235,6 +235,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
 
     def _populate_floor(self, floor_num, cached=None):
         self.world_active = False
+        self.player.buffered_combat = None
         self.popups = []
         self.fishing_cast = None
         self.catch_display = None
