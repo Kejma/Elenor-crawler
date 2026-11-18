@@ -40,7 +40,9 @@ EARLY_STATS = {
     "cave_piercer": (14, 3, 6, 14),
     "cave_angler": (15, 3, 6, 14),
 }
-def populate_encounters(game, Interactable):
+
+
+def populate_encounters(game):
     d = game.dungeon
     depth = d.floor_num
     start = d.start_pos
@@ -53,7 +55,8 @@ def populate_encounters(game, Interactable):
         if d.grid[y][x] not in (SHALLOW_WATER, DEEP_WATER, PIER, 32, 43, 44)
     }
     # Approaches stay safe even on the other side of a bend or a closed door.
-    entry_buffer = 10 if d.interior else (13 if depth == 1 else 10)
+    compact = bool(d.interior) and d.jungle_gate is None
+    entry_buffer = (7 if compact else 10) if d.interior else (13 if depth == 1 else 10)
     quiet = [start, *d.passages]
     camps = [
         position for position, kind in d.map_landmarks.items()
@@ -70,11 +73,11 @@ def populate_encounters(game, Interactable):
     rng.shuffle(groups)
     placed = []
     if d.interior:
-        compact = d.jungle_gate is None
         limit = (5 if compact else 9) + min(5, depth - 1)
     else:
         limit = 11 if depth == 1 else 16 + min(8, depth - 2)
-    spacing = 6.0 if d.interior else 7.5
+    limit *= 3
+    spacing = 2.3 if compact else (3.2 if d.interior else 4.5)
 
     def spawn(point, kind, state):
         mob = Enemy(*point, kind=kind, state=state)
@@ -108,20 +111,31 @@ def populate_encounters(game, Interactable):
             spawn(rng.choice(roomy), boss[1], "guarding")
             break
 
-    for habitat, cells in groups * 3:
-        if len(placed) >= limit:
-            break
+    eligible = []
+    for habitat, cells in groups:
         kinds = [kind for earliest, kind in HABITATS[habitat] if earliest <= depth]
-        candidates = [p for p in sorted(cells) if all(math.dist(p, q) >= spacing for q in placed)]
-        if not candidates or not kinds:
-            continue
-        anchor = rng.choice(candidates)
-        kind = rng.choice(kinds)
-        hold = habitat in ("village", "temple_inner", "cave_squeeze", "cave_chasm") or kind in (
-            "swamp_lurker", "cave_angler", "thorn_treant",
-        )
-        spawn(anchor, kind, "guarding" if hold else "patrolling")
-        companions = [p for p in candidates if 2 <= math.dist(anchor, p) <= 4]
-        if len(placed) < limit and companions and (kind == "tribal_shaman" or rng.random() < (0.25 if depth == 1 else 0.70)):
-            allies = [other for other in kinds if other != "tribal_shaman"]
-            spawn(rng.choice(companions), rng.choice(allies), "guarding" if hold else "patrolling")
+        if kinds and cells:
+            eligible.append((habitat, sorted(cells), kinds))
+
+    # Let each habitat take a turn filling the budget before revisiting busy rooms.
+    while len(placed) < limit and eligible:
+        remaining = []
+        for habitat, cells, kinds in eligible:
+            if len(placed) >= limit:
+                break
+            candidates = [p for p in cells if all(math.dist(p, q) >= spacing for q in placed)]
+            if not candidates:
+                continue
+            anchor = rng.choice(candidates)
+            kind = rng.choice(kinds)
+            hold = habitat in ("village", "temple_inner", "cave_squeeze", "cave_chasm") or kind in (
+                "swamp_lurker", "cave_angler", "thorn_treant",
+            )
+            state = "guarding" if hold else "patrolling"
+            spawn(anchor, kind, state)
+            companions = [p for p in candidates if spacing <= math.dist(anchor, p) <= 5]
+            if len(placed) < limit and companions and (kind == "tribal_shaman" or rng.random() < (0.25 if depth == 1 else 0.70)):
+                allies = [other for other in kinds if other != "tribal_shaman"]
+                spawn(rng.choice(companions), rng.choice(allies), state)
+            remaining.append((habitat, candidates, kinds))
+        eligible = remaining

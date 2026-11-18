@@ -7,6 +7,17 @@ _X = np.arange(VIEW_W, dtype=np.float32)[:, None]
 _Y = np.arange(VIEW_H, dtype=np.float32)[None, :]
 
 
+def canopy_visibility(fov_mask, tile_x, tile_y):
+    """Fade the crown as the visible area of its footprint grows."""
+    x0, x1 = max(0, tile_x + 3), min(VIEW_W, tile_x + TILE_W - 3)
+    y0, y1 = max(0, tile_y + 3), min(VIEW_H, tile_y + TILE_H - 3)
+    if x0 >= x1 or y0 >= y1:
+        return 0.0
+    coverage = fov_mask[x0:x1, y0:y1].sum() / ((TILE_W - 6) * (TILE_H - 6))
+    strength = min(1.0, max(0.0, (float(coverage) - 0.35) / 0.48))
+    return strength * strength * (3.0 - 2.0 * strength)
+
+
 def overlay_visibility(fov_mask, lights, cam_x, cam_y):
     """Combine wall occlusion with the falloff of the current frame's lights.
 

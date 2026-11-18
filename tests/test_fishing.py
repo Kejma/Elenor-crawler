@@ -129,7 +129,7 @@ class FishingTests(unittest.TestCase):
         self.assertTrue(dungeon.is_blocking_move(deep_x, deep_y))
         self.assertFalse(dungeon.is_blocking_sight(deep_x, deep_y))
 
-    def test_jungle_landmarks_and_optional_vault(self):
+    def test_jungle_surface_has_landmarks_without_locked_vaults(self):
         for seed in range(24):
             with self.subTest(seed=seed):
                 random.seed(seed)
@@ -146,17 +146,9 @@ class FishingTests(unittest.TestCase):
                 self.assertTrue(dungeon.fishing_edges.keys() <= seen)
                 self.assertTrue(game.mobs)
                 self.assertTrue(all((int(m.x), int(m.y)) in seen for m in game.mobs))
-                self.assertEqual(len(game.mirror_puzzles), seed % 2)
-                if game.mirror_puzzles:
-                    info = dungeon.mirror_puzzle_info
-                    self.assertIn(info["entry_door"], seen)
-                    self.assertNotIn(info["sealed_rect"].center, seen)
-                    self.assertFalse(game.mirror_puzzles[0].ambush_enabled)
-                    dungeon.doors[info["gate_door"]].is_open = True
-                    self.assertIn(
-                        info["sealed_rect"].center,
-                        reachable_floor_tiles(dungeon, dungeon.start_pos),
-                    )
+                self.assertFalse(game.mirror_puzzles)
+                self.assertFalse(dungeon.doors and any(door.locked for door in dungeon.doors.values()))
+                self.assertFalse({"ford", "log"} & set(dungeon.map_landmarks.values()))
 
     def test_return_to_the_same_surface_and_interiors(self):
         dungeon = Dungeon(puzzle_chance=0)

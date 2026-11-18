@@ -91,6 +91,7 @@ class Dungeon:
         self.jungle_controls = {}
         self.jungle_keys = set()
         self.jungle_starter_cache = None
+        self.jungle_bag_cache = None
         self.explored_tiles = {}
         self.map_landmarks = {}
         self.interior = interior

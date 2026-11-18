@@ -8,6 +8,7 @@ from elenor.entities.objects import JUNGLE_KEY_COLORS
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
 from elenor.rendering.lighting import GPULightShader
+from elenor.rendering.visibility import canopy_visibility
 from elenor.ui.renderer import UIRendererMixin
 
 class Renderer(UIRendererMixin):
@@ -611,10 +612,14 @@ class Renderer(UIRendererMixin):
                     key = "floor_pebble_shore" if end else "floor_lake_deep"
                 elif t_val in TALL_TREE_MAP:
                     key, tree_asset_key = TALL_TREE_MAP[t_val]
-                    if (c, r) in visible_tiles:
+                    visible_base = (
+                        canopy_visibility(fov_mask, sx, sy) if t_val != 5
+                        else float((c, r) in visible_tiles)
+                    )
+                    if visible_base > 0.0:
                         if t_val != 5 and (c*17 + r*23) % 9 == 0:
                             tree_asset_key = {21:"tree_jungle",22:"tree_palm",56:"tree_bone",57:"tree_dead_mangrove"}[t_val]
-                        tall_trees_to_draw.append((c, r, tree_asset_key))
+                        tall_trees_to_draw.append((c, r, tree_asset_key, visible_base))
                 else:
                     key = TILE_ROLE_MAP.get(t_val, f"floor_{t_val}")
                 d_surf, n_surf = self.get_tile_pair(key, c, r)
@@ -687,12 +692,13 @@ class Renderer(UIRendererMixin):
             "alpha": 255
         }]
 
-        for (tc, tr, tree_asset_key) in tall_trees_to_draw:
+        for (tc, tr, tree_asset_key, visible_base) in tall_trees_to_draw:
             behind_canopy = (tr - 1.8 <= player.y <= tr + 0.35) and (abs(player.x - (tc + 0.5)) <= 1.05)
             t_alpha = 105 if behind_canopy else 255
             render_list.append({
                 "wx": float(tc), "wy": float(tr),
                 "is_tree": True,
+                "canopy_visibility": visible_base,
                 "pair": self.assets.get(tree_asset_key, self.assets["tall_tree"]),
                 "alpha": t_alpha
             })
@@ -832,7 +838,9 @@ class Renderer(UIRendererMixin):
                                 mask = pygame.surfarray.array_alpha(d_surf) > threshold
                                 self.alpha_mask_cache[id(d_surf)] = mask
                             alpha = mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
-                            source = 1.0 if ent.get("is_tree", False) else fov_mask[cx0:cx1, cy0:cy1]
+                            source = fov_mask[cx0:cx1, cy0:cy1]
+                            if ent.get("is_tree", False):
+                                source = np.maximum(source, ent["canopy_visibility"])
                             np.copyto(scene_fov[cx0:cx1, cy0:cy1], source, where=alpha)
                     em_role = ent.get("emissive_role")
                     if em_role:

@@ -5,13 +5,24 @@ import pygame
 
 from elenor.config import TILE_H, TILE_W, VIEW_H, VIEW_W
 from elenor.entities import Interactable
-from elenor.rendering.visibility import visible_lit_tiles
+from elenor.rendering.visibility import canopy_visibility, visible_lit_tiles
 from elenor.ui.exploration_map import INK, TERRAIN, chart_surface, discovered_landmarks
 from elenor.world.dungeon import Door, Dungeon
 from elenor.world.exploration import remember_tiles
 
 
 class ExplorationMapTests(unittest.TestCase):
+    def test_canopy_visibility_ignores_a_ray_along_the_footprint(self):
+        mask = np.zeros((VIEW_W, VIEW_H), dtype=np.float32)
+        mask[24:28, 20:28] = 1
+        self.assertEqual(canopy_visibility(mask, 16, 16), 0.0)
+        mask.fill(0)
+        mask[19:26, 19:29] = 1
+        self.assertLess(canopy_visibility(mask, 16, 16), 1.0)
+        self.assertGreater(canopy_visibility(mask, 16, 16), 0.0)
+        mask[19:29, 19:29] = 1
+        self.assertEqual(canopy_visibility(mask, 16, 16), 1.0)
+
     def test_survey_requires_both_light_and_line_of_sight(self):
         scene = pygame.Surface((VIEW_W, VIEW_H))
         scene.fill((0, 0, 0))

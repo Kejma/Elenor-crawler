@@ -158,7 +158,13 @@ class CombatMixin:
                 self.sfx.play("hurt")
                 self.emit_noise(dx + 0.5, dy + 0.5, 4.5)
                 self.trigger_event_thought("door_locked")
-                label = self.loc["jungle_route"]["mechanism"] if (dx, dy) == self.dungeon.jungle_gate else "ЗАПЕРТО"
+                labels = self.loc["jungle_route"]
+                if (dx, dy) == self.dungeon.jungle_gate:
+                    label = labels["mechanism"]
+                elif any(door in puzzle.target_doors for puzzle in self.mirror_puzzles):
+                    label = labels["mirror_lock"]
+                else:
+                    label = "ЗАПЕРТО"
                 self.add_popup(dx + 0.5, dy + 0.5, label, (255, 120, 100))
             else:
                 if door.is_open:
@@ -271,8 +277,10 @@ class CombatMixin:
         elif obj.kind in JUNGLE_CHESTS:
             if (obj.x, obj.y) == self.dungeon.jungle_starter_cache:
                 drop = self.make_item("rusty_dagger", rarity="common")
+            elif (obj.x, obj.y) == self.dungeon.jungle_bag_cache:
+                drop = self.make_item("small_pouch")
             else:
-                drop = self.roll_item_by_rarity(allowed_types=["equipment", "consumable"])
+                drop = self.roll_item_by_rarity(allowed_types=["equipment", "consumable", "bag"])
             self.objects.append(Interactable(obj.x, obj.y, "loot", drop))
             self.sfx.play("door")
             self.trigger_event_thought("chest_pick_ok", item=drop.name)

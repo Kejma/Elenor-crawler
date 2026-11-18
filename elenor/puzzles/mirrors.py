@@ -585,6 +585,7 @@ def setup_mirror_puzzle_in_room(
         if key_tile is None:
             # An unlucky floor must never require an unreachable key.
             ctrl.emitter_state = "ready"
+            emitter_obj.kind = "light_emitter"
     if key_tile is not None and emitter_mode == "need_lever":
         kx, ky = key_tile
         p_lev = InteractableCls(kx, ky, "lever_off")
@@ -626,13 +627,17 @@ def spawn_floor_mirror_puzzle(
         return None
 
     game.mobs = [m for m in game.mobs if not p_rect.inflate(2, 2).collidepoint(int(m.x), int(m.y))]
-    game.objects = [o for o in game.objects if not p_rect.inflate(2, 2).collidepoint(o.x, o.y)]
+    clear_area = p_rect.inflate(2, 2)
+    game.objects = [
+        o for o in game.objects
+        if (o.x, o.y) in dungeon.jungle_controls or not clear_area.collidepoint(o.x, o.y)
+    ]
 
     cr, cg, cb = beam_color
     dungeon.room_lights.append({
         "x": p_rect.centerx, "y": p_rect.centery,
-        "color": (0.48 + (cr / 255.0) * 0.52, 0.48 + (cg / 255.0) * 0.52, 0.58 + (cb / 255.0) * 0.52),
-        "radius": 155.0
+        "color": (0.18 + cr / 1700.0, 0.18 + cg / 1700.0, 0.23 + cb / 1700.0),
+        "radius": 126.0
     })
 
     target_doors = [gate_door] if gate_door is not None else []
@@ -1027,7 +1032,7 @@ def update_mirror_puzzles(game, dt):
 
 
 def inject_mirror_puzzle_lights(game, lights, player_open_tiles, register_light_fn):
-    """Передаёт усиленное 2.5D-освещение луча и кристаллов в шейдер ModernGL."""
+    """Add local light from the crystals and reflected beam."""
     for ctrl in getattr(game, "mirror_puzzles", []):
         if ctrl.emitter_state == "need_lever":
             continue
@@ -1036,25 +1041,25 @@ def inject_mirror_puzzle_lights(game, lights, player_open_tiles, register_light_
             if (em.x, em.y) in player_open_tiles:
                 ex_w, ey_w = (em.x + 0.5) * TILE_W, (em.y + 0.5) * TILE_H
                 bc = getattr(em, "beam_color", ctrl.beam_color)
-                mult = 0.65 if ctrl.emitter_state == "need_lens" else 1.25
-                l_col = ((bc[0] / 160.0) * mult, (bc[1] / 160.0) * mult, (bc[2] / 160.0) * mult)
-                rad = 52.0 if ctrl.emitter_state == "need_lens" else 84.0
+                mult = 0.20 if ctrl.emitter_state == "need_lens" else 0.34
+                l_col = tuple(channel / 255.0 * mult for channel in bc)
+                rad = 38.0 if ctrl.emitter_state == "need_lens" else 52.0
                 register_light_fn(ex_w, ey_w, ey_w, 22.0, rad, l_col, None, ignore_d=True)
 
         if ctrl.solved and (ctrl.receiver.x, ctrl.receiver.y) in player_open_tiles:
             rx_w, ry_w = (ctrl.receiver.x + 0.5) * TILE_W, (ctrl.receiver.y + 0.5) * TILE_H
             bc = ctrl.beam_color
-            l_col = (min(1.65, bc[0] / 145.0 + 0.30), min(1.65, bc[1] / 145.0 + 0.30), min(1.65, bc[2] / 145.0 + 0.30))
-            register_light_fn(rx_w, ry_w, ry_w, 24.0, 102.0, l_col, None, ignore_d=True)
+            l_col = tuple(0.06 + channel / 710.0 for channel in bc)
+            register_light_fn(rx_w, ry_w, ry_w, 24.0, 49.0, l_col, None, ignore_d=True)
 
         lights_added = 0
         for (x0, y0), (x1, y1), _, b_col in ctrl.beam_segments:
-            if lights_added >= 8:
+            if lights_added >= 4:
                 break
             mx, my = (x0 + x1) * 0.5, (y0 + y1) * 0.5
             if (int(mx), int(my)) in player_open_tiles:
                 lights_added += 1
-                l_col = (b_col[0] / 155.0, b_col[1] / 155.0, b_col[2] / 155.0)
-                register_light_fn(mx * TILE_W, my * TILE_H, my * TILE_H, 18.0, 78.0, l_col, None, ignore_d=True)
+                l_col = tuple(channel / 1500.0 for channel in b_col)
+                register_light_fn(mx * TILE_W, my * TILE_H, my * TILE_H, 18.0, 36.0, l_col, None, ignore_d=True)
 
 

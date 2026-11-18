@@ -23,8 +23,6 @@ TERRAIN = {
 }
 MARKER_STYLE = {
     "village": ("square", (242, 180, 94)),
-    "ford": ("lines", (176, 222, 244)),
-    "log": ("slash", (236, 202, 152)),
     "pier": ("circle", (102, 233, 222)),
     "temple": ("triangle", (228, 171, 249)),
     "cave": ("arch", (200, 207, 248)),
@@ -55,7 +53,7 @@ def chart_surface(dungeon, region=None):
 
 def discovered_landmarks(dungeon):
     for position, kind in (dungeon.map_landmarks | dungeon.passages).items():
-        if position in dungeon.explored_tiles:
+        if kind in MARKER_STYLE and position in dungeon.explored_tiles:
             yield position, kind
 
 
@@ -100,23 +98,6 @@ def draw_marker(screen, kind, point, radius=8):
                 (x - radius + 1, y + radius - 2),
             ],
             3,
-        )
-    elif shape == "lines":
-        for offset in (-3, 3):
-            pygame.draw.line(
-                screen,
-                color,
-                (x - radius + 1, y + offset),
-                (x + radius - 1, y + offset),
-                2,
-            )
-    elif shape == "slash":
-        pygame.draw.line(
-            screen,
-            color,
-            (x - radius + 2, y + radius - 2),
-            (x + radius - 2, y - radius + 2),
-            4,
         )
     else:
         tip, upper, lower = {

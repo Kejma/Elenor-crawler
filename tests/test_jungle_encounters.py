@@ -21,6 +21,7 @@ class JungleEncountersTests(unittest.TestCase):
         game._populate_floor(1)
 
         self.assertTrue(game.mobs)
+        self.assertGreaterEqual(len(game.mobs), 30)
         self.assertEqual(
             set(ATTACKS), {kind for group in HABITATS.values() for _, kind in group}
             | {kind for _, kind in GUARDIANS.values()},
@@ -32,6 +33,15 @@ class JungleEncountersTests(unittest.TestCase):
         self.assertTrue(any(o.kind == "campfire" and (o.x, o.y) in near_start for o in game.objects))
         self.assertIn(dungeon.jungle_starter_cache, reachable_floor_tiles(dungeon, dungeon.start_pos))
         self.assertNotIn(dungeon.jungle_starter_cache, near_start)
+
+        game.inv_open = False
+        x, y = dungeon.jungle_bag_cache
+        self.assertNotEqual((x, y), dungeon.jungle_starter_cache)
+        game.player.x, game.player.y = x + 0.5, y + 0.5
+        game.try_interact_or_melee(game.player.x, game.player.y)
+        loot = next(o for o in game.objects if o.kind == "loot" and o.item.id == "small_pouch")
+        game._pickup_loot_object(loot)
+        self.assertEqual(game.player.unlocked_slots, 6)
 
     def arena(self):
         dungeon = empty_dungeon()

@@ -180,7 +180,7 @@ BASE_ITEMS_DB = {
     "hunting_bolas": {
         "type": "equipment", "slot": "right_hand", "two_handed": False, "weap_style": "thrown",
         "dmg_min": 2, "dmg_max": 4, "atk_cd": 0.50, "reach": 5.0, "proj_visual": "thrown_bolas",
-        "proj_speed": 8.8, "color": [185, 165, 130], "status": "root", "status_dur": 2.0, "status_chance": 0.85, "knockback": 0.10, "icon": "weapon_bolas"
+        "proj_speed": 8.8, "color": [185, 165, 130], "status": "root", "status_dur": 2.0, "status_chance": 0.35, "knockback": 0.10, "icon": "weapon_bolas"
     },
     "francisca_axe": {
         "type": "equipment", "slot": "right_hand", "two_handed": False, "weap_style": "thrown",
@@ -218,9 +218,9 @@ BASE_ITEMS_DB = {
     "scroll_spark": {"type": "consumable_spell", "cast_type": "beam", "status": "stun", "status_dur": 1.5, "cooldown": 1.2, "power": 10, "color": [90, 235, 255], "icon": "skill_zap"},
     "scroll_fireball": {"type": "consumable_spell", "cast_type": "aoe_cursor", "aoe_radius": 2.1, "status": "poison", "status_dur": 5.0, "cooldown": 1.5, "power": 12, "color": [110, 245, 95], "icon": "bomb"},
     "oblivion_seal": {"type": "consumable_eraser", "icon": "trinket"},
-    "small_pouch": {"type": "bag", "slots": 6, "icon": "bag_small"},
-    "pouch_bag": {"type": "bag", "slots": 10, "icon": "bag_small"},
-    "scout_satchel": {"type": "bag", "slots": 15, "icon": "bag_big"},
-    "travel_backpack": {"type": "bag", "slots": 20, "icon": "bag_big"},
-    "void_chest_bag": {"type": "bag", "slots": 24, "icon": "bag_big"},
+    "small_pouch": {"type": "bag", "rarity": "common", "slots": 6, "icon": "bag_small"},
+    "pouch_bag": {"type": "bag", "rarity": "uncommon", "slots": 10, "icon": "bag_small"},
+    "scout_satchel": {"type": "bag", "rarity": "rare", "slots": 15, "icon": "bag_big"},
+    "travel_backpack": {"type": "bag", "rarity": "epic", "slots": 20, "icon": "bag_big"},
+    "void_chest_bag": {"type": "bag", "rarity": "legendary", "slots": 24, "icon": "bag_big"},
 }

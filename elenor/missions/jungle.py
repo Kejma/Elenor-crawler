@@ -11,4 +11,4 @@ def populate_jungle_floor(game, Interactable):
         spawn_floor_mirror_puzzle(
             game, Interactable, beam_color=(106, 224, 172), ambush_enabled=False
         )
-    populate_encounters(game, Interactable)
+    populate_encounters(game)

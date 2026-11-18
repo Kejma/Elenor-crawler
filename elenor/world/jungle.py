@@ -359,7 +359,6 @@ def river_crossings(plan, wet, island):
                     plan.d.overlays[point] = "ov_water_lily"
         left, right = channel[y]
         landings.extend(((left - 2, y), (right + 2, y)))
-        plan.d.map_landmarks[((left + right) // 2, y)] = "ford"
 
     bands = [range(24, 34), range(51, 62)]
     plan.rng.shuffle(bands)
@@ -379,7 +378,6 @@ def river_crossings(plan, wet, island):
     plan.routes.update(trunk | bank)
     plan.light((left - 2, row), 63, (0.4, 0.62, 0.58))
     landings.extend(((left - 2, row), (right + 2, row)))
-    plan.d.map_landmarks[((left + right) // 2, row)] = "log"
     plan.crossing_approaches = list(zip(landings[::2], landings[1::2]))
     return landings
 
@@ -840,7 +838,10 @@ def surface(plan, relief):
             stashes.append(point)
         if len(stashes) == 3:
             break
-    optional_vault(plan, temple_gate, start)
+    if plan.d.floor_num == 1:
+        if not stashes:
+            raise LayoutError("No reachable cache for a starter pouch")
+        plan.d.jungle_bag_cache = stashes[0]
     reserved = dilate(plan.structure | plan.water | plan.bridges | plan.occupied, 2)
     dress_verges(plan, main_road, region, reserved)
     return start
@@ -1087,6 +1088,7 @@ def generate_jungle_floor(dungeon):
         dungeon.jungle_props = []
         dungeon.jungle_habitats = []
         dungeon.jungle_gate = dungeon.jungle_starter_cache = None
+        dungeon.jungle_bag_cache = None
         for name in ("rooms", "braziers", "room_lights", "fog_zones", "atmo_zones",
                      "overlays", "moss_tiles", "invisible_bounds", "passages", "map_landmarks",
                      "fishing_edges", "doors", "levers", "jungle_controls"):
