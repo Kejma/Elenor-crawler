@@ -3,6 +3,8 @@ import random
 import unittest
 from unittest.mock import Mock
 
+import pygame
+
 from elenor.entities import Enemy
 from elenor.entities.jungle_combat import ATTACKS, HEAL, POUNCE, STOMP
 from elenor.missions.jungle_encounters import EARLY_STATS, GUARDIANS, HABITATS
@@ -41,7 +43,7 @@ class JungleEncountersTests(unittest.TestCase):
         game.try_interact_or_melee(game.player.x, game.player.y)
         loot = next(o for o in game.objects if o.kind == "loot" and o.item.id == "small_pouch")
         game._pickup_loot_object(loot)
-        self.assertEqual(game.player.unlocked_slots, 6)
+        self.assertEqual(game.player.unlocked_slots, game.player.pocket_slots + 2)
 
     def arena(self):
         dungeon = empty_dungeon()
@@ -49,6 +51,16 @@ class JungleEncountersTests(unittest.TestCase):
             for x in range(8, 17):
                 dungeon.grid[y][x] = 0
         return dungeon, HeadlessGame(dungeon)
+
+    def test_alerted_enemy_keeps_chasing_far_from_spawn(self):
+        dungeon, game = self.arena()
+        dungeon._carve_rect(pygame.Rect(5, 8, 22, 6), 10)
+        mob = Enemy(6, 10, "jungle_gremlin", state="combat")
+        mob.x = 17.5
+        game.player.x = 22.5
+        mob.update_ai(.10, game.player, dungeon, [mob], [], game.sfx, game.add_popup, Mock())
+        self.assertEqual(mob.state, "combat")
+        self.assertGreater(mob.x, 17.5)
 
     def test_shaman_channels_a_bounded_heal_for_a_tribal_ally(self):
         dungeon, game = self.arena()

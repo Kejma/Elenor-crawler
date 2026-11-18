@@ -4,7 +4,7 @@ import random
 
 from elenor.audio.voices import choose_voice, next_call_delay
 from elenor.entities.effects import Projectile
-from elenor.entities.jungle_combat import ATTACKS, TRIBE, WARDEN_LEASH, update_jungle_combat
+from elenor.entities.jungle_combat import ATTACKS, TRIBE, update_jungle_combat
 
 
 MOB_PROFILES = {
@@ -388,13 +388,6 @@ class Enemy:
 
         if self.jungle_home is not None:
             distance_home = math.dist((self.x, self.y), self.jungle_home)
-            if self.state == "combat" and distance_home > WARDEN_LEASH:
-                self.state = "returning"
-                self.jungle_windup = None
-                self.jungle_dash = None
-                self.cast_windup_timer = 0.0
-                self.awareness = 0.0
-                self.path_timer = 0.0
             if self.state == "returning":
                 if distance_home > 0.5:
                     self._follow_astar_path(*self.jungle_home, dt, dungeon, all_mobs)

@@ -12,16 +12,31 @@ from elenor.world.exploration import remember_tiles
 
 
 class ExplorationMapTests(unittest.TestCase):
-    def test_canopy_visibility_ignores_a_ray_along_the_footprint(self):
-        mask = np.zeros((VIEW_W, VIEW_H), dtype=np.float32)
-        mask[24:28, 20:28] = 1
-        self.assertEqual(canopy_visibility(mask, 16, 16), 0.0)
-        mask.fill(0)
-        mask[19:26, 19:29] = 1
-        self.assertLess(canopy_visibility(mask, 16, 16), 1.0)
-        self.assertGreater(canopy_visibility(mask, 16, 16), 0.0)
-        mask[19:29, 19:29] = 1
-        self.assertEqual(canopy_visibility(mask, 16, 16), 1.0)
+    def test_exposed_canopies_stay_visible_along_a_straight_corridor(self):
+        dungeon = Dungeon()
+        dungeon._carve_rect(pygame.Rect(4, 7, 26, 6), 10)
+        for row in (8, 10):
+            for x in range(5, 29):
+                dungeon.grid[row][x] = 21
+                dungeon.thickets.add((x, row))
+
+        for player_x in (9.1, 9.35, 9.6, 9.85, 10.1, 10.35):
+            for row in (8, 10):
+                for x in range(7, 16):
+                    self.assertEqual(canopy_visibility(dungeon, player_x, 9.5, x, row), 1.0,
+                                     (player_x, x, row))
+
+    def test_wall_and_other_trees_can_occlude_a_crown(self):
+        dungeon = Dungeon()
+        dungeon._carve_rect(pygame.Rect(5, 5, 15, 10), 10)
+        for x in range(5, 20):
+            dungeon.grid[9][x] = 1
+        self.assertEqual(canopy_visibility(dungeon, 9.5, 7.5, 9, 11), 0.0)
+        for x in range(5, 20):
+            dungeon.grid[9][x] = 21
+            dungeon.thickets.add((x, 9))
+        self.assertEqual(canopy_visibility(dungeon, 9.5, 7.5, 9, 11), 0.0)
+        self.assertEqual(canopy_visibility(dungeon, 9.5, 7.5, 9, 9), 1.0)
 
     def test_survey_requires_both_light_and_line_of_sight(self):
         scene = pygame.Surface((VIEW_W, VIEW_H))

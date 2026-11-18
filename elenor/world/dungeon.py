@@ -85,6 +85,7 @@ class Dungeon:
 
     def generate(self, floor_num=1, *, campaign="rats", interior=None, route_variant=0):
         self.floor_num = floor_num
+        self.campaign = campaign
         self.thickets = set()
         self.passages = {}
         self.jungle_gate = None
@@ -601,20 +602,27 @@ class Dungeon:
         door = self.doors.get((tx, ty))
         return self.grid[ty][tx] in OPAQUE_WALL_TILES or bool(door and not door.is_open)
 
-    def has_line_of_sight(self, x0, y0, x1, y1, max_dist):
+    def has_line_of_sight(self, x0, y0, x1, y1, max_dist, *, target_thicket=None):
         dx = x1 - x0
         dy = y1 - y0
         dist = math.hypot(dx, dy)
         if dist > max_dist:
             return False
         steps = int(dist * (8.0 if self.thickets else 3.0)) + 1
-        for i in range(1, steps):
+        previous = (math.floor(x0), math.floor(y0))
+        for i in range(1, steps + (target_thicket is not None)):
             t = i / steps
             x, y = x0 + dx * t, y0 + dy * t
             cx, cy = math.floor(x), math.floor(y)
             if self.is_blocking_sight(cx, cy, include_thickets=False):
                 return False
-            if (cx, cy) in self.thickets:
+            if target_thicket is not None:
+                px, py = previous
+                if (px != cx and py != cy
+                        and self.is_blocking_sight(cx, py) and self.is_blocking_sight(px, cy)):
+                    return False
+                previous = (cx, cy)
+            if (cx, cy) != target_thicket and (cx, cy) in self.thickets:
                 ox, oy = x - cx - 0.5, y - cy - 0.5
                 if (ox * ox + oy * oy <= 0.22 ** 2
                         or abs(oy) <= 0.15 and (cx + (1 if ox > 0 else -1), cy) in self.thickets

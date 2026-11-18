@@ -195,6 +195,7 @@ class RedesignTests(unittest.TestCase):
         update_physical(g, 0.3)
         health = m.hp
         self.assertLess(health, 100)
+        self.assertEqual([fx["kind"] for fx in g.physical_effects], ["trap_snap"])
         update_physical(g, 0.5)
         self.assertEqual(m.hp, health)
         hp = g.player.hp

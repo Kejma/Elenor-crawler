@@ -316,6 +316,7 @@ def update_physical(game, dt):
                         game, state["x"], state["y"], 12, [(220, 230, 245), (95, 240, 135), (235, 70, 70)], (1.2, 3.0), 2.6, 0.28
                     )
                     hit(game, target, item, state["power"], state["credit"], 0, 0)
-                    state["timer"] = 0
+                    game.play_spatial("hit", state["x"], state["y"])
+                    state.update(kind="trap_snap", timer=.24, max_timer=.24)
         if state["timer"] <= 0:
             effects(game).remove(state)

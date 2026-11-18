@@ -9,7 +9,8 @@ from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
 from elenor.rendering.lighting import GPULightShader
-from elenor.rendering.visibility import CanopyVisibility, canopy_opacity
+from elenor.rendering.pixel_fx import PixelLayer
+from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, canopy_visibility
 from elenor.ui.renderer import UIRendererMixin
 
 class Renderer(UIRendererMixin):
@@ -25,6 +26,7 @@ class Renderer(UIRendererMixin):
         self.emissive_cache = {}
         self.alpha_mask_cache = {}
         self.canopy_visibility = CanopyVisibility()
+        self.combat_pixels = PixelLayer()
         self.jungle_attack_cache = {}
         self._shadow_small = pygame.Surface((10, 4), pygame.SRCALPHA)
         pygame.draw.ellipse(self._shadow_small, (8, 6, 12, 120), (0, 0, 10, 4))
@@ -619,7 +621,11 @@ class Renderer(UIRendererMixin):
                     key = "floor_pebble_shore" if end else "floor_lake_deep"
                 elif t_val in TALL_TREE_MAP:
                     key, tree_asset_key = TALL_TREE_MAP[t_val]
-                    visible_base = self.canopy_visibility.sample((c, r), fov_mask, sx, sy)
+                    # Hidden ground within the tree's own footprint is not a visibility test for its crown.
+                    target = canopy_visibility(dungeon, player.x, player.y, c, r)
+                    if ui_texts.get("_reveal_map", False):
+                        target = 1.0
+                    visible_base = self.canopy_visibility.sample((c, r), target)
                     if visible_base > 0.006:
                         if t_val != 5 and (c*17 + r*23) % 9 == 0:
                             tree_asset_key = {21:"tree_jungle",22:"tree_palm",56:"tree_bone",57:"tree_dead_mangrove"}[t_val]
@@ -1064,6 +1070,19 @@ class Renderer(UIRendererMixin):
                 msy = dm["wy"] * TILE_H - cam_y
                 if not (2 <= msx < VIEW_W - 2 and 2 <= msy < VIEW_H - 2):
                     continue
+                nx, ny = int(msx), int(msy)
+                if fov_mask[nx, ny] < .5:
+                    continue
+                if dm["kind"] == "firefly":
+                    distance = math.hypot(dm["wx"] - player.x, dm["wy"] - player.y)
+                    pulse = max(0.0, math.sin(dm["phase"] * 2.2)) ** 3
+                    brightness = pulse * max(0.0, min(1.0, (8.0 - distance) / 3.0))
+                    if brightness > .12:
+                        edge = tuple(round(c * brightness) for c in (86, 128, 44))
+                        core = tuple(round(c * brightness) for c in (233, 247, 123))
+                        pygame.draw.rect(screen, edge, ((nx - 1) * SCALE, ny * SCALE, 3 * SCALE, SCALE))
+                        pygame.draw.rect(screen, core, (nx * SCALE, ny * SCALE, SCALE, SCALE))
+                    continue
                 # Проверяем освещённость точки пылинки от реальных источников света (пропуская базовое ночное зрение lights[0])
                 m_lum = 0.0
                 m_col = [180, 170, 140]
@@ -1084,8 +1103,8 @@ class Renderer(UIRendererMixin):
                     twinkle = 0.65 + 0.35 * math.sin(dm["phase"] * 2.5)
                     br_factor = min(1.0, m_lum * twinkle * 1.3)
                     final_c = (int(m_col[0] * br_factor), int(m_col[1] * br_factor), int(m_col[2] * br_factor))
-                    sz_p = dm["size"] * 2
-                    pygame.draw.rect(screen, final_c, (int(msx * SCALE), int(msy * SCALE), sz_p, sz_p))
+                    sz_p = SCALE if "anchor" in dm else dm["size"] * 2
+                    pygame.draw.rect(screen, final_c, (nx * SCALE, ny * SCALE, sz_p, sz_p))
 
         # Precision targeting works silently under the hood (visual reticle removed as requested)
 
@@ -1095,7 +1114,7 @@ class Renderer(UIRendererMixin):
             sy = int((pt.wy * TILE_H - cam_y) * SCALE)
             if 0 <= sy < VIEW_H * SCALE:
                 rad = max(2, int(pt.size * (pt.life / pt.max_life) * SCALE * 0.6))
-                pygame.draw.circle(screen, pt.color, (sx, sy), rad)
+                self.combat_pixels.circle(pt.color, (sx, sy), rad)
 
         for pr in projectiles:
             sx = int((pr.wx * TILE_W - cam_x) * SCALE)
@@ -1112,54 +1131,53 @@ class Renderer(UIRendererMixin):
                     pommel = (int(sx - cos_a * 12), int(sy - sin_a * 12))
                     g1 = (int(guard_c[0] + perp_x * 6), int(guard_c[1] + perp_y * 6))
                     g2 = (int(guard_c[0] - perp_x * 6), int(guard_c[1] - perp_y * 6))
-                    pygame.draw.line(screen, (20, 18, 26), pommel, tip, 6)
-                    pygame.draw.line(screen, (135, 82, 42), pommel, guard_c, 4)
-                    pygame.draw.line(screen, (215, 175, 70), g1, g2, 3)
-                    pygame.draw.line(screen, (210, 220, 235), guard_c, tip, 4)
-                    pygame.draw.line(screen, (250, 252, 255), guard_c, tip, 2)
+                    self.combat_pixels.line((20, 18, 26), pommel, tip, 6)
+                    self.combat_pixels.line((135, 82, 42), pommel, guard_c, 4)
+                    self.combat_pixels.line((215, 175, 70), g1, g2, 3)
+                    self.combat_pixels.line((210, 220, 235), guard_c, tip, 4)
+                    self.combat_pixels.line((250, 252, 255), guard_c, tip, 2)
                 elif vk in ("thrown_javelin", "blowdart"):
                     length, line_width = (9, 2) if vk == "blowdart" else (18, 3)
                     tail = (int(sx - cos_a * length), int(sy - sin_a * length))
                     neck = (int(sx + cos_a * length / 3), int(sy + sin_a * length / 3))
                     tip = (int(sx + cos_a * length), int(sy + sin_a * length))
-                    pygame.draw.line(screen, (20, 18, 26), tail, tip, line_width + 2)
-                    pygame.draw.line(screen, (150, 98, 48), tail, neck, line_width)
-                    pygame.draw.line(screen, (220, 230, 245), neck, tip, line_width)
+                    self.combat_pixels.line((20, 18, 26), tail, tip, line_width + 2)
+                    self.combat_pixels.line((150, 98, 48), tail, neck, line_width)
+                    self.combat_pixels.line((220, 230, 245), neck, tip, line_width)
                 elif vk == "thrown_axe":
                     haft0 = (int(sx - cos_a * 12), int(sy - sin_a * 12))
                     haft1 = (int(sx + cos_a * 10), int(sy + sin_a * 10))
                     b1 = (int(haft1[0] + perp_x * 9), int(haft1[1] + perp_y * 9))
                     b2 = (int(sx + cos_a * 3 + perp_x * 7), int(sy + sin_a * 3 + perp_y * 7))
-                    pygame.draw.line(screen, (145, 90, 44), haft0, haft1, 4)
-                    pygame.draw.polygon(screen, (215, 225, 240), [haft1, b1, b2])
+                    self.combat_pixels.line((145, 90, 44), haft0, haft1, 4)
+                    self.combat_pixels.polygon((215, 225, 240), [haft1, b1, b2])
                 elif vk == "thrown_chakram":
-                    pygame.draw.circle(screen, (25, 22, 32), (sx, sy), 12, 5)
-                    pygame.draw.circle(screen, (220, 235, 250), (sx, sy), 11, 3)
-                    pygame.draw.circle(screen, (255, 220, 95), (int(sx + cos_a * 9), int(sy + sin_a * 9)), 3)
+                    self.combat_pixels.circle((25, 22, 32), (sx, sy), 12, 5)
+                    self.combat_pixels.circle((220, 235, 250), (sx, sy), 11, 3)
+                    self.combat_pixels.circle((255, 220, 95), (int(sx + cos_a * 9), int(sy + sin_a * 9)), 3)
                 elif vk == "thrown_bolas":
                     for b_i in range(3):
                         ba = ang + b_i * (2.0 * math.pi / 3.0)
                         bx = int(sx + math.cos(ba) * 11)
                         by = int(sy + math.sin(ba) * 11)
-                        pygame.draw.line(screen, (155, 108, 58), (sx, sy), (bx, by), 2)
-                        pygame.draw.circle(screen, (180, 185, 198), (bx, by), 4)
+                        self.combat_pixels.line((155, 108, 58), (sx, sy), (bx, by), 2)
+                        self.combat_pixels.circle((180, 185, 198), (bx, by), 4)
                 elif vk == "sling_stone":
-                    pygame.draw.circle(screen, (30, 28, 36), (sx, sy), 6)
-                    pygame.draw.circle(screen, (190, 198, 210), (sx, sy), 4)
+                    self.combat_pixels.circle((30, 28, 36), (sx, sy), 6)
+                    self.combat_pixels.circle((190, 198, 210), (sx, sy), 4)
                 else:
-                    # Огненная / магическая комета с пламенным хвостом и пульсирующим ядром
-                    c_r, c_g, c_b = pr.color
-                    dark_tail = (max(0, c_r - 70), max(0, c_g // 2), max(0, c_b // 2))
-                    tail_tip = (int(sx - cos_a * 26), int(sy - sin_a * 26))
-                    tail_mid = (int(sx - cos_a * 16), int(sy - sin_a * 16))
-                    w1 = (int(sx - cos_a * 4 + perp_x * 9), int(sy - sin_a * 4 + perp_y * 9))
-                    w2 = (int(sx - cos_a * 4 - perp_x * 9), int(sy - sin_a * 4 - perp_y * 9))
-                    pygame.draw.polygon(screen, dark_tail, [tail_tip, w1, w2])
-                    pygame.draw.polygon(screen, pr.color, [tail_mid, (int(sx + perp_x * 6), int(sy + perp_y * 6)), (int(sx - perp_x * 6), int(sy - perp_y * 6))])
-                    pygame.draw.circle(screen, dark_tail, (sx, sy), 11)
-                    pygame.draw.circle(screen, pr.color, (sx, sy), 8)
-                    pygame.draw.circle(screen, (255, 240, 155), (sx, sy), 5)
-                    pygame.draw.circle(screen, (255, 255, 245), (int(sx + cos_a * 2), int(sy + sin_a * 2)), 3)
+                    # Blocky embers separate from the glowing projectile core.
+                    r, g, b = pr.color
+                    shadow = (r // 2, g // 2, b // 2)
+                    core = tuple((c + 255) // 2 for c in pr.color)
+                    for step, side, size in ((6, -4, 8), (12, 2, 6), (21, -4, 4), (29, 7, 4)):
+                        trail = (sx - cos_a * step + perp_x * side, sy - sin_a * step + perp_y * side, size, size)
+                        self.combat_pixels.rect(pr.color if step < 18 else shadow, trail)
+                    self.combat_pixels.circle(shadow, (sx, sy), 12)
+                    self.combat_pixels.circle(pr.color, (sx, sy), 8)
+                    self.combat_pixels.rect(core, (sx - 2, sy - 4, 4, 4))
+
+        self.combat_pixels.flush(screen, fov_mask)
 
         # Enemy Awareness, HP, Ground Roots & Chattering Speech Bubbles (with Darkness Camouflage!)
         for m in mobs:
@@ -1316,31 +1334,33 @@ class Renderer(UIRendererMixin):
         p_sy_scr = int(((player.y - 0.35) * TILE_H - cam_y) * SCALE)
         p_foot_scr = int(((player.y + 0.05) * TILE_H - cam_y) * SCALE)
         if getattr(player, "rejuv_timer", 0.0) > 0.0:
-            pygame.draw.ellipse(screen, (45, 165, 85), (p_sx_scr - 24, p_foot_scr - 8, 48, 16), 2)
+            self.combat_pixels.ellipse((45, 165, 85), (p_sx_scr - 24, p_foot_scr - 8, 48, 16), 2)
             for ff_i in range(5):
                 ang = now_sec * 3.4 + ff_i * (math.tau / 5.0)
                 fx_s = p_sx_scr + int(math.cos(ang) * 23)
                 fy_s = p_sy_scr + int(math.sin(ang * 1.5) * 14)
-                pygame.draw.circle(screen, (55, 195, 95), (fx_s, fy_s), 6)
-                pygame.draw.circle(screen, (115, 250, 145), (fx_s, fy_s), 4)
-                pygame.draw.circle(screen, (235, 255, 235), (fx_s, fy_s), 2)
+                self.combat_pixels.circle((55, 195, 95), (fx_s, fy_s), 6)
+                self.combat_pixels.circle((115, 250, 145), (fx_s, fy_s), 4)
+                self.combat_pixels.circle((235, 255, 235), (fx_s, fy_s), 2)
                 # Восходящие изумрудные крестики исцеления
                 rise = (now_sec * 1.8 + ff_i * 0.37) % 1.0
                 cx_h = p_sx_scr + int(math.sin(ff_i * 2.1 + now_sec * 2.0) * 16)
                 cy_h = int(p_foot_scr - 4 - rise * 38)
-                pygame.draw.line(screen, (150, 255, 175), (cx_h - 3, cy_h), (cx_h + 3, cy_h), 2)
-                pygame.draw.line(screen, (150, 255, 175), (cx_h, cy_h - 3), (cx_h, cy_h + 3), 2)
+                self.combat_pixels.line((150, 255, 175), (cx_h - 3, cy_h), (cx_h + 3, cy_h), 2)
+                self.combat_pixels.line((150, 255, 175), (cx_h, cy_h - 3), (cx_h, cy_h + 3), 2)
         if getattr(player, "ignite_timer", 0.0) > 0.0:
-            pygame.draw.ellipse(screen, (215, 65, 20), (p_sx_scr - 24, p_foot_scr - 8, 48, 16), 3)
-            pygame.draw.ellipse(screen, (255, 195, 70), (p_sx_scr - 20, p_foot_scr - 6, 40, 12), 1)
+            self.combat_pixels.ellipse((215, 65, 20), (p_sx_scr - 24, p_foot_scr - 8, 48, 16), 3)
+            self.combat_pixels.ellipse((255, 195, 70), (p_sx_scr - 20, p_foot_scr - 6, 40, 12), 1)
             for fl_i in range(6):
                 ang = now_sec * 5.0 + fl_i * (math.tau / 6.0)
                 fx_s = p_sx_scr + int(math.cos(ang) * 20)
                 fy_s = p_sy_scr + 8 + int(math.sin(ang) * 10)
                 h_fl = 10 + int(math.sin(now_sec * 14.0 + fl_i * 1.7) * 4)
-                pygame.draw.polygon(screen, (220, 55, 20), [(fx_s - 5, fy_s), (fx_s, fy_s - h_fl - 4), (fx_s + 5, fy_s)])
-                pygame.draw.polygon(screen, (255, 145, 35), [(fx_s - 3, fy_s), (fx_s, fy_s - h_fl), (fx_s + 3, fy_s)])
-                pygame.draw.polygon(screen, (255, 240, 125), [(fx_s - 2, fy_s), (fx_s, fy_s - h_fl // 2), (fx_s + 2, fy_s)])
+                self.combat_pixels.polygon((220, 55, 20), [(fx_s - 5, fy_s), (fx_s, fy_s - h_fl - 4), (fx_s + 5, fy_s)])
+                self.combat_pixels.polygon((255, 145, 35), [(fx_s - 3, fy_s), (fx_s, fy_s - h_fl), (fx_s + 3, fy_s)])
+                self.combat_pixels.polygon((255, 240, 125), [(fx_s - 2, fy_s), (fx_s, fy_s - h_fl // 2), (fx_s + 2, fy_s)])
+
+        self.combat_pixels.flush(screen, fov_mask)
 
         for p in popups:
             sx = int((p.wx * TILE_W - cam_x) * SCALE)
@@ -1381,7 +1401,7 @@ class Renderer(UIRendererMixin):
                 cx_s = int((pa["tx"] * TILE_W - cam_x) * SCALE)
                 cy_s = int((pa["ty"] * TILE_H - cam_y) * SCALE)
                 r_px = int(pa["item"].aoe_radius * TILE_W * SCALE)
-                pygame.draw.circle(screen, pa["item"].color, (cx_s, cy_s), r_px, 2)
+                self.combat_pixels.broken_ring(pa["item"].color, (cx_s, cy_s), r_px)
 
 
         # Render Combat Skill & God Spell Visual FX
@@ -1400,17 +1420,17 @@ class Renderer(UIRendererMixin):
                 if 0 <= cy_s < VIEW_H * SCALE:
                     diamond_outer = [(cx_s, cy_s - 9), (cx_s + 6, cy_s), (cx_s, cy_s + 9), (cx_s - 6, cy_s)]
                     diamond_inner = [(cx_s, cy_s - 5), (cx_s + 3, cy_s), (cx_s, cy_s + 5), (cx_s - 3, cy_s)]
-                    pygame.draw.polygon(screen, (45, 165, 245), diamond_outer)
-                    pygame.draw.polygon(screen, (215, 250, 255), diamond_inner)
-                    pygame.draw.polygon(screen, (15, 45, 85), diamond_outer, 1)
+                    self.combat_pixels.polygon((45, 165, 245), diamond_outer)
+                    self.combat_pixels.polygon((215, 250, 255), diamond_inner)
+                    self.combat_pixels.polygon((15, 45, 85), diamond_outer, 1)
 
             elif vfx["kind"] == "fire_trail":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
                 cy_s = int((vfx["y"] * TILE_H - cam_y) * SCALE)
                 if 0 <= cy_s < VIEW_H * SCALE:
                     fade = max(0.2, 1.0 - prog)
-                    pygame.draw.ellipse(screen, (95, 25, 15), (cx_s - 15, cy_s - 6, 30, 14))
-                    pygame.draw.ellipse(screen, (185, 55, 20), (cx_s - 11, cy_s - 4, 22, 10), 2)
+                    self.combat_pixels.ellipse((95, 25, 15), (cx_s - 15, cy_s - 6, 30, 14))
+                    self.combat_pixels.ellipse((185, 55, 20), (cx_s - 11, cy_s - 4, 22, 10), 2)
                     seed_v = int((vfx["x"] * 37 + vfx["y"] * 73) * 10)
                     for f_i in range(5):
                         ox = ((seed_v + f_i * 11) % 21) - 10
@@ -1419,9 +1439,9 @@ class Renderer(UIRendererMixin):
                         fx_p = cx_s + ox
                         fy_p = cy_s + oy
                         h_flame = max(4, int(11 * fade) + flick)
-                        pygame.draw.polygon(screen, (205, 50, 20), [(fx_p - 4, fy_p + 2), (fx_p, fy_p - h_flame - 3), (fx_p + 4, fy_p + 2)])
-                        pygame.draw.polygon(screen, (255, 140, 30), [(fx_p - 3, fy_p + 1), (fx_p, fy_p - h_flame), (fx_p + 3, fy_p + 1)])
-                        pygame.draw.polygon(screen, (255, 240, 115), [(fx_p - 2, fy_p + 1), (fx_p, fy_p - max(2, h_flame // 2)), (fx_p + 2, fy_p + 1)])
+                        self.combat_pixels.polygon((205, 50, 20), [(fx_p - 4, fy_p + 2), (fx_p, fy_p - h_flame - 3), (fx_p + 4, fy_p + 2)])
+                        self.combat_pixels.polygon((255, 140, 30), [(fx_p - 3, fy_p + 1), (fx_p, fy_p - h_flame), (fx_p + 3, fy_p + 1)])
+                        self.combat_pixels.polygon((255, 240, 115), [(fx_p - 2, fy_p + 1), (fx_p, fy_p - max(2, h_flame // 2)), (fx_p + 2, fy_p + 1)])
 
             elif vfx["kind"] == "frost_nova":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
@@ -1433,14 +1453,14 @@ class Renderer(UIRendererMixin):
                     a_pt = i_pt * (math.tau / 24.0) + prog * 0.25
                     rad_pt = r_px * (1.06 if i_pt % 2 == 0 else 0.82)
                     star_pts.append((int(cx_s + math.cos(a_pt) * rad_pt), int(cy_s + math.sin(a_pt) * rad_pt)))
-                pygame.draw.polygon(screen, (45, 140, 215), star_pts, 5)
-                pygame.draw.polygon(screen, (115, 220, 255), star_pts, 3)
-                pygame.draw.circle(screen, (225, 250, 255), (cx_s, cy_s), max(4, int(r_px * 0.72)), 2)
+                self.combat_pixels.polygon((45, 140, 215), star_pts, 5)
+                self.combat_pixels.polygon((115, 220, 255), star_pts, 3)
+                self.combat_pixels.circle((225, 250, 255), (cx_s, cy_s), max(4, int(r_px * 0.72)), 2)
                 for sp_i in range(6):
                     a = sp_i * (math.pi / 3.0)
                     p1 = (int(cx_s + math.cos(a) * (r_px * 0.25)), int(cy_s + math.sin(a) * (r_px * 0.25)))
                     p2 = (int(cx_s + math.cos(a) * (r_px * 1.08)), int(cy_s + math.sin(a) * (r_px * 1.08)))
-                    pygame.draw.line(screen, (215, 248, 255), p1, p2, 3)
+                    self.combat_pixels.line((215, 248, 255), p1, p2, 3)
 
             elif vfx["kind"] == "chain_lightning":
                 pts = vfx["points"]
@@ -1459,22 +1479,22 @@ class Renderer(UIRendererMixin):
                         if seg in (2, 4):
                             bx = jx + int(math.cos(now_sec * 30.0 + seg + i) * 18)
                             by = jy + int(math.sin(now_sec * 30.0 + seg + i) * 18)
-                            pygame.draw.line(screen, (75, 195, 255), (jx, jy), (bx, by), 3)
-                            pygame.draw.line(screen, (235, 255, 255), (jx, jy), (bx, by), 1)
+                            self.combat_pixels.line((75, 195, 255), (jx, jy), (bx, by), 3)
+                            self.combat_pixels.line((235, 255, 255), (jx, jy), (bx, by), 1)
                     zig.append((x1_s, y1_s))
-                    pygame.draw.lines(screen, (40, 125, 220), False, zig, 9)
-                    pygame.draw.lines(screen, (105, 215, 255), False, zig, 5)
-                    pygame.draw.lines(screen, (245, 255, 255), False, zig, 2)
+                    self.combat_pixels.lines((40, 125, 220), False, zig, 9)
+                    self.combat_pixels.lines((105, 215, 255), False, zig, 5)
+                    self.combat_pixels.lines((245, 255, 255), False, zig, 2)
                     # Электрическая звезда в узле попадания
-                    pygame.draw.circle(screen, (95, 215, 255), (x1_s, y1_s), 12, 2)
-                    pygame.draw.circle(screen, (245, 255, 255), (x1_s, y1_s), 6)
+                    self.combat_pixels.circle((95, 215, 255), (x1_s, y1_s), 12, 2)
+                    self.combat_pixels.circle((245, 255, 255), (x1_s, y1_s), 6)
 
             elif vfx["kind"] == "entangle_zone":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
                 cy_s = int((vfx["y"] * TILE_H - cam_y) * SCALE)
                 r_px = max(6, int(vfx["radius"] * TILE_W * SCALE))
-                pygame.draw.circle(screen, (45, 95, 45), (cx_s, cy_s), r_px, 4)
-                pygame.draw.circle(screen, (105, 225, 115), (cx_s, cy_s), max(4, r_px - 6), 2)
+                self.combat_pixels.circle((45, 95, 45), (cx_s, cy_s), r_px, 4)
+                self.combat_pixels.circle((105, 225, 115), (cx_s, cy_s), max(4, r_px - 6), 2)
                 grow = 1.0 - abs(prog - 0.45) * 1.4
                 for v_i in range(9):
                     ang = v_i * (math.tau / 9.0)
@@ -1488,11 +1508,11 @@ class Renderer(UIRendererMixin):
                         (vx_b + sway, vy_b - h_vine // 2),
                         (vx_b - sway // 2, vy_b - h_vine),
                     ]
-                    pygame.draw.lines(screen, (65, 42, 24), False, v_pts, 5)
-                    pygame.draw.lines(screen, (85, 185, 75), False, v_pts, 2)
+                    self.combat_pixels.lines((65, 42, 24), False, v_pts, 5)
+                    self.combat_pixels.lines((85, 185, 75), False, v_pts, 2)
                     # Листок на верхушке лозы
                     tx_v, ty_v = v_pts[-1]
-                    pygame.draw.polygon(screen, (145, 245, 130), [(tx_v, ty_v - 4), (tx_v + 4, ty_v), (tx_v, ty_v + 3), (tx_v - 4, ty_v)])
+                    self.combat_pixels.polygon((145, 245, 130), [(tx_v, ty_v - 4), (tx_v + 4, ty_v), (tx_v, ty_v + 3), (tx_v - 4, ty_v)])
 
             elif vfx["kind"] == "beam":
                 x1_s = int((vfx["x0"] * TILE_W - cam_x) * SCALE)
@@ -1504,13 +1524,13 @@ class Renderer(UIRendererMixin):
                 outer_w = max(4, int(20 * fade))
                 mid_w = max(2, int(11 * fade))
                 core_w = max(1, int(4 * fade))
-                pygame.draw.line(screen, (c_r // 2, c_g // 2, c_b // 2), (x1_s, y1_s), (x2_s, y2_s), outer_w)
-                pygame.draw.line(screen, (c_r, c_g, c_b), (x1_s, y1_s), (x2_s, y2_s), mid_w)
-                pygame.draw.line(screen, (255, 255, 240), (x1_s, y1_s), (x2_s, y2_s), core_w)
-                pygame.draw.circle(screen, (c_r, c_g, c_b), (x1_s, y1_s), int(12 * fade))
-                pygame.draw.circle(screen, (255, 255, 240), (x1_s, y1_s), int(6 * fade))
-                pygame.draw.circle(screen, (c_r, c_g, c_b), (x2_s, y2_s), int(15 * fade))
-                pygame.draw.circle(screen, (255, 255, 240), (x2_s, y2_s), int(7 * fade))
+                self.combat_pixels.line((c_r // 2, c_g // 2, c_b // 2), (x1_s, y1_s), (x2_s, y2_s), outer_w)
+                self.combat_pixels.line((c_r, c_g, c_b), (x1_s, y1_s), (x2_s, y2_s), mid_w)
+                self.combat_pixels.line((255, 255, 240), (x1_s, y1_s), (x2_s, y2_s), core_w)
+                self.combat_pixels.circle((c_r, c_g, c_b), (x1_s, y1_s), int(12 * fade))
+                self.combat_pixels.circle((255, 255, 240), (x1_s, y1_s), int(6 * fade))
+                self.combat_pixels.circle((c_r, c_g, c_b), (x2_s, y2_s), int(15 * fade))
+                self.combat_pixels.circle((255, 255, 240), (x2_s, y2_s), int(7 * fade))
 
             elif vfx["kind"] == "whirlwind_slash":
                 cx_s = int((player.x * TILE_W - cam_x) * SCALE)
@@ -1526,9 +1546,9 @@ class Renderer(UIRendererMixin):
                     if step_i < 10:
                         pts_core.append((int(cx_s + math.cos(a) * r_cur), int(cy_s + math.sin(a) * r_cur)))
                 if len(pts_outer) >= 2:
-                    pygame.draw.lines(screen, vfx["color"], False, pts_outer, 10)
+                    self.combat_pixels.lines(vfx["color"], False, pts_outer, 10)
                 if len(pts_core) >= 2:
-                    pygame.draw.lines(screen, (255, 250, 235), False, pts_core, 4)
+                    self.combat_pixels.lines((255, 250, 235), False, pts_core, 4)
 
             elif vfx["kind"] == "slam_wave":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
@@ -1541,19 +1561,19 @@ class Renderer(UIRendererMixin):
                     a = base_a + frac * 0.85
                     arc_pts.append((int(cx_s + math.cos(a) * cur_r), int(cy_s + math.sin(a) * cur_r)))
                 if len(arc_pts) >= 2:
-                    pygame.draw.lines(screen, vfx["color"], False, arc_pts, 8)
-                    pygame.draw.lines(screen, (255, 235, 180), False, arc_pts, 3)
+                    self.combat_pixels.lines(vfx["color"], False, arc_pts, 8)
+                    self.combat_pixels.lines((255, 235, 180), False, arc_pts, 3)
                 for ray_off in (-0.55, 0.0, 0.55):
                     ra = base_a + ray_off
                     ex = int(cx_s + math.cos(ra) * cur_r)
                     ey = int(cy_s + math.sin(ra) * cur_r)
-                    pygame.draw.line(screen, vfx["color"], (cx_s, cy_s), (ex, ey), 3)
+                    self.combat_pixels.line(vfx["color"], (cx_s, cy_s), (ex, ey), 3)
 
             elif vfx["kind"] == "aoe_ring":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
                 cy_s = int((vfx["y"] * TILE_H - cam_y) * SCALE)
                 r_px = int(vfx["radius"] * TILE_W * SCALE * (0.7 + prog * 0.3))
-                pygame.draw.circle(screen, vfx["color"], (cx_s, cy_s), max(4, r_px), 3)
+                self.combat_pixels.broken_ring(vfx["color"], (cx_s, cy_s), max(4, r_px), prog * .24)
 
             elif vfx["kind"] == "blood_pentagram":
                 cx_s = int((vfx["x"] * TILE_W - cam_x) * SCALE)
@@ -1561,9 +1581,9 @@ class Renderer(UIRendererMixin):
                 r_px = int(vfx["radius"] * TILE_W * SCALE)
                 pulse_col = (255, int(40 + 175 * prog), int(55 + 90 * prog))
                 dark_col = (145, 18, 32)
-                pygame.draw.circle(screen, dark_col, (cx_s, cy_s), r_px + 3, 4)
-                pygame.draw.circle(screen, pulse_col, (cx_s, cy_s), r_px, 2)
-                pygame.draw.circle(screen, pulse_col, (cx_s, cy_s), int(r_px * max(0.15, prog)), 1)
+                self.combat_pixels.circle(dark_col, (cx_s, cy_s), r_px + 3, 4)
+                self.combat_pixels.circle(pulse_col, (cx_s, cy_s), r_px, 2)
+                self.combat_pixels.circle(pulse_col, (cx_s, cy_s), int(r_px * max(0.15, prog)), 1)
                 rot = -math.pi * 0.5 + prog * 0.35
                 verts = [
                     (int(cx_s + math.cos(rot + i * 2.0 * math.pi / 5.0) * r_px),
@@ -1571,9 +1591,11 @@ class Renderer(UIRendererMixin):
                     for i in range(5)
                 ]
                 star_order = [verts[0], verts[2], verts[4], verts[1], verts[3], verts[0]]
-                pygame.draw.lines(screen, pulse_col, False, star_order, 3 if prog > 0.6 else 2)
+                self.combat_pixels.lines(pulse_col, False, star_order, 3 if prog > 0.6 else 2)
                 for vx_p, vy_p in verts:
-                    pygame.draw.circle(screen, (255, 220, 120), (vx_p, vy_p), 3)
+                    self.combat_pixels.circle((255, 220, 120), (vx_p, vy_p), 3)
+
+        self.combat_pixels.flush(screen, fov_mask)
 
         # Typewriter Text in Dedicated Thought Box (адаптивно центрируется под SCALE = 4)
         if shown_thought:
@@ -1695,14 +1717,24 @@ class Renderer(UIRendererMixin):
                 pdata = perks_db.get(pid, {})
                 p_col = VECTOR_COLORS.get(perk_branch(pid, pdata), UI_BORDER_WOOD)
                 is_p_hov = pr.collidepoint(hover_pos)
-                self.draw_pixel_frame(screen, pr, (43, 35, 48) if is_p_hov else UI_SLOT_BG,
-                                      p_col, False, player.illumination)
+                ready = player.passive_active(pid) or (pid == "firm_stance" and player.stance_ready())
+                flash = player.passive_flash(pid)
+                brightness = .23 * ready + .60 * flash ** 2
+                rim = tuple(round(c + (250 - c) * brightness) for c in p_col)
+                background = (43, 35, 48) if is_p_hov else UI_SLOT_BG
+                background = tuple(round(c + hue * brightness * .14) for c, hue in zip(background, p_col))
+                self.draw_pixel_frame(screen, pr, background, rim, False, player.illumination)
+                if flash > .05:
+                    sparks = tuple(round(c * (.45 + .55 * flash)) for c in p_col)
+                    pygame.draw.rect(screen, sparks, pr.inflate(4, 4), 1)
+                    for cx, cy in (pr.topleft, pr.topright, pr.bottomleft, pr.bottomright):
+                        pygame.draw.rect(screen, rim, (cx - 2, cy - 2, 4, 4))
                 self.draw_item_icon(screen, pdata.get("icon", "trinket"), pr.x + 8, pr.y + 8, 32)
                 lv_txt = self.font_small.render(str(plvl), True, (255, 235, 110))
                 pygame.draw.rect(screen, (14, 12, 18), (pr.right - lv_txt.get_width() - 6, pr.bottom - 16, lv_txt.get_width() + 4, 14))
                 screen.blit(lv_txt, (pr.right - lv_txt.get_width() - 4, pr.bottom - 16))
-                if player.passive_active(pid):
-                    pygame.draw.rect(screen, p_col, (pr.x + 5, pr.y + 5, 6, 3))
+                if ready:
+                    pygame.draw.rect(screen, rim, (pr.x + 5, pr.y + 5, 6, 3))
                 if is_p_hov:
                     hovered_passive = (pid, plvl, pdata)
             else:

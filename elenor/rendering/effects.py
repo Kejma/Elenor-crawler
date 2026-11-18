@@ -31,6 +31,7 @@ class FXManager:
 
         self.ripples = []
         self.dust_motes = []
+        self.mote_rng = random.Random()
         self.active_clouds = []
 
         self.shake_timer = 0.0
@@ -46,6 +47,9 @@ class FXManager:
 
     def _spawn_dust_in_zones(self, dungeon, count=55):
         self.dust_motes = []
+        if getattr(dungeon, "campaign", None) == "jungle":
+            self._spawn_jungle_motes(dungeon)
+            return
         zones = getattr(dungeon, "atmo_zones", [])
         if not zones:
             return
@@ -62,6 +66,23 @@ class FXManager:
                 "zone_rect": r,
                 "kind": z.get("kind", "dust")
             })
+
+    def _spawn_jungle_motes(self, dungeon):
+        rng = self.mote_rng
+        outdoors = not dungeon.interior
+        for y, row in enumerate(dungeon.grid):
+            for x, tile in enumerate(row):
+                if rng.random() >= 0.24 or dungeon.is_blocking_move(x, y):
+                    continue
+                # Fireflies favor vegetated openings and banks. Interiors get drifting dust.
+                kind = ("firefly" if outdoors and tile in (10, 11, 23, 37, 40, 45, 46)
+                        and rng.random() < .35 else "dust")
+                anchor = (x + rng.uniform(.30, .70), y + rng.uniform(.30, .70))
+                self.dust_motes.append({
+                    "wx": anchor[0], "wy": anchor[1], "anchor": anchor, "kind": kind,
+                    "phase": rng.uniform(0, math.tau), "size": 1,
+                    "rate": rng.uniform(.5, 1.5),
+                })
 
     def clear_floor_decals(self):
         self.decal_surf.fill((0, 0, 0, 0))
@@ -224,6 +245,13 @@ class FXManager:
         # Пылинки и споры летают ТОЛЬКО внутри разрешённых тематических зон (`zone_rect`)!
         if self.flags["dust_motes"] and self.dust_motes:
             for dm in self.dust_motes:
+                if "anchor" in dm:
+                    dm["phase"] += dt * dm["rate"]
+                    x, y = dm["anchor"]
+                    amplitude = .27 if dm["kind"] == "firefly" else .13
+                    dm["wx"] = x + math.cos(dm["phase"]) * amplitude
+                    dm["wy"] = y + math.sin(dm["phase"] * 1.38) * amplitude
+                    continue
                 dm["phase"] += dt * 1.8
                 dm["wx"] += (dm["vx"] + math.sin(dm["phase"]) * 0.12) * dt
                 dm["wy"] += dm["vy"] * dt

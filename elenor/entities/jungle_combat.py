@@ -58,7 +58,6 @@ ATTACKS = {
 }
 TRIBE = frozenset(("tribal_hunter", "tribal_warrior", "tribal_shaman"))
 RANGED = frozenset(("dart", "spell", "sigil"))
-WARDEN_LEASH = 9
 
 
 def _in_ranged_band(attack, distance):

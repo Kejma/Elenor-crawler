@@ -9,7 +9,6 @@ from elenor.data.items import BAG_CAPACITIES
 from elenor.entities import Enemy, Interactable
 from elenor.entities.enemies import MOB_PROFILES
 from elenor.rendering.visibility import CanopyVisibility, canopy_opacity
-from elenor.config import VIEW_W, VIEW_H
 from test_mirror_puzzles import HeadlessGame, empty_dungeon
 
 
@@ -22,14 +21,14 @@ class InventoryFeedbackTests(unittest.TestCase):
 
     def test_bag_slots_stack_and_two_best_bags_maximize_capacity(self):
         capacities = sorted(BAG_CAPACITIES.values())
-        self.assertEqual(capacities, list(range(4, 12)))
+        self.assertEqual(capacities, list(range(2, 10)))
         for index in range(2):
             bag = self.game.make_item("small_pouch")
             loot = Interactable(10, 10, "loot", bag)
             self.game._pickup_loot_object(loot)
             self.assertTrue(loot.used)
             self.assertIs(self.player.bag_slots[index], bag)
-        self.assertEqual(self.player.unlocked_slots, self.player.pocket_slots + 8)
+        self.assertEqual(self.player.unlocked_slots, self.player.pocket_slots + 4)
 
         best = self.game.make_item("void_chest_bag")
         self.assertTrue(self.player.change_bag(0, best))
@@ -94,17 +93,14 @@ class InventoryFeedbackTests(unittest.TestCase):
     def test_brief_los_spike_only_softly_changes_tree_visibility(self):
         visibility = CanopyVisibility()
         floor = []
-        mask = np.zeros((VIEW_W, VIEW_H), dtype=np.float32)
         visibility.begin_frame(floor, 0)
-        self.assertEqual(visibility.sample((2, 2), mask, 32, 32), 0)
+        self.assertEqual(visibility.sample((2, 2), 0), 0)
         visibility.begin_frame(floor, .016)
-        mask[32:48, 32:48] = 1
-        peak = visibility.sample((2, 2), mask, 32, 32)
+        peak = visibility.sample((2, 2), 1)
         self.assertGreater(peak, 0)
         self.assertLess(peak, .2)
         visibility.begin_frame(floor, .032)
-        mask.fill(0)
-        self.assertLess(visibility.sample((2, 2), mask, 32, 32), peak)
+        self.assertLess(visibility.sample((2, 2), 0), peak)
         self.assertTrue(105 < canopy_opacity(2, 2, 1.45, 1.0) < 255)
 
     def test_every_enemy_has_two_nonempty_voice_samples(self):

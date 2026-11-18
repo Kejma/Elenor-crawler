@@ -55,6 +55,7 @@ class Player:
         self.passive_bonuses = {}
         self.passive_ready_at = {}
         self.passive_until = {}
+        self.passive_flash_until = {}
         self.passive_time = 0.0
         self.stationary_for = 0.0
         self.last_passive_position = (self.x, self.y)
@@ -410,6 +411,22 @@ class Player:
     def passive_active(self, perk_id):
         return self.passive_until.get(perk_id, 0.0) > self.passive_time
 
+    def flash_passive(self, perk_id):
+        self.passive_flash_until[perk_id] = self.passive_time + 0.70
+
+    def passive_flash(self, perk_id):
+        remaining = self.passive_flash_until.get(perk_id, 0.0) - self.passive_time
+        return max(0.0, remaining / 0.70)
+
+    def activate_passive(self, perk_id, duration):
+        self.passive_until[perk_id] = self.passive_time + duration
+        self.flash_passive(perk_id)
+
+    def stance_ready(self):
+        return (self.passive_power("firm_stance") > 0
+                and self.stationary_for >= PASSIVES["firm_stance"]["stationary"]
+                and (self.x, self.y) == self.last_passive_position)
+
     def can_learn_passive(self, perk_id):
         if perk_id not in PASSIVES:
             return False
@@ -475,6 +492,7 @@ class Player:
         self.passive_perks.pop(perk_id, None)
         self.passive_bonuses.pop(perk_id, None)
         self.passive_until.pop(perk_id, None)
+        self.passive_flash_until.pop(perk_id, None)
         if perk_id == "change_target":
             self.last_killed_target = None
 
@@ -747,7 +765,10 @@ class Player:
         self.passive_time += dt
         position = (self.x, self.y)
         if position == self.last_passive_position:
+            was_ready = self.stationary_for >= PASSIVES["firm_stance"]["stationary"]
             self.stationary_for += dt
+            if not was_ready and self.stance_ready():
+                self.flash_passive("firm_stance")
         else:
             self.stationary_for = 0.0
             self.last_passive_position = position

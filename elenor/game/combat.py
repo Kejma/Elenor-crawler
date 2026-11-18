@@ -22,7 +22,7 @@ class CombatMixin:
             if not getattr(source, "no_rewards", False):
                 self.player.record_build_action("cunning", 0.08)
             if self.player.passive_power("sidestep"):
-                self.player.passive_until["sidestep"] = self.player.passive_time + PASSIVES["sidestep"]["duration"]
+                self.player.activate_passive("sidestep", PASSIVES["sidestep"]["duration"])
             self.add_popup(self.player.x, self.player.y, "УВОРОТ", (140, 230, 255))
             self.add_log("combat", "Уклонение от вражеской атаки!", (140, 230, 255))
             self.trigger_event_thought("combat_dodge")
@@ -464,10 +464,8 @@ class CombatMixin:
 
     def _trigger_firm_stance(self):
         p = self.player
-        settings = PASSIVES["firm_stance"]
-        if (p.passive_power("firm_stance") and p.stationary_for >= settings["stationary"]
-                and (p.x, p.y) == p.last_passive_position):
-            p.passive_until["firm_stance"] = p.passive_time + settings["duration"]
+        if p.stance_ready():
+            p.activate_passive("firm_stance", PASSIVES["firm_stance"]["duration"])
 
     def _physical_hit_damage(self, mob, power, armor_pierce, was_unaware=False, action=None):
         p = self.player
@@ -477,12 +475,14 @@ class CombatMixin:
             if was_unaware or mob in action.get("unaware_targets", ()):
                 power *= 1.0 + quiet
                 action["quiet_work_used"] = True
+                p.flash_passive("quiet_work")
 
         switch = p.passive_power("change_target")
         if (switch and p.passive_active("change_target") and mob is not p.last_killed_target
                 and not (action and action.get("change_target_kill"))):
             power *= 1.0 + switch
             p.passive_until.pop("change_target", None)
+            p.flash_passive("change_target")
             p.last_killed_target = None
 
         armor = mob.phys_def
@@ -492,21 +492,25 @@ class CombatMixin:
             if now >= mob.armor_breaker_ready_at:
                 mob.armor_breaker_until = now + settings["duration"]
                 mob.armor_breaker_ready_at = now + settings["cooldown"]
+                p.flash_passive("armor_breaker")
             if now < mob.armor_breaker_until:
                 armor -= max(1, round(armor * breaker))
         return max(1, int(power) - max(0, armor - armor_pierce))
 
-    def _trigger_spell_passives(self, item):
+    def _trigger_spell_passives(self, item, mana_paid):
         school = spell_school(item)
         if not school:
             return
         p = self.player
         p.recent_spell_schools[school] = p.passive_time
+        if p.passive_power("divine_pact") and 0 < mana_paid < item.mp_cost:
+            p.flash_passive("divine_pact")
         focus = p.passive_power("spell_focus")
         if focus:
             for other in p.ability_slots:
                 if other and other.id != item.id and spell_school(other) == school and other.id in p.cooldowns:
                     p.cooldowns[other.id] *= 1.0 - focus
+                    p.flash_passive("spell_focus")
 
         pulse = p.passive_power("warding_pulse")
         if not pulse or p.passive_time < p.passive_ready_at.get("warding_pulse", 0.0):
@@ -514,6 +518,7 @@ class CombatMixin:
         settings = PASSIVES["warding_pulse"]
         radius = settings["radius"]
         p.passive_ready_at["warding_pulse"] = p.passive_time + settings["cooldown"]
+        p.flash_passive("warding_pulse")
         self.visual_fx.append({
             "kind": "aoe_ring", "x": p.x, "y": p.y, "radius": radius,
             "color": (145, 195, 255), "timer": 0.28, "max_timer": 0.28,
@@ -581,6 +586,7 @@ class CombatMixin:
         if wide_attack:
             arc_deg = min(360, arc_deg * (1.0 + wide))
             self.player.passive_until.pop("wide_swing", None)
+            self.player.flash_passive("wide_swing")
         # 2. ПЛАВНЫЙ ВЫПАД С ШАГОМ ВПЕРЁД (Сабля, Гладиус, Фальката, Эсток, Фламберг)
         lunge = getattr(weap, "lunge_dist", 0.0) if weap else 0.0
         if lunge > 0.0:
@@ -737,7 +743,7 @@ class CombatMixin:
             self._trigger_firm_stance()
         if (wide and not wide_attack and hit_count >= 2
                 and p.passive_time >= p.passive_ready_at.get("wide_swing", 0.0)):
-            p.passive_until["wide_swing"] = math.inf
+            p.activate_passive("wide_swing", math.inf)
             p.passive_ready_at["wide_swing"] = p.passive_time + PASSIVES["wide_swing"]["cooldown"]
 
         if any_killed and weap and getattr(weap, "reset_cd_on_kill", False):
@@ -782,7 +788,7 @@ class CombatMixin:
         growth_credit = {"action": growth, "awarded": False, **action}
         c_type = getattr(item, "cast_type", "projectile")
         if c_type not in ("targeted", "chain_lightning"):
-            self._trigger_spell_passives(item)
+            self._trigger_spell_passives(item, mana_paid)
 
         if c_type == "physical":
             self._execute_physical_ability(item, total_pwr, target_wx, target_wy, growth_credit)
@@ -876,7 +882,7 @@ class CombatMixin:
                 self.add_popup(target_wx, target_wy, "Нет цели!", (195, 195, 210))
                 return
 
-            self._trigger_spell_passives(item)
+            self._trigger_spell_passives(item, mana_paid)
             self.sfx.play("crit")
             if hasattr(self, "fx") and self.fx:
                 self.fx.trigger_shake(1.7, 0.14)
@@ -1076,7 +1082,7 @@ class CombatMixin:
                 self.player.cooldowns.pop(item.id, None)
                 self.add_popup(target_wx, target_wy, "Нет цели!", (195, 195, 210))
                 return
-            self._trigger_spell_passives(item)
+            self._trigger_spell_passives(item, mana_paid)
             self.sfx.play("magic")
             target_mob.alert_to_combat(self.sfx, self.add_popup)
             dmg = max(1, int(math.floor(total_pwr - target_mob.mag_def)))
@@ -1155,7 +1161,7 @@ class CombatMixin:
             if p.passive_power("change_target") and p.passive_time >= p.passive_ready_at.get("change_target", 0.0):
                 settings = PASSIVES["change_target"]
                 p.last_killed_target = m
-                p.passive_until["change_target"] = p.passive_time + settings["duration"]
+                p.activate_passive("change_target", settings["duration"])
                 p.passive_ready_at["change_target"] = p.passive_time + settings["cooldown"]
                 if action is not None:
                     action["change_target_kill"] = True

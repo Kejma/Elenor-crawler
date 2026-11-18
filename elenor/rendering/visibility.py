@@ -3,21 +3,39 @@ import math
 
 import numpy as np
 import pygame
-from elenor.config import VIEW_W, VIEW_H, TILE_W, TILE_H
+from elenor.config import VIEW_W, VIEW_H, TILE_W, TILE_H, LOS_MAX_RADIUS
 
 _X = np.arange(VIEW_W, dtype=np.float32)[:, None]
 _Y = np.arange(VIEW_H, dtype=np.float32)[None, :]
 
 
-def canopy_visibility(fov_mask, tile_x, tile_y):
-    """Fade the crown as the visible area of its footprint grows."""
-    x0, x1 = max(0, tile_x + 3), min(VIEW_W, tile_x + TILE_W - 3)
-    y0, y1 = max(0, tile_y + 3), min(VIEW_H, tile_y + TILE_H - 3)
-    if x0 >= x1 or y0 >= y1:
+def canopy_visibility(dungeon, player_x, player_y, x, y):
+    """Trace to the exposed faces of a tree independently of the floor ray fan."""
+    cx, cy = x + 0.5, y + 0.5
+    dx, dy = player_x - cx, player_y - cy
+    if dx * dx + dy * dy > (LOS_MAX_RADIUS / TILE_W + 1.0) ** 2:
         return 0.0
-    coverage = fov_mask[x0:x1, y0:y1].sum() / ((x1 - x0) * (y1 - y0))
-    strength = min(1.0, max(0.0, (float(coverage) - 0.35) / 0.48))
-    return strength * strength * (3.0 - 2.0 * strength)
+    # In a straight row the end face can face the viewer while being covered by
+    # the next tree. Prefer a genuinely exposed side, such as the corridor bank.
+    horizontal = (1 if dx > 0 else -1, 0)
+    vertical = (0, 1 if dy > 0 else -1)
+    faces = (horizontal, vertical) if abs(dx) > abs(dy) else (vertical, horizontal)
+    grazing = 0
+    for fx, fy in faces:
+        if dungeon.is_blocking_sight(x + fx, y + fy):
+            continue
+        face_x, face_y = cx + fx * .42, cy + fy * .42
+
+        def visible(offset):
+            return dungeon.has_line_of_sight(
+                player_x, player_y, face_x + fy * offset, face_y + fx * offset,
+                LOS_MAX_RADIUS / TILE_W, target_thicket=(x, y),
+            )
+
+        if visible(0):
+            return 1.0
+        grazing = max(grazing, visible(-.24) + visible(.24))
+    return .32 * grazing
 
 
 class CanopyVisibility:
@@ -42,8 +60,7 @@ class CanopyVisibility:
         self.current = {}
         self.time = time
 
-    def sample(self, tile, mask, x, y):
-        target = canopy_visibility(mask, x, y)
+    def sample(self, tile, target):
         old = self.previous.get(tile, 0.0)
         value = old + (target - old) * self.blend
         if value > 0.006 or target > 0.0:

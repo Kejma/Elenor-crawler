@@ -935,6 +935,7 @@ def main():
 
         ui_bundle = dict(game.loc["ui"])
         ui_bundle["_game_ref"] = game
+        ui_bundle["_reveal_map"] = game.dev_panel.reveal_map
         ui_bundle["_survey_map"] = not game.inv_open and not game.dev_panel.reveal_map
         ui_bundle["_perks_db"] = game.loc.get("perks", {})
         ui_bundle["_world_hover_item"] = world_hover_item

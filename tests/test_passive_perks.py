@@ -60,8 +60,13 @@ class PassivePerkTests(unittest.TestCase):
         target.hp = 100
         self.game.mobs = [target]
         self.player.update_timers(0.5)
+        self.assertTrue(self.player.stance_ready())
+        self.assertGreater(self.player.passive_flash("firm_stance"), 0)
+        self.player.update_timers(0.7)
+        self.assertEqual(self.player.passive_flash("firm_stance"), 0)
         self.game._execute_melee_swing(target.x, target.y - 0.22)
         self.assertTrue(self.player.passive_active("firm_stance"))
+        self.assertGreater(self.player.passive_flash("firm_stance"), 0)
         hp = self.player.hp
         raw = self.player.phys_defense + 10
         with patch("elenor.game.combat.random.random", return_value=1.0):
@@ -168,6 +173,8 @@ class PassivePerkTests(unittest.TestCase):
         self.player.mp = expected_cost
         self.game.use_or_equip_item(frost)
         self.assertAlmostEqual(self.player.mp, 0)
+        self.assertGreater(self.player.passive_flash("divine_pact"), 0)
+        self.assertGreater(self.player.passive_flash("spell_focus"), 0)
         self.assertAlmostEqual(self.player.cooldowns[lightning.id], 3.2 * 0.85)
         self.assertAlmostEqual(self.player.ability_mana_cost(frost), expected_cost)
         self.assertAlmostEqual(self.player.cooldowns[frost.id], frost.cooldown)

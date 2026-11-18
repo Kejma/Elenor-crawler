@@ -1,12 +1,12 @@
 BAG_CAPACITIES = {
-    "small_pouch": 4,
-    "waxed_pouch": 5,
-    "pouch_bag": 6,
-    "reed_satchel": 7,
-    "scout_satchel": 8,
-    "frame_pack": 9,
-    "travel_backpack": 10,
-    "void_chest_bag": 11,
+    "small_pouch": 2,
+    "waxed_pouch": 3,
+    "pouch_bag": 4,
+    "reed_satchel": 5,
+    "scout_satchel": 6,
+    "frame_pack": 7,
+    "travel_backpack": 8,
+    "void_chest_bag": 9,
 }
 
 BASE_ITEMS_DB = {
