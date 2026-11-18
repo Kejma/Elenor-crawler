@@ -914,8 +914,9 @@ class Renderer(UIRendererMixin):
         self.norm_canvas.blit(tz_norm, (0, VIEW_H))
 
         clouds = []
-        if fx_mgr and fx_mgr.flags.get("volumetric_fog", True):
-            for cloud in fx_mgr.active_clouds:
+        volume_enabled = fx_mgr is None or fx_mgr.flags.get("volumetric_fog", True)
+        if volume_enabled:
+            for cloud in fx_mgr.active_clouds if fx_mgr else ():
                 sx, sy = cloud["wx"]*TILE_W-cam_x, cloud["wy"]*TILE_H-cam_y
                 radius = cloud["radius"]*TILE_W
                 if -radius <= sx <= VIEW_W+radius and -radius <= sy <= VIEW_H+radius:
@@ -1040,10 +1041,12 @@ class Renderer(UIRendererMixin):
             seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y)
             remember_tiles(dungeon, seen, objects)
 
-        if clouds:
-            fog_lights = ui_texts.get("_fog_lights", ())
-            self.fog_renderer.render(lit_surf, dungeon, clouds, fog_lights, fov_mask,
-                                     self.entity_y_canvas, cam_x, cam_y, now_sec)
+        if volume_enabled:
+            volume_lights = [light for light in lights if light.get("volume", True)]
+            volume_lights.extend(ui_texts.get("_occluded_lights", ()))
+            if clouds or volume_lights:
+                self.fog_renderer.render(lit_surf, dungeon, clouds, volume_lights, fov_mask,
+                                         self.entity_y_canvas, cam_x, cam_y, now_sec)
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))
 

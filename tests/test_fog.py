@@ -76,3 +76,30 @@ class FogTests(unittest.TestCase):
         self.assertEqual(game_view.get_at((72, 72))[:3], (0, 0, 0))
         self.assertEqual(game_view.get_at((97, 72))[:3], (0, 0, 0))
         self.assertEqual(game_view.get_at((59, VIEW_H))[:3], (0, 0, 0))
+
+    def test_dry_air_scatters_light_without_revealing_the_far_side_of_a_wall(self):
+        game_view = pygame.Surface((VIEW_W, CANVAS_H))
+        dungeon = Dungeon()
+        dungeon.grid = [[0] * 12 for _ in range(12)]
+        for y in range(12):
+            dungeon.grid[y][5] = 1
+        dungeon.doors.clear()
+        dungeon.thickets.clear()
+        mask = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
+        depth = np.full_like(mask, -9999.0)
+        light = dict(pos=(63, 80, 16), color=(1.0, .5, .2), radius=80)
+        FogRenderer().render(game_view, dungeon, [], [light], mask, depth, 0, 0, 0)
+        red, green, blue = game_view.get_at((66, 80))[:3]
+        self.assertGreater(red, green)
+        self.assertGreater(green, blue)
+        self.assertGreater(blue, 0)
+        self.assertEqual(game_view.get_at((105, 80))[:3], (0, 0, 0))
+
+    def test_penumbra_keeps_a_lit_core_and_softens_the_shadow_boundary(self):
+        stops = np.full(720, 150, dtype=np.float32)
+        stops[:360] = 15
+        angles = np.array([350.0, 359.0, 360.0, 370.0], dtype=np.float32)
+        transmission = FogRenderer()._penumbra(stops, angles, np.full_like(angles, 46.0))
+        self.assertEqual(transmission[0], 0)
+        self.assertEqual(transmission[-1], 1)
+        self.assertTrue(np.all(np.diff(transmission) > 0))

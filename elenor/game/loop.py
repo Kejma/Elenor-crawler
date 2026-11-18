@@ -734,11 +734,12 @@ def main():
                 "pos": (p_sx, p_sy, TORCH_Z_HEIGHT),
                 "foot_y": p_foot_sy + 2.0,
                 "ignore_depth": True,
+                "volume": False,
                 "radius": game.player.dark_vision_radius,
                 "color": (0.38, 0.48, 0.72)
             }
         ]
-        fog_lights = []
+        occluded_lights = []
         if game.player.has_lit_torch:
             lights.append({
                 "pos": (p_sx + 4, p_sy - 2, TORCH_Z_HEIGHT),
@@ -746,8 +747,6 @@ def main():
                 "radius": game.player.torch_light_radius + flicker,
                 "color": (1.15, 0.80, 0.40)
             })
-
-            fog_lights.append(lights[-1])
 
         # Свечение игрока во время подготовки каста, Воспламенения Пиро или Омоложения Персефоны!
         if getattr(game.player, "cast_glow_color", None) and game.player.pending_action:
@@ -802,10 +801,10 @@ def main():
                 "color": (1.4, 1.15, 0.45)
             })
 
-        def register_fog_light(wx_px, wy_px, z, radius, color):
+        def register_occluded_light(wx_px, wy_px, z, radius, color):
             sx, sy = wx_px - game.cam_x, wy_px - game.cam_y
             if -radius <= sx <= VIEW_W + radius and -radius <= sy <= VIEW_H + radius:
-                fog_lights.append(dict(pos=(sx, sy, z), radius=radius, color=color))
+                occluded_lights.append(dict(pos=(sx, sy, z), radius=radius, color=color))
 
         def register_world_and_hud_light(wx_px, wy_px, foot_wy_px, z_h, rad, col, allowed_set, ignore_d=False):
             sx, sy = wx_px - game.cam_x, wy_px - game.cam_y
@@ -845,7 +844,7 @@ def main():
         if getattr(game.dev_panel, "reveal_map", False):
             fov_mask[:, :] = 1.0
             visible_tiles = {(c, r) for r in range(game.dungeon.height) for c in range(game.dungeon.width)}
-            lights.append({"pos": (VIEW_W * 0.5, VIEW_H * 0.5, 180.0), "foot_y": 9999.0, "ignore_depth": True, "radius": 600.0, "color": (0.85, 0.85, 0.95)})
+            lights.append({"pos": (VIEW_W * 0.5, VIEW_H * 0.5, 180.0), "foot_y": 9999.0, "ignore_depth": True, "radius": 600.0, "volume": False, "color": (0.85, 0.85, 0.95)})
 
         for br in game.dungeon.braziers:
             lx_w, ly_w = br["x"] * TILE_W + 8, br["y"] * TILE_H + 6
@@ -853,11 +852,12 @@ def main():
             rad = br["radius"] + flicker * 0.5
             if (abs(lx_w - world_ox) > VIEW_W + rad or abs(ly_w - world_oy) > VIEW_H + rad):
                 continue
-            register_fog_light(lx_w, ly_w, 22.0, rad, br["color"])
             l_open = game.dungeon.get_light_open_tiles(br["x"], br["y"], br["radius"])
             allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
             if allowed is not None:
                 register_world_and_hud_light(lx_w, ly_w, foot_w, 22.0, rad, br["color"], allowed)
+            else:
+                register_occluded_light(lx_w, ly_w, 22.0, rad, br["color"])
 
         for rl in game.dungeon.room_lights:
             lx_w, ly_w = rl["x"] * TILE_W + 8, rl["y"] * TILE_H + 8
@@ -871,23 +871,27 @@ def main():
                 allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
                 if allowed is not None:
                     register_world_and_hud_light(lx_w, ly_w, foot_w, 24.0, rad, rl["color"], allowed, ignore_d=False)
+                else:
+                    register_occluded_light(lx_w, ly_w, 24.0, rad, rl["color"])
                 continue
-            register_fog_light(lx_w, ly_w, 32.0, rad, rl["color"])
             l_open = game.dungeon.get_light_open_tiles(rl["x"], rl["y"], rad)
             allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
             if allowed is not None:
                 register_world_and_hud_light(lx_w, ly_w, foot_w, 32.0, rad, rl["color"], allowed, ignore_d=True)
+            else:
+                register_occluded_light(lx_w, ly_w, 32.0, rad, rl["color"])
 
         for obj in game.objects:
             if obj.kind in ("campfire", "fireplace"):
                 lx_w, ly_w = obj.x * TILE_W + 8, obj.y * TILE_H + 8
                 foot_w = (obj.y + 0.5) * TILE_H
                 rad = 115.0 + flicker * 0.8
-                register_fog_light(lx_w, ly_w, 24.0, rad, (1.20, 0.72, 0.32))
                 l_open = game.dungeon.get_light_open_tiles(obj.x, obj.y, 115.0)
                 allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
                 if allowed is not None:
                     register_world_and_hud_light(lx_w, ly_w, foot_w, 24.0, rad, (1.20, 0.72, 0.32), allowed)
+                else:
+                    register_occluded_light(lx_w, ly_w, 24.0, rad, (1.20, 0.72, 0.32))
 
         inject_mirror_puzzle_lights(game, lights, player_open_tiles, register_world_and_hud_light)
 
@@ -953,7 +957,7 @@ def main():
         ui_bundle["_show_map_hud"] = (
             not game.inv_open and not game.levelup_choices and game.fishing_cast is None and not dev_open
         )
-        ui_bundle["_fog_lights"] = fog_lights
+        ui_bundle["_occluded_lights"] = occluded_lights
         ui_bundle["_visual_fx"] = game.visual_fx
         ui_bundle["_fx_mgr"] = game.fx
         ui_bundle["_journal_open"] = game.journal_open

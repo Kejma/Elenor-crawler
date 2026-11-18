@@ -1,4 +1,4 @@
-"""Two layers of atmospheric fog with pixel-accurate light shafts."""
+"""Half-resolution air scattering and layered fog with soft light shafts."""
 
 from collections import OrderedDict
 import math
@@ -72,7 +72,26 @@ class FogRenderer:
             self.rays.popitem(last=False)
         return distances
 
-    def _light_field(self, lights, x, y, cam_x, cam_y, patch):
+    @staticmethod
+    def _coverage(stops, angle, distance):
+        ray = np.floor(angle)
+        weight = angle - ray
+        index = ray.astype(np.int32) % _RAY_COUNT
+        near = np.clip(.5 + (stops[index] - distance) * .30, 0.0, 1.0)
+        far = np.clip(.5 + (stops[(index + 1) % _RAY_COUNT] - distance) * .30, 0.0, 1.0)
+        return near + (far - near) * weight
+
+    def _penumbra(self, stops, angle, distance):
+        # Sample angular coverage across a widening footprint, in world pixels.
+        # Filtering the distances themselves would blend a wall and a distant opening.
+        spread = (.60 + np.minimum(distance * .013, 1.50)) * (_RAY_COUNT / math.tau)
+        spread /= np.maximum(distance, 7.0)
+        center = self._coverage(stops, angle, distance)
+        left = self._coverage(stops, angle - spread, distance)
+        right = self._coverage(stops, angle + spread, distance)
+        return center * .58 + (left + right) * .21
+
+    def _light_field(self, lights, visible, cam_x, cam_y, patch):
         x0, y0, x1, y1 = patch
         illumination = np.zeros((x1 - x0, y1 - y0, 3), dtype=np.float32)
         for light in lights:
@@ -82,29 +101,35 @@ class FogRenderer:
             j0, j1 = max(y0, math.floor((ly - radius) / 2)), min(y1, math.ceil((ly + radius) / 2))
             if i0 >= i1 or j0 >= j1:
                 continue
-            dx, dy = x[i0:i1] - lx, y[:, j0:j1] - ly
+            dx, dy = _X[i0:i1] - lx, _Y[:, j0:j1] - ly
             dist = np.sqrt(dx * dx + dy * dy)
-            if not (dist < radius).any():
+            if not ((dist < radius) & visible[i0:i1, j0:j1]).any():
                 continue
             stops = self._shadow_distances(lx + cam_x, ly + cam_y, radius)
-            angle = (np.arctan2(dy, dx) * (_RAY_COUNT / math.tau)) % _RAY_COUNT
-            index = angle.astype(np.int32) % _RAY_COUNT
-            fraction = angle - np.floor(angle)
-            # Interpolate coverage, not distance, to retain the narrow gap between bars.
-            near = np.clip((stops[index] - dist) * .75, 0.0, 1.0)
-            far = np.clip((stops[(index + 1) % _RAY_COUNT] - dist) * .75, 0.0, 1.0)
-            transmission = near * (1.0 - fraction) + far * fraction
-            scatter = np.clip(1.0 - np.hypot(dist, lz * .43) / radius, 0.0, 1.0) ** 1.15
-            # A mild forward lobe leaves a readable shaft beyond the opening.
-            scatter *= transmission * np.minimum(1.0, .54 + dist * .017)
+            angle = np.arctan2(dy, dx) * (_RAY_COUNT / math.tau)
+            transmission = self._penumbra(stops, angle, dist)
+            range_fade = np.clip(1.0 - np.hypot(dist, lz * .43) / radius, 0.0, 1.0)
+            # A soft outer falloff and a brighter core give even small lights depth.
+            edge = np.minimum(1.0, range_fade * 5.0)
+            edge *= edge * (3.0 - 2.0 * edge)
+            core = range_fade * range_fade
+            scatter = (range_fade * .77 + core * .23) * edge * transmission
+            scatter *= np.minimum(1.0, .62 + dist * .017)
             illumination[i0 - x0:i1 - x0, j0 - y0:j1 - y0] += (
                 scatter[:, :, None] * np.asarray(light["color"], dtype=np.float32)
             )
         return illumination
 
     def render(self, screen, dungeon, clouds, lights, fov_mask, entity_y, cam_x, cam_y, time):
+        visible = fov_mask[:VIEW_W:2, :VIEW_H:2] > .025
+        xv, yv = np.nonzero(visible)
+        if not xv.size:
+            return
+        # Only shade the visible part of the viewport, even when the source is elsewhere.
+        i0, j0, i1, j1 = xv.min(), yv.min(), xv.max() + 1, yv.max() + 1
+        patch = np.s_[i0:i1, j0:j1]
         self._update_geometry(dungeon)
-        low = np.zeros((_HALF_W, _HALF_H), dtype=np.float32)
+        low = np.zeros((i1 - i0, j1 - j0), dtype=np.float32)
         upper = np.zeros_like(low)
         tint = np.zeros((*low.shape, 3), dtype=np.float32)
         x, y = _X + cam_x, _Y + cam_y
@@ -113,11 +138,11 @@ class FogRenderer:
             if radius <= 0:
                 continue
             cx, cy = cloud["wx"] * TILE_W, cloud["wy"] * TILE_H
-            i0, i1 = max(0, math.floor((cx - radius - cam_x) / 2)), min(_HALF_W, math.ceil((cx + radius - cam_x) / 2))
-            j0, j1 = max(0, math.floor((cy - radius - cam_y) / 2)), min(_HALF_H, math.ceil((cy + radius - cam_y) / 2))
-            if i0 >= i1 or j0 >= j1:
+            cx0, cx1 = max(i0, math.floor((cx - radius - cam_x) / 2)), min(i1, math.ceil((cx + radius - cam_x) / 2))
+            cy0, cy1 = max(j0, math.floor((cy - radius - cam_y) / 2)), min(j1, math.ceil((cy + radius - cam_y) / 2))
+            if cx0 >= cx1 or cy0 >= cy1:
                 continue
-            xx, yy = x[i0:i1], y[:, j0:j1]
+            xx, yy = x[cx0:cx1], y[:, cy0:cy1]
             radial = np.clip(1 - ((xx - cx) ** 2 + (yy - cy) ** 2) / radius ** 2, 0, 1) ** 1.35
             if cloud.get("bounds"):
                 bx, by, bw, bh = cloud["bounds"]
@@ -133,32 +158,43 @@ class FogRenderer:
             drift += .60 * np.cos((xx - yy) * .104 + time * .43)
             floor = density * floor_noise
             loft = density * np.clip((drift - .03) * .39, 0, .55)
-            patch = np.s_[i0:i1, j0:j1]
-            low[patch] += floor
-            upper[patch] += loft
-            tint[patch] += (floor + loft)[:, :, None] * np.asarray(cloud["color"], dtype=np.float32)
+            cloud_patch = np.s_[cx0-i0:cx1-i0, cy0-j0:cy1-j0]
+            low[cloud_patch] += floor
+            upper[cloud_patch] += loft
+            tint[cloud_patch] += (floor + loft)[:, :, None] * np.asarray(cloud["color"], dtype=np.float32)
 
-        # Fade the ground layer against the figures' feet and leave a thinner layer above.
-        xv, yv = np.nonzero(low + upper > .003)
-        if not xv.size:
+        illumination = self._light_field(lights, visible, cam_x, cam_y, (i0, j0, i1, j1))
+        peak = illumination.max(axis=2)
+        density = low + upper
+        if not (peak > .001).any() and not (density > .001).any():
             return
-        i0, j0, i1, j1 = xv.min(), yv.min(), xv.max() + 1, yv.max() + 1
-        patch = np.s_[i0:i1, j0:j1]
-        color = tint[patch] / np.maximum(.001, (low[patch] + upper[patch])[:, :, None])
-        illumination = self._light_field(lights,
-                                         _X, _Y, cam_x, cam_y, (i0, j0, i1, j1))
-        rgb = pygame.surfarray.pixels3d(self.half)
-        rgb[:] = 0
-        rgb[patch] = np.clip(color * (np.array((40, 47, 59), dtype=np.float32) + illumination * 400), 0, 255)
-        del rgb
-        alpha = pygame.surfarray.pixels_alpha(self.half)
-        alpha[:] = 0
+        color = tint / np.maximum(.001, density[:, :, None])
+
+        # Dry air catches just a little colored light. Fog contributes the heavier layers.
+        xx, yy = x[i0:i1], y[:, j0:j1]
+        grain = .88 + .07 * np.sin(xx * .094 + time * .33 + np.cos(yy * .09))
+        grain += .05 * np.cos((xx - yy) * .137 - time * .48)
+        air_alpha = np.minimum(.20, peak * .25) * grain
+        air_color = illumination / np.maximum(.001, peak[:, :, None]) * 222.0
+
+        fog_color = np.clip(color * (np.array((40, 47, 59), dtype=np.float32) + illumination * 400), 0, 255)
         feet = entity_y[:VIEW_W:2, :VIEW_H:2][patch]
         clearance = feet - _Y[:, j0:j1]
         ground_height = np.clip(1 - clearance / 13.0, .12, 1.0)
         upper_height = np.clip(1 - clearance / 26.0, .28, 1.0)
-        thickness = low[patch] * ground_height + upper[patch] * upper_height
-        alpha[patch] = np.minimum(.57, 1 - np.exp(-thickness * 1.9)) * 255
+        thickness = low * ground_height + upper * upper_height
+        fog_alpha = np.minimum(.57, 1 - np.exp(-thickness * 1.9))
+        air_alpha *= (1 - fog_alpha) * (.77 + .23 * upper_height)
+        combined = fog_alpha + air_alpha
+        premultiplied = fog_color * fog_alpha[:, :, None] + air_color * air_alpha[:, :, None]
+
+        rgb = pygame.surfarray.pixels3d(self.half)
+        rgb[:] = 0
+        rgb[patch] = premultiplied / np.maximum(.001, combined[:, :, None])
+        del rgb
+        alpha = pygame.surfarray.pixels_alpha(self.half)
+        alpha[:] = 0
+        alpha[patch] = combined * 255
         del alpha
 
         pygame.transform.smoothscale(self.half, self.full.get_size(), self.full)
