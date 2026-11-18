@@ -1,5 +1,6 @@
 import math
 import pygame
+from elenor.data.abilities import acquisition_bonuses
 from elenor.config import VIEW_H, SCALE, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
 
 
@@ -42,9 +43,12 @@ class UIRendererMixin:
             }
             if not is_upgrade or existing_sp is None:
                 lines = []
-                for st_k in pdata.get("upgradable_stats", ["power", "cooldown"]):
+                stats = pdata.get("upgradable_stats", ["power", "cooldown"])
+                bonuses = acquisition_bonuses(pdata.get("rarity", "common"), stats)
+                for st_k in stats:
                     lbl = stat_labels.get(st_k, st_k)
-                    val = pdata.get(st_k, 0)
+                    val = (getattr(existing_sp, st_k) if existing_sp is not None
+                           else player.eval_stat_with_pct(pid, st_k, pdata.get(st_k, 0), bonuses[st_k]))
                     if st_k == "power":
                         tot = int(math.floor(val + stat_add))
                         lines.append(f"{lbl}: {tot} ({int(val)}+{stat_add})")
@@ -189,10 +193,10 @@ class UIRendererMixin:
 
             cur_lvl = player.perks.get(perk["id"], 0)
             if is_erase_mode:
-                lvl_str = f"СТЕРЕТЬ (Ур.{cur_lvl})"
+                lvl_str = "СТЕРЕТЬ"
                 l_col = (255, 95, 95)
             else:
-                lvl_str = f"Ур.{cur_lvl} -> {cur_lvl + 1}" if cur_lvl > 0 else ("АКТИВ [Q/E/R/F]" if perk.get("type") == "active" else "ПАССИВ")
+                lvl_str = "УЛУЧШЕНИЕ" if cur_lvl > 0 else ("АКТИВ [Q/E/R/F]" if perk.get("type") == "active" else "ПАССИВ")
                 l_col = (130, 240, 160) if cur_lvl > 0 else ((110, 210, 255) if perk.get("type") == "active" else UI_TEXT_DIM)
 
             l_surf = self.font_small.render(lvl_str, True, l_col)

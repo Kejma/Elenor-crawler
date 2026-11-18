@@ -8,6 +8,33 @@ from elenor.rendering.ability_icons import draw_ability_icon
 
 
 class AbilityTests(unittest.TestCase):
+    def test_spell_defaults_to_common_and_upgrade_rarity_is_independent(self):
+        game = HeadlessGame(empty_dungeon())
+        key = "stratos_chain_lightning"
+        base = game.loc["perks"][key]
+
+        game.player.apply_perk(key, game.loc["perks"])
+        spell = game.player.ability_slots[0]
+        self.assertEqual(spell.rarity, "common")
+        self.assertEqual(spell.bounces, base["bounces"])
+
+        game.player.apply_perk(key, {key: dict(base, rarity="legendary")}, {"power": 0.48})
+        self.assertEqual(spell.rarity, "common")
+        self.assertEqual(spell.name, base["name"])
+        self.assertAlmostEqual(spell.power, base["power"] * 1.48, places=2)
+
+    def test_rare_first_spell_card_previews_the_acquired_stats(self):
+        from elenor.ui.renderer import UIRendererMixin
+
+        game = HeadlessGame(empty_dungeon())
+        key = "pyro_firebolt"
+        offer = dict(game.loc["perks"][key], rarity="rare")
+        lines = UIRendererMixin()._get_perk_progression_lines(game.player, key, offer, 0, 1)
+        game.player.apply_perk(key, {key: offer})
+        spell = game.player.ability_slots[0]
+        self.assertEqual(spell.rarity, "rare")
+        self.assertIn(f"Перезарядка: {spell.cooldown:.2f}с", lines)
+
     def test_equal_rosters_and_distinct_icons(self):
         data = load_modular_locales()["perks"]
         counts = Counter()

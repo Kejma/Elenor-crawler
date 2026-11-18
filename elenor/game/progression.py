@@ -3,7 +3,7 @@ import math
 import random
 
 from elenor.config import get_rarity_weights
-from elenor.entities import Particle
+from elenor.entities import Item, Particle
 
 
 
@@ -40,10 +40,10 @@ class ProgressionMixin:
 
     def _roll_spell_upgrade_stats(self, pdata, tier_weights_list):
         """
-        Для уже изученного заклинания выбирает редкость апгрейда (12% / 24% / 48% / 96% / 192%)
+        Для уже изученного навыка выбирает редкость улучшения (6% / 12% / 20% / 32% / 48%)
         и делит этот процент поровну между 1..3 случайными параметрами способности!
         """
-        tiers = ["common", "uncommon", "rare", "epic", "legendary"]
+        tiers = Item.RARITY_ORDER
         pct_table = {
             "common": 0.06,
             "uncommon": 0.12,
@@ -72,9 +72,8 @@ class ProgressionMixin:
         perks_db = self.loc.get("perks", {})
         if not perks_db:
             return
-        tiers = ["common", "uncommon", "rare", "epic", "legendary"]
+        tiers = Item.RARITY_ORDER
         tier_weights_list = get_rarity_weights(getattr(self.player, "luck", 1))
-        r_weights = dict(zip(tiers, tier_weights_list))
 
         aff = self.player.get_build_affinities()
         total_aff = sum(aff.values()) + 1.0
@@ -102,12 +101,12 @@ class ProgressionMixin:
             used_ids.add(picked_pid)
             p_copy = dict(picked_data)
             p_copy["id"] = picked_pid
-            p_copy["rarity"] = random.choices(tiers, weights=tier_weights_list, k=1)[0]
-
             if picked_pid in self.player.perks and picked_data.get("type") == "active":
                 upg_rar, upg_roll = self._roll_spell_upgrade_stats(picked_data, tier_weights_list)
                 p_copy["rarity"] = upg_rar
                 p_copy["upgrade_roll"] = upg_roll
+            else:
+                p_copy["rarity"] = random.choices(tiers, weights=tier_weights_list, k=1)[0]
 
             chosen.append(p_copy)
 
@@ -127,6 +126,8 @@ class ProgressionMixin:
             if pid in perks_db:
                 p_copy = dict(perks_db[pid])
                 p_copy["id"] = pid
+                equipped = next((item for item in self.player.ability_slots if item and item.id == pid), None)
+                p_copy["rarity"] = equipped.rarity if equipped else "common"
                 choices.append(p_copy)
         self.inv_open = False
         self.levelup_choices = {"mode": "erase", "choices": choices, "lock_timer": 0.4, "seal_item": seal_item}

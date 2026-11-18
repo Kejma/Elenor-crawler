@@ -1,5 +1,5 @@
 from elenor.config import SHALLOW_WATER
-from elenor.data.abilities import perk_branch
+from elenor.data.abilities import acquisition_bonuses, perk_branch
 import math
 import random
 from elenor.config import PLAYER_BASE_SPEED, TORCH_BASE_RADIUS, DARK_VISION_RADIUS
@@ -372,16 +372,12 @@ class Player:
                     for st_k in existing_spell.upgradable_stats[:1]:
                         existing_spell.stat_bonuses_pct[st_k] = existing_spell.stat_bonuses_pct.get(st_k, 0.0) + 0.12
                 self.recalculate_spell_from_base(existing_spell)
-                existing_spell.name = f"{p_data['name']} (Ур.{new_lvl})"
             else:
                 s_kind = p_data.get("skill_kind", "spell")
                 spell_item_data = dict(p_data)
-                spell_item_data["name"] = f"{p_data['name']} (Ур.{new_lvl})"
                 spell_item_data["type"] = "combat_skill" if s_kind == "combat" else "permanent_spell"
                 sp_item = Item(perk_id, spell_item_data)
-                budget = {"common":0,"uncommon":.12,"rare":.24,"epic":.4,"legendary":.6}[sp_item.rarity]
-                for stat in sp_item.upgradable_stats:
-                    sp_item.stat_bonuses_pct[stat] = budget / len(sp_item.upgradable_stats)
+                sp_item.stat_bonuses_pct.update(acquisition_bonuses(sp_item.rarity, sp_item.upgradable_stats))
                 self.recalculate_spell_from_base(sp_item)
                 for index, slot in enumerate(self.ability_slots):
                     if slot is None:
