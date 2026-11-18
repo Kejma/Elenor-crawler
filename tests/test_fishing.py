@@ -15,7 +15,7 @@ from elenor.config import DEEP_WATER, FALLEN_LOG, SHALLOW_WATER
 from elenor.missions.jungle import populate_jungle_floor
 from elenor.rendering.fishing import FISH_CATALOG_SPECS
 from elenor.world.dungeon import Dungeon
-from elenor.world.jungle_sites import CARDINAL, offset
+from elenor.world.jungle_sites import CARDINAL, Plan, offset, village
 from elenor.puzzles.mirrors import reachable_floor_tiles
 
 
@@ -161,7 +161,7 @@ class FishingTests(unittest.TestCase):
         game = HeadlessGame(dungeon)
         game.campaign, game.jungle_locations = "jungle", {}
         game._populate_floor(1)
-        self.assertEqual((dungeon.width, dungeon.height), (198, 126))
+        self.assertEqual((dungeon.width, dungeon.height), (132, 84))
         self.assertFalse(
             any(tile in (45, 46, 47, 56, 57) for row in dungeon.grid for tile in row)
         )
@@ -223,17 +223,17 @@ class FishingTests(unittest.TestCase):
         shallows = [
             y
             for y in range(8, dungeon.height - 8)
-            if dungeon.grid[y][72:147].count(SHALLOW_WATER) >= 5
-            and DEEP_WATER not in dungeon.grid[y][72:147]
+            if dungeon.grid[y][50:100].count(SHALLOW_WATER) >= 5
+            and DEEP_WATER not in dungeon.grid[y][50:100]
         ]
         ford_heads = [y for y in shallows if y - 1 not in shallows]
         self.assertIn(len(ford_heads), (2, 3))
         self.assertGreaterEqual(
-            min(b - a for a, b in zip(ford_heads, ford_heads[1:])), 20
+            min(b - a for a, b in zip(ford_heads, ford_heads[1:])), 14
         )
         for y in ford_heads:
             cross_section = {
-                (x, y) for x in range(72, 147) if dungeon.grid[y][x] == SHALLOW_WATER
+                (x, y) for x in range(50, 100) if dungeon.grid[y][x] == SHALLOW_WATER
             }
             self.assertTrue(cross_section <= seen)
         logs = {
@@ -262,6 +262,31 @@ class FishingTests(unittest.TestCase):
         self.assertIn("ov_mangrove_roots", dungeon.overlays.values())
         self.assertIn("ov_jungle_vines", dungeon.overlays.values())
         self.assertIn(treasure, reachable_floor_tiles(dungeon, start))
+
+    def test_settlement_houses_vary_in_shape_count_and_furnishings(self):
+        counts = set()
+        footprints = set()
+        kinds = set()
+        for seed in range(12):
+            dungeon = Dungeon(puzzle_chance=0)
+            dungeon.grid = [[21] * dungeon.width for _ in range(dungeon.height)]
+            dungeon.jungle_props, dungeon.rooms = [], []
+            plan = Plan(dungeon, random.Random(seed))
+            center = (dungeon.width // 2, dungeon.height // 2)
+            contacts = village(plan, center, (1, 0))
+            reached = reachable_floor_tiles(dungeon, contacts[0])
+            self.assertIn(contacts[1], reached)
+            self.assertTrue(plan.hut_entries <= reached)
+            self.assertTrue(2 <= len(plan.hut_entries) <= 5)
+            counts.add(len(plan.hut_entries))
+            footprints.update(tuple(sorted(room.size)) for room in dungeon.rooms[:-1])
+            kinds.update(kind for _, _, kind in dungeon.jungle_props)
+        self.assertGreaterEqual(len(counts), 3)
+        self.assertGreaterEqual(len(footprints), 5)
+        self.assertTrue(
+            {"tribal_bed", "tribal_bow_stand", "shaman_cauldron", "tribal_chest"}
+            <= kinds
+        )
 
     def test_touching_jungle_trees_occlude_the_view(self):
         random.seed(12)

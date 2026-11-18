@@ -35,9 +35,15 @@ from elenor.world.jungle_sites import (
     offset,
     oval,
     village,
+    vault_layout,
+    prop_group,
+    GROVE_GROUPS,
+    MARSH_GROUPS,
+    RUIN_GROUPS,
+    BONE_GROUPS,
 )
 
-WIDTH, HEIGHT = MAP_COLS * 3, MAP_ROWS * 3
+WIDTH, HEIGHT = MAP_COLS * 2, MAP_ROWS * 2
 Point = tuple[int, int]
 
 
@@ -65,7 +71,7 @@ class Relief:
 
     def __init__(self, rng, width, height):
         self.layers = []
-        for scale, weight in ((34, 0.65), (13, 0.25), (6, 0.10)):
+        for scale, weight in ((24, 0.65), (11, 0.25), (5, 0.10)):
             values = [
                 [rng.random() for _ in range(width // scale + 2)]
                 for _ in range(height // scale + 2)
@@ -90,10 +96,10 @@ class Relief:
 def surface_background(plan, relief, region):
     """Contiguous stands occupy all space outside explicitly opened ground."""
     ridge = []
-    limit = plan.rng.randint(94, 122)
+    limit = plan.rng.randint(68, 87)
     for y, line in enumerate(relief):
         row = plan.d.grid[y]
-        bluff = round(15 * sin(y / 29 + limit))
+        bluff = round(10 * sin(y / 21 + limit))
         for x, height in enumerate(line):
             if height > 0.71:
                 tile = 17
@@ -236,65 +242,65 @@ def trail(plan, points, tile, *, avoid=None, main=True, underground=False):
 
 
 def lake_shape(plan, relief):
-    low_points = [(x, y) for x in range(94, 153, 8) for y in range(31, 96, 7)]
+    low_points = [(x, y) for x in range(73, 94, 4) for y in range(24, 62, 5)]
     plan.rng.shuffle(low_points)
     center = min(low_points[:19], key=lambda point: relief[point[1]][point[0]])
     orientation = plan.rng.uniform(0, pi)
     basin = oval(
         center,
-        plan.rng.randint(14, 26),
         plan.rng.randint(9, 15),
+        plan.rng.randint(7, 11),
         orientation,
         0.28,
         plan.rng.random() * tau,
     )
-    ox = round(cos(orientation) * 17)
-    oy = round(sin(orientation) * 17)
+    ox = round(cos(orientation) * 9)
+    oy = round(sin(orientation) * 9)
     bay = oval(
         (center[0] + ox, center[1] + oy),
-        12,
-        7,
+        8,
+        5,
         orientation + 0.7,
         0.19,
         plan.rng.random() * tau,
     )
-    return {point for point in basin | bay if point[0] >= 71}
+    return {point for point in basin | bay if 53 <= point[0] <= WIDTH - 22}
 
 
 def river_shape(plan, relief):
-    start_x = plan.rng.randint(89, 123)
-    lower_x = plan.rng.randint(85, 128)
-    bend = plan.rng.choice((-1, 1)) * plan.rng.randint(16, 43)
-    elevation = min(range(62, 137), key=lambda x: relief[44][x])
+    start_x = plan.rng.randint(64, 79)
+    lower_x = plan.rng.randint(64, 82)
+    bend = plan.rng.choice((-1, 1)) * plan.rng.randint(10, 25)
+    elevation = min(range(63, 82), key=lambda x: relief[44][x])
     # Control points pull the stream across several different bands of the valley.
     first = (
-        max(87, min(125, start_x + bend * 0.6 + (elevation - start_x) * 0.4)),
-        plan.rng.randint(16, 39),
+        max(64, min(81, start_x + bend * 0.6 + (elevation - start_x) * 0.4)),
+        plan.rng.randint(13, 26),
     )
-    second = max(88, min(127, lower_x - bend)), plan.rng.randint(81, 108)
+    second = max(65, min(83, lower_x - bend)), plan.rng.randint(52, 70)
     river = set()
     phase = plan.rng.uniform(0, tau)
     for i in range(HEIGHT * 2 + 1):
         t = i / (HEIGHT * 2)
         x, y = cubic((start_x, 0), (lower_x, HEIGHT - 1), first, second, t)
         radius = (
-            3.7 + 2.65 * (0.5 + 0.5 * sin(t * 9 + phase)) + 0.9 * cos(t * 19 - phase)
+            3.4 + 2.15 * (0.5 + 0.5 * sin(t * 9 + phase)) + 0.9 * cos(t * 19 - phase)
         )
         river.update(oval((round(x), round(y)), radius, radius))
     if plan.rng.random() < 0.5:
         x, y = cubic((start_x, 0), (lower_x, HEIGHT - 1), first, second, 0.58)
         # Cut a backwater off the active current, with a wider landing area.
         bay = oval(
-            (round(x) + plan.rng.choice((-7, 7)), round(y)), 14, 7, 0.8, 0.24, phase
+            (round(x) + plan.rng.choice((-5, 5)), round(y)), 9, 5, 0.8, 0.24, phase
         )
         river.update(bay)
     # A reach downstream of the bend has enough flooded area for a bar.
     t = plan.rng.uniform(0.4, 0.61)
     x, y = cubic((start_x, 0), (lower_x, HEIGHT - 1), first, second, t)
     eddy = round(x), round(y)
-    river.update(oval(eddy, 10, 12, 0.12, 0.15, phase))
+    river.update(oval(eddy, 8, 8, 0.12, 0.15, phase))
     bar = oval(
-        eddy, plan.rng.uniform(2.4, 3.4), plan.rng.uniform(4, 6), 0.15, 0.22, phase
+        eddy, plan.rng.uniform(2, 2.8), plan.rng.uniform(3, 4.5), 0.15, 0.22, phase
     )
     return river, bar
 
@@ -333,7 +339,7 @@ def river_crossings(plan, wet, island):
         left, right = channel.get(y, (x, x))
         channel[y] = min(x, left), max(x, right)
     landings = []
-    ford_rows = [plan.rng.randint(14, 25), plan.rng.randint(96, 109)]
+    ford_rows = [plan.rng.randint(10, 17), plan.rng.randint(65, 73)]
     if plan.rng.random() < 0.73:
         ford_rows.insert(1, sorted(y for _, y in island)[len(island) // 2])
     for y in ford_rows:
@@ -353,13 +359,13 @@ def river_crossings(plan, wet, island):
         left, right = channel[y]
         landings.extend(((left - 2, y), (right + 2, y)))
 
-    bands = [range(32, 45), range(78, 91)]
+    bands = [range(24, 34), range(51, 62)]
     plan.rng.shuffle(bands)
     suitable = [
         y
         for band in bands
         for y in band
-        if all(abs(y - ford) >= 8 for ford in ford_rows)
+        if all(abs(y - ford) >= 6 for ford in ford_rows)
     ]
     row = min(suitable, key=lambda y: channel[y][1] - channel[y][0])
     left, right = channel[row]
@@ -483,9 +489,9 @@ def waterfront(plan, relief):
     plan.rng.shuffle(candidates)
     ports = []
     for landing in candidates:
-        if any(distance(landing.bank, port.bank) < 29 for port in ports):
+        if any(distance(landing.bank, port.bank) < 19 for port in ports):
             continue
-        if any(distance(landing.bank, foot) < 14 for foot in shore_nodes):
+        if any(distance(landing.bank, foot) < 8 for foot in shore_nodes):
             continue
         ports.append(landing)
         if len(ports) == (3 if mode == "river" else 2):
@@ -500,13 +506,6 @@ def waterfront(plan, relief):
         shore_nodes.append(shore)
         plan.landing_approaches.add(shore)
     return shore_nodes
-
-
-def feature_lot(plan, center, facing, kind):
-    point = axis_frame(center, facing)
-    if kind == "vault":
-        return axis_rect(point, 1, 21, -6, 6)
-    return axis_rect(point, 3, 29, -15, 15)
 
 
 def region_for(d, rng):
@@ -527,6 +526,35 @@ def mark_trail(plan, path, ground):
         if index % 3 == 1 and center in plan.floor:
             plan.d.overlays[center] = "ov_flowers_blue"
             plan.light(center, 77, (0.42, 0.62, 0.66))
+
+
+def dress_verges(plan, road, biome, reserved):
+    palette = {
+        "grove": (10, GROVE_GROUPS, "ov_fern"),
+        "marsh": (23, MARSH_GROUPS, "ov_mangrove_roots"),
+        "ruins": (24, RUIN_GROUPS, "ov_jungle_vines"),
+        "bone": (45, BONE_GROUPS, "ov_ribcage_remains"),
+    }
+    for index in range(8, len(road) - 6, 11):
+        x, y = road[index]
+        local_biome = biome if x > WIDTH // 2 else "grove"
+        tile, collections, overlay = palette[local_biome]
+        edges = [
+            point
+            for point in dilate({(x, y)}, 4) - dilate({(x, y)}, 2)
+            if point not in reserved
+            and point not in plan.routes
+            and any(side in plan.routes for side in neighbors(point))
+            and plan.inside(point, 3)
+        ]
+        if not edges:
+            continue
+        center = plan.rng.choice(sorted(edges))
+        patch = oval(center, 2.8, 2.1, 0.3, 0.17) - reserved - plan.routes
+        plan.clearing(patch, tile)
+        prop_group(plan, plan.rng.choice(collections)[:2], patch, center)
+        detail_patch(plan, patch, overlay, 2, radius=(1, 2))
+        plan.light(road[index], 76, (0.4, 0.65, 0.58))
 
 
 def cut_through(plan, points, biome, avoid, *, natural):
@@ -565,31 +593,31 @@ def cut_through(plan, points, biome, avoid, *, natural):
 def facade_lot(center, facing, kind, compact):
     point = axis_frame(center, facing)
     if kind == "temple":
-        flank = 7 if compact else 10
-        return axis_rect(point, -5, 13, -8, 8) | axis_rect(
-            point, 14, 20 if compact else 25, -flank, flank
+        flank = 6 if compact else 8
+        return axis_rect(point, -3, 6, -6, 6) | axis_rect(
+            point, 7, 12 if compact else 16, -flank, flank
         )
     angle = 0 if facing[0] else pi / 2
-    radius = (9.8, 8.55) if compact else (14.7, 12.2)
-    return oval(point(15), *radius, angle) | oval(point(2), 12.2, 8.55, angle)
+    radii = (7.35, 6.1) if compact else (9.8, 7.35)
+    return oval(point(8), *radii, angle) | oval(point(0), 7.4, 6.2, angle)
 
 
 def build_facade(plan, center, kind, facing, compact, lot):
     entrance(plan, center, kind, facing, compact)
     point = axis_frame(center, facing)
-    ramp = axis_rect(point, -12, 0, 0, 1)
+    ramp = axis_rect(point, -8, 0, 0, 1)
     plan.paint(ramp, 24 if kind == "temple" else 11)
     plan.routes.update(ramp)
     plan.structure.update(lot | ramp)
-    return point(-12)
+    return point(-8)
 
 
 def place_facade(plan, kind, north):
     """Local lot search. Both banks have room outside the river's floodplain."""
     candidates = [
         (x, y)
-        for x in range(125, 175, 5)
-        for y in (range(16, 49, 4) if north else range(76, 111, 4))
+        for x in range(91, 115, 3)
+        for y in (range(12, 33, 3) if north else range(51, 73, 3))
     ]
     plan.rng.shuffle(candidates)
     forbidden = plan.water | plan.structure | plan.bridges | plan.floor
@@ -602,13 +630,13 @@ def place_facade(plan, kind, north):
             for facing in facing_options:
                 lot = facade_lot(center, facing, kind, compact)
                 point = axis_frame(center, facing)
-                layout = lot | axis_rect(point, -13, 0, 0, 1)
+                layout = lot | axis_rect(point, -9, 0, 0, 1)
                 if layout & forbidden or not all(
                     plan.inside(tile, 3) for tile in layout
                 ):
                     continue
                 return build_facade(plan, center, kind, facing, compact, lot)
-    center = (164, 31 if north else 95)
+    center = (106, 16 if north else 69)
     facing = (1, 0)
     lot = facade_lot(center, facing, kind, True)
     return build_facade(plan, center, kind, facing, True, lot)
@@ -620,16 +648,16 @@ def glade_sites(plan, relief, region, ridge):
     blocked = dilate(plan.structure | plan.water | plan.occupied | plan.bridges, 2)
     candidates = [(x, y) for x in range(13, WIDTH - 13) for y in range(13, HEIGHT - 13)]
     rng.shuffle(candidates)
-    target = rng.randint(8, 12)
+    target = rng.randint(6, 9)
     for center in candidates:
         if center in blocked:
             continue
-        rx, ry = rng.randint(7, 14), rng.randint(6, 11)
+        rx, ry = rng.randint(5, 9), rng.randint(4, 7)
         angle = rng.uniform(0, pi)
         footprint = oval(center, rx, ry, angle, 0.22, rng.random() * tau)
         if len(footprint & blocked) > len(footprint) * 0.16:
             continue
-        scenic = center[0] > 90 or (
+        scenic = center[0] > 63 or (
             region == "marsh" and relief[center[1]][center[0]] < 0.42
         )
         biome = region if scenic else "grove"
@@ -710,10 +738,10 @@ def surface(plan, relief):
     region = region_for(plan.d, plan.rng)
     ridge = surface_background(plan, relief, region)
     waterfront(plan, relief)
-    start = (plan.rng.randint(12, 17), plan.rng.randint(24, HEIGHT - 25))
+    start = (plan.rng.randint(8, 12), plan.rng.randint(19, HEIGHT - 20))
     hearth = (
-        plan.rng.randint(43, 47),
-        max(25, min(HEIGHT - 26, start[1] + plan.rng.randint(-17, 17))),
+        plan.rng.randint(28, 34),
+        max(13, min(HEIGHT - 14, start[1] + plan.rng.randint(-11, 11))),
     )
     west_gate, east_gate = village(plan, hearth, (1, 0))
     north = bool(plan.rng.getrandbits(1))
@@ -724,12 +752,14 @@ def surface(plan, relief):
     gates = {west_gate, east_gate, temple_gate, cave_gate}
     impassable = (plan.water - plan.bridges) | (plan.structure - gates) | plan.occupied
     main = set()
+    roads = []
     for first, last in (
         (start, west_gate),
         (east_gate, temple_gate),
         (temple_gate, end),
     ):
         points = path_curve(plan, first, last, impassable, relief)
+        roads.append(points)
         main.update(trail(plan, points, 12, avoid=impassable))
         main.update((first, last))
         mark_trail(plan, points, main)
@@ -781,6 +811,9 @@ def surface(plan, relief):
     targets = plan.d.passages.keys() | plan.d.fishing_edges.keys() | ends
     join_access(plan, start, targets, region)
     optional_vault(plan, temple_gate, start)
+    reserved = dilate(plan.structure | plan.water | plan.bridges | plan.occupied, 2)
+    for road in roads:
+        dress_verges(plan, road, region, reserved)
     return start
 
 
@@ -807,32 +840,38 @@ def optional_vault(plan, focus, start):
         start, plan.floor - solid_fixtures(plan)
     )
     choices = sorted(edges, key=lambda point: (distance(point, focus), point))
-    for center in choices:
-        # Find a wall face with enough unexcavated rock to hold the entire branch.
-        normals = list(CARDINAL)
-        plan.rng.shuffle(normals)
-        for facing in normals:
-            if offset(center, facing) in plan.floor:
-                continue
-            lot = feature_lot(plan, center, facing, "vault")
-            if not lot & (plan.floor | plan.water | plan.structure) and all(
-                plan.inside(point, 2) for point in lot
-            ):
-                mirror_vault(plan, center, facing)
-                return
+    blocked = plan.floor | plan.water
+    if not plan.d.interior:
+        blocked |= plan.structure
+    for compact in (False, True):
+        for center in choices:
+            normals = list(CARDINAL)
+            plan.rng.shuffle(normals)
+            for facing in normals:
+                if offset(center, facing) in blocked:
+                    continue
+                layout = vault_layout(center, facing, compact)
+                lot = layout[2]
+                if not lot & blocked and all(plan.inside(point, 2) for point in lot):
+                    mirror_vault(plan, layout)
+                    return
 
 
 def temple(plan):
     facing = plan.rng.choice(CARDINAL)
     if facing[0]:
         origin = (
-            plan.rng.randint(22, 31) if facing[0] > 0 else plan.rng.randint(161, 175),
-            plan.rng.randint(48, 78),
+            plan.rng.randint(20, 26)
+            if facing[0] > 0
+            else plan.rng.randint(WIDTH - 27, WIDTH - 21),
+            plan.rng.randint(HEIGHT // 2 - 4, HEIGHT // 2 + 4),
         )
     else:
         origin = (
-            plan.rng.randint(51, 143),
-            plan.rng.randint(13, 22) if facing[1] > 0 else plan.rng.randint(103, 113),
+            plan.rng.randint(WIDTH // 2 - 12, WIDTH // 2 + 12),
+            plan.rng.randint(11, 14)
+            if facing[1] > 0
+            else plan.rng.randint(HEIGHT - 15, HEIGHT - 12),
         )
     start, axis = build_temple(plan, origin, facing)
     optional_vault(plan, axis(24), start)
@@ -841,21 +880,19 @@ def temple(plan):
 
 def cave_nodes(plan):
     """Follow a fault with alternate pockets and short subsidiary passages."""
-    y = plan.rng.randint(44, 76)
-    start = plan.rng.randint(17, 24), y
+    y = plan.rng.randint(35, 50)
+    start = plan.rng.randint(13, 18), y
     points = [start]
     folded = plan.rng.random() < 0.42
-    for index in range(1, 7):
+    for index in range(1, 6):
         if folded:
-            motion = ((28, -22), (35, -9), (39, 13), (15, 28), (-23, 24), (-31, 6))[
-                index - 1
-            ]
-            dx, dy = (step + plan.rng.randint(-6, 6) for step in motion)
+            motion = ((18, -14), (23, -6), (24, 12), (8, 20), (-18, 12))[index - 1]
+            dx, dy = (step + plan.rng.randint(-4, 4) for step in motion)
         else:
-            dx = plan.rng.randint(19, 29)
-            dy = plan.rng.choice((-1, 1)) * plan.rng.randint(6, 21)
+            dx = plan.rng.randint(14, 19)
+            dy = plan.rng.choice((-1, 1)) * plan.rng.randint(6, 14)
         x = min(WIDTH - 17, points[-1][0] + dx)
-        y = max(19, min(HEIGHT - 20, y + dy))
+        y = max(13, min(HEIGHT - 14, y + dy))
         points.append((x, y))
     if plan.rng.random() < 0.5:
         points = [(WIDTH - 1 - x, y) for x, y in points]
@@ -864,14 +901,14 @@ def cave_nodes(plan):
 
 def cave_spurs(plan, points):
     branches = []
-    for index in plan.rng.sample(range(1, len(points) - 1), 4):
+    for index in plan.rng.sample(range(1, len(points) - 1), 3):
         x, y = points[index]
         directions = [-1, 1]
         plan.rng.shuffle(directions)
         for side in directions:
-            fork = x + plan.rng.randint(-14, 14), y + side * plan.rng.randint(20, 35)
+            fork = x + plan.rng.randint(-9, 9), y + side * plan.rng.randint(14, 22)
             if plan.inside(fork, 14) and all(
-                distance(fork, point) > 17 for point in points + branches
+                distance(fork, point) > 13 for point in points + branches
             ):
                 branches.append(fork)
                 yield points[index], fork
@@ -882,7 +919,7 @@ def caves(plan):
     points = cave_nodes(plan)
     spurs = list(cave_spurs(plan, points))
     rooms = []
-    kinds = ["mouth", "squeeze", "geode", "chasm", "gallery", "sump", "gallery"]
+    kinds = ["mouth", "squeeze", "geode", "chasm", "sump", "gallery"]
     middle = kinds[1:-1]
     plan.rng.shuffle(middle)
     kinds[1:-1] = middle
@@ -936,8 +973,8 @@ def validate_floor(plan, start):
             raise LayoutError("A river crossing needs two reachable approaches")
         if not d.fishing_edges:
             raise LayoutError("No usable landing")
-        if len(plan.hut_entries) < 3 or plan.hut_entries - reachable:
-            raise LayoutError("The village needs three or more accessible huts")
+        if len(plan.hut_entries) < 2 or plan.hut_entries - reachable:
+            raise LayoutError("The village needs two or more accessible houses")
     info = d.mirror_puzzle_info
     if d.interior:
         reward_tiles = {
