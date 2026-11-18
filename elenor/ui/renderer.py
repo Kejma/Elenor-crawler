@@ -1,9 +1,11 @@
 import math
+from collections import Counter
 import pygame
 from elenor.data.abilities import (
     PASSIVES, PASSIVE_SLOT_LIMIT, VECTOR_COLORS, acquisition_bonuses, passive_power_at, perk_branch,
 )
-from elenor.config import VIEW_H, SCALE, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, RARITY_COLORS
+from elenor.config import VIEW_H, SCALE, SCREEN_W, SCREEN_H, TILE_W, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, RARITY_COLORS
+from elenor.entities.objects import JUNGLE_KEY_COLORS
 
 
 class UIRendererMixin:
@@ -227,8 +229,8 @@ class UIRendererMixin:
                 lvl_str = "СТЕРЕТЬ"
                 l_col = (255, 95, 95)
             else:
-                lvl_str = "УЛУЧШЕНИЕ" if cur_lvl > 0 else ("АКТИВ [Q/E/R/F]" if perk.get("type") == "active" else "ПАССИВ")
-                l_col = UI_TEXT_MAIN if cur_lvl > 0 else UI_TEXT_DIM
+                lvl_str = "УЛУЧШЕНИЕ" if cur_lvl > 0 else "НОВАЯ"
+                l_col = UI_TEXT_MAIN
 
             l_surf = self.font_small.render(lvl_str, True, l_col)
             screen.blit(l_surf, (rect.right - 12 - l_surf.get_width(), rect.y + 14))
@@ -242,6 +244,9 @@ class UIRendererMixin:
                 n_surf = self.font_small.render(perk["name"], True, r_col)
             screen.blit(n_surf, (rect.centerx - n_surf.get_width() // 2, rect.y + 108))
 
+            ability_type = "Активная" if perk.get("type") == "active" else "Пассивная"
+            type_surf = self.font_small.render(ability_type, True, UI_TEXT_DIM)
+            screen.blit(type_surf, type_surf.get_rect(midright=(rect.right - 12, rect.y + 34)))
             if not is_erase_mode:
                 rar_name = ui_texts["perk_ranks"][rarity]
                 r_surf = self.font_small.render(rar_name, True, r_col)
@@ -269,165 +274,199 @@ class UIRendererMixin:
                 screen.blit(d_s, (rect.centerx - d_s.get_width() // 2, cur_y))
                 cur_y += 18
 
-    def _render_character_sheet_modal(self, screen, player, ui_texts, hover_pos, drag_item):
-        win_w, win_h = 960, 510
-        wx = (SCREEN_W - win_w) // 2
-        wy = (VIEW_H * SCALE - win_h) // 2 + 20
-        self.modal_rect = pygame.Rect(wx, wy, win_w, win_h)
+    def _draw_inventory_label(self, screen, text, x, y, color=UI_TEXT_MAIN, *, align="topleft", font=None):
+        label = (font or self.font_small).render(text, True, color)
+        screen.blit(label, label.get_rect(**{align: (x, y)}))
 
+    def _render_character_sheet_modal(self, screen, player, ui_texts, hover_pos, drag_item):
+        win_w, win_h = 1140, 578
+        wx = (SCREEN_W - win_w) // 2
+        wy = (VIEW_H * SCALE - win_h) // 2
+        self.modal_rect = pygame.Rect(wx, wy, win_w, win_h)
         self.draw_pixel_frame(screen, self.modal_rect, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
         journal_open = ui_texts.get("_journal_open", False)
 
-        # Кнопка переключения между Куклой Героя и Журналом в правом верхнем углу окна инвентаря
-        self.journal_btn_rect = pygame.Rect(wx + win_w - 224, wy + 10, 204, 32)
-        j_hov = self.journal_btn_rect.collidepoint(hover_pos)
-        j_bg = (58, 46, 40) if (j_hov or journal_open) else UI_SLOT_BG
-        self.draw_pixel_frame(screen, self.journal_btn_rect, j_bg, UI_BORDER_GOLD, j_hov or journal_open, 1.0)
-        j_lbl_txt = "НАЗАД К ГЕРОЮ" if journal_open else "ЖУРНАЛ ЗАПИСЕЙ [J]"
-        j_lbl = self.font_small.render(j_lbl_txt, True, (255, 230, 110) if journal_open else UI_TEXT_MAIN)
-        screen.blit(j_lbl, (self.journal_btn_rect.centerx - j_lbl.get_width() // 2, self.journal_btn_rect.centery - j_lbl.get_height() // 2))
-
+        self.journal_btn_rect = pygame.Rect(wx + win_w - 224, wy + 15, 204, 34)
+        hovered = self.journal_btn_rect.collidepoint(hover_pos)
+        self.draw_pixel_frame(screen, self.journal_btn_rect, UI_SLOT_BG, UI_BORDER_GOLD, hovered, 1.0)
+        journal_label = "К герою" if journal_open else "Журнал [J]"
+        self._draw_inventory_label(screen, journal_label, *self.journal_btn_rect.center, align="center")
         if journal_open:
             self._render_journal_view(screen, wx, wy, win_w, win_h, ui_texts, hover_pos)
             return
 
-        title = self.font_title.render(f"{ui_texts['inv_title']} — {player.full_name} ({ui_texts['lvl']} {player.level})", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(title, (wx + 24, wy + 16))
+        self._draw_inventory_label(screen, player.full_name, wx + 24, wy + 15, UI_BORDER_HIGHLIGHT, font=self.font_title)
+        self._draw_inventory_label(screen, f"Уровень {player.level}", wx + 24, wy + 43, UI_TEXT_DIM)
+        stats = pygame.Rect(wx + 20, wy + 71, 320, 454)
+        gear = pygame.Rect(stats.right + 10, stats.y, 310, stats.height)
+        storage = pygame.Rect(gear.right + 10, gear.y, 450, gear.height)
+        for rect, title in ((stats, "Характеристики"), (gear, "Снаряжение"), (storage, "Поклажа")):
+            self.draw_pixel_frame(screen, rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
+            self._draw_inventory_label(screen, title, rect.x + 16, rect.y + 13, UI_BORDER_HIGHLIGHT, font=self.font_ui)
 
-        col1_rect = pygame.Rect(wx + 18, wy + 48, 250, 418)
-        self.draw_pixel_frame(screen, col1_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
-
-        xp_txt = self.font_small.render(f"{ui_texts['xp']}: {player.xp} / {player.max_xp}", True, (245, 205, 80))
-        screen.blit(xp_txt, (col1_rect.x + 16, col1_rect.y + 14))
-        pygame.draw.rect(screen, (14, 12, 18), (col1_rect.x + 16, col1_rect.y + 34, 218, 10))
+        x, right = stats.x + 16, stats.right - 16
+        xp_y = stats.y + 44
+        self._draw_inventory_label(screen, "Опыт", x, xp_y, UI_TEXT_DIM)
+        self._draw_inventory_label(screen, f"{player.xp} / {player.max_xp}", right, xp_y, align="topright")
+        pygame.draw.rect(screen, (13, 11, 16), (x, xp_y + 20, right - x, 7))
         ratio = min(1.0, player.xp / max(1, player.max_xp))
-        pygame.draw.rect(screen, (235, 185, 55), (col1_rect.x + 17, col1_rect.y + 35, int(216 * ratio), 8))
+        pygame.draw.rect(screen, (225, 180, 76), (x, xp_y + 20, round((right - x) * ratio), 7))
 
-        self.stat_plus_rects = {}
-        primary_stats = [
-            ("body", ui_texts["body"], player.body, (235, 145, 130)),
-            ("cunning", ui_texts["cunning"], player.cunning, (135, 230, 165)),
-            ("mind", ui_texts["mind"], player.mind, (150, 200, 255)),
-        ]
-        for idx, (st_key, st_label, st_val, st_col) in enumerate(primary_stats):
-            ry = col1_rect.y + 56 + idx * 38
-            pygame.draw.rect(screen, (32, 27, 38), (col1_rect.x + 14, ry, 222, 32))
-            pygame.draw.rect(screen, (75, 62, 55), (col1_rect.x + 14, ry, 222, 32), 1)
-            screen.blit(self.font_ui.render(st_label, True, UI_TEXT_MAIN), (col1_rect.x + 20, ry + 7))
-            screen.blit(self.font_title.render(str(st_val), True, st_col), (col1_rect.x + 166, ry + 6))
+        for index, (label, value, color) in enumerate((
+            ("Сила", player.body, VECTOR_COLORS["body"]),
+            ("Ловкость", player.cunning, VECTOR_COLORS["cunning"]),
+            ("Магия", player.mind, VECTOR_COLORS["mind"]),
+        )):
+            y = stats.y + 84 + index * 32
+            pygame.draw.rect(screen, (36, 30, 41), (x, y, right - x, 27))
+            pygame.draw.rect(screen, color, (x, y, 2, 27))
+            self._draw_inventory_label(screen, label, x + 10, y + 5, font=self.font_ui)
+            self._draw_inventory_label(screen, str(value), right - 9, y + 4, color, align="topright", font=self.font_ui)
 
-        ledger_y = col1_rect.y + 180
-        pygame.draw.line(screen, UI_BORDER_WOOD, (col1_rect.x + 14, ledger_y - 6), (col1_rect.right - 14, ledger_y - 6), 2)
-        derived = [
-            (ui_texts["phys_atk"], f"{player.phys_attack} (Крит {int(player.crit_chance*100)}%)"),
-            (ui_texts["mag_atk"], f"+{player.mag_attack} (Удар +{player.mp_on_hit:.1f} МП)"),
-            (ui_texts["phys_def"], f"{player.phys_defense} ед."),
-            (ui_texts["mag_def"], f"{player.mag_defense} ед."),
-            ("Уклонение", f"{int(player.dodge_chance*100)}%"),
-            (ui_texts["noise"], f"{int(player.noise_factor*100)}%"),
-            (ui_texts["vision"], f"{int(player.torch_light_radius)}/{int(player.dark_vision_radius)}"),
-            ("Способности", f"Акт:{len(player.active_perks)}/4"),
-        ]
-        for idx, (k_txt, v_txt) in enumerate(derived):
-            ly = ledger_y + idx * 27
-            if idx % 2 == 0:
-                pygame.draw.rect(screen, (28, 24, 34), (col1_rect.x + 14, ly - 2, 222, 24))
-            screen.blit(self.font_small.render(k_txt, True, UI_TEXT_DIM), (col1_rect.x + 18, ly + 2))
-            v_surf = self.font_small.render(v_txt, True, UI_TEXT_MAIN)
-            screen.blit(v_surf, (col1_rect.right - 18 - v_surf.get_width(), ly + 2))
+        stats_list = (
+            ("Здоровье", f"{int(player.hp)} / {player.max_hp}"),
+            ("Мана", f"{int(player.mp)} / {player.max_mp}"),
+            ("Физическая атака", str(player.phys_attack)),
+            ("Магическая мощь", str(player.mag_attack)),
+            ("Физическая защита", str(player.phys_defense)),
+            ("Магическая защита", str(player.mag_defense)),
+            ("Шанс критического удара", f"{player.crit_chance:.1%}"),
+            ("Шанс уклонения", f"{player.dodge_chance:.0%}"),
+            ("Мана за попадание", f"{player.mp_on_hit:.1f}"),
+            ("Шум шагов", f"{player.noise_factor:.0%}"),
+            ("Обзор с факелом", f"{player.torch_light_radius / TILE_W:.1f} м"),
+            ("Обзор в темноте", f"{player.dark_vision_radius / TILE_W:.1f} м"),
+        )
+        for index, (label, value) in enumerate(stats_list):
+            y = stats.y + 188 + index * 22
+            if index % 2 == 0:
+                pygame.draw.rect(screen, (28, 24, 34), (x, y - 2, right - x, 21))
+            self._draw_inventory_label(screen, label, x + 5, y, UI_TEXT_DIM)
+            self._draw_inventory_label(screen, value.replace(".", ","), right - 5, y, align="topright")
 
-        col2_rect = pygame.Rect(wx + 278, wy + 48, 274, 418)
-        self.draw_pixel_frame(screen, col2_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
+        cx = gear.centerx
+        portrait = pygame.Rect(cx - 47, gear.y + 137, 94, 147)
+        self.draw_pixel_frame(screen, portrait, (18, 15, 22), UI_BORDER_WOOD, False, 1.0)
+        hero, _ = self.get_hero_pair(player)
+        art = pygame.transform.scale(hero, (64, 80))
+        screen.blit(art, art.get_rect(center=portrait.center))
 
-        ped_rect = pygame.Rect(col2_rect.x + 89, col2_rect.y + 104, 96, 116)
-        self.draw_pixel_frame(screen, ped_rect, (18, 15, 22), UI_BORDER_WOOD, False, 1.0)
-        h_diff, _ = self.get_hero_pair(player)
-        big_hero = pygame.transform.scale(h_diff, (16 * 4, 20 * 4))
-        screen.blit(big_hero, (ped_rect.x + 16, ped_rect.y + 18))
-
-        cx = col2_rect.x + 137
-        cy = col2_rect.y + 162
-        doll_layout = {
-            "helmet":     pygame.Rect(cx - 32, col2_rect.y + 18, 64, 68),
-            "trinket":    pygame.Rect(col2_rect.right - 80, col2_rect.y + 18, 64, 68),
-            "right_hand": pygame.Rect(col2_rect.x + 16, cy - 42, 64, 68),
-            "left_hand":  pygame.Rect(col2_rect.right - 80, cy - 42, 64, 68),
-            "torso":      pygame.Rect(cx - 32, cy + 68, 64, 68),
-            "ring_1":     pygame.Rect(col2_rect.x + 16, cy + 42, 64, 68),
-            "ring_2":     pygame.Rect(col2_rect.right - 80, cy + 42, 64, 68),
-            "boots":      pygame.Rect(cx - 32, col2_rect.bottom - 82, 64, 68),
-            "bag":        pygame.Rect(col2_rect.x + 16, col2_rect.bottom - 82, 64, 68),
+        self.equip_slot_rects = {
+            key: pygame.Rect(center - 48, gear.y + top, 96, 67)
+            for key, center, top in (
+                ("helmet", cx, 51), ("trinket", gear.right - 56, 51),
+                ("right_hand", gear.x + 56, 137), ("left_hand", gear.right - 56, 137),
+                ("ring_1", gear.x + 56, 217), ("ring_2", gear.right - 56, 217),
+                ("torso", cx, 297), ("boots", cx, 373),
+            )
         }
-        self.equip_slot_rects = doll_layout
         hovered_item = None
-        hovered_from_inventory = False
+        compares = False
+        weapon = player.equipment["right_hand"]
+        for slot, rect in self.equip_slot_rects.items():
+            item = player.equipment[slot]
+            if slot == "left_hand" and weapon and weapon.two_handed:
+                item = weapon
+            is_hovered = rect.collidepoint(hover_pos)
+            self.draw_pixel_frame(screen, rect, UI_PANEL_BG, item.rarity_color if item else UI_BORDER_WOOD, is_hovered, 1.0)
+            label = ui_texts["slots"][slot]
+            self._draw_inventory_label(screen, label, rect.centerx, rect.bottom - 13, UI_TEXT_DIM, align="center")
+            if item:
+                self.draw_item_icon(screen, item.icon, rect.centerx - 16, rect.y + 8, 32)
+                if is_hovered:
+                    hovered_item = item
 
-        main_weap = player.equipment["right_hand"]
-        two_hand_active = main_weap is not None and main_weap.two_handed
-
-        for s_key, s_rect in doll_layout.items():
-            is_hov = s_rect.collidepoint(hover_pos)
-            itm = player.equipment.get(s_key) if s_key != "bag" else None
-            bd_col = itm.rarity_color if itm else UI_BORDER_WOOD
-            self.draw_pixel_frame(screen, s_rect, UI_PANEL_BG, bd_col, is_hov, 1.0)
-
-            lbl_str = ui_texts["slots"][s_key][:8]
-            lbl_s = self.font_small.render(lbl_str, True, UI_TEXT_DIM)
-            screen.blit(lbl_s, (s_rect.x + (s_rect.width - lbl_s.get_width()) // 2, s_rect.y + 48))
-
-            if s_key == "bag":
-                ic = "bag_big" if player.unlocked_slots >= 15 else ("bag_small" if player.unlocked_slots >= 6 else None)
-                if ic:
-                    self.draw_item_icon(screen, ic, s_rect.x + 16, s_rect.y + 10, 32)
-            elif s_key == "left_hand" and two_hand_active:
-                self.draw_item_icon(screen, main_weap.icon, s_rect.x + 16, s_rect.y + 10, 32)
-                lk = self.font_small.render("2H", True, (220, 120, 120))
-                screen.blit(lk, (s_rect.x + 8, s_rect.y + 8))
-            elif itm:
-                self.draw_item_icon(screen, itm.icon, s_rect.x + 16, s_rect.y + 10, 32)
-                if is_hov:
-                    hovered_item = itm
-                    hovered_from_inventory = False
-
-        col3_rect = pygame.Rect(wx + 562, wy + 48, 380, 418)
-        self.draw_pixel_frame(screen, col3_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
-        p_head = self.font_ui.render(f"{player.bag_name} [{player.unlocked_slots}/24]", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(p_head, (col3_rect.x + 16, col3_rect.y + 12))
+        used = sum(item is not None for item in player.inventory)
+        self._draw_inventory_label(screen, f"{used} / {player.unlocked_slots} мест", storage.right - 16,
+                                   storage.y + 14, UI_TEXT_DIM, align="topright")
+        self.bag_slot_rects = [pygame.Rect(storage.x + 15 + i * 213, storage.y + 42, 207, 56) for i in range(2)]
+        for index, rect in enumerate(self.bag_slot_rects):
+            item = player.bag_slots[index]
+            is_hovered = rect.collidepoint(hover_pos)
+            self.draw_pixel_frame(screen, rect, UI_PANEL_BG, item.rarity_color if item else UI_BORDER_WOOD, is_hovered, 1.0)
+            if item:
+                self.draw_item_icon(screen, item.icon, rect.x + 8, rect.y + 12, 32)
+                self._draw_inventory_label(screen, item.name, rect.x + 44, rect.y + 11)
+                self._draw_inventory_label(screen, f"+{item.slots} к вместимости", rect.x + 44, rect.y + 30, UI_TEXT_DIM)
+                if is_hovered:
+                    hovered_item, compares = item, False
+            else:
+                self._draw_inventory_label(screen, f"Место для сумки {index + 1}", *rect.center, UI_TEXT_DIM, align="center")
 
         self.inv_slot_rects = []
-        grid_x, grid_y = col3_rect.x + 14, col3_rect.y + 38
+        for index, item in enumerate(player.inventory):
+            row, col = divmod(index, 6)
+            rect = pygame.Rect(storage.x + 15 + col * 71, storage.y + 111 + row * 55, 65, 49)
+            self.inv_slot_rects.append(rect)
+            unlocked = index < player.unlocked_slots
+            is_hovered = unlocked and rect.collidepoint(hover_pos)
+            border = item.rarity_color if item else (UI_BORDER_WOOD if unlocked else (53, 44, 53))
+            self.draw_pixel_frame(screen, rect, UI_PANEL_BG if unlocked else (18, 16, 22), border, is_hovered, 1.0)
+            if item:
+                self.draw_item_icon(screen, item.icon, rect.centerx - 16, rect.y + 9, 32)
+                if is_hovered:
+                    hovered_item, compares = item, item.type == "equipment"
+            elif not unlocked:
+                self.draw_item_icon(screen, "lock", rect.centerx - 16, rect.y + 9, 32)
 
-        for idx in range(player.max_possible_slots):
-            col = idx % 4
-            row = idx // 4
-            sr = pygame.Rect(grid_x + col * 89, grid_y + row * 61, 84, 57)
-            self.inv_slot_rects.append(sr)
-            unlocked = idx < player.unlocked_slots
-            is_hov = sr.collidepoint(hover_pos) and unlocked
+        key_y = storage.y + 389
+        pygame.draw.line(screen, UI_BORDER_WOOD, (storage.x + 15, key_y), (storage.right - 15, key_y))
+        self._draw_inventory_label(screen, "Ключи", storage.x + 16, key_y + 18, UI_BORDER_HIGHLIGHT, font=self.font_ui)
+        if (key_item := self._render_keyring(screen, player, ui_texts, storage.x + 80, key_y + 11, hover_pos)) is not None:
+            hovered_item, compares = key_item, False
 
-            if not unlocked:
-                self.draw_pixel_frame(screen, sr, (16, 14, 20), (55, 45, 50), False, 1.0)
-                self.draw_item_icon(screen, "lock", sr.x + 26, sr.y + 12, 32)
-            else:
-                itm = player.inventory[idx]
-                bd_col = itm.rarity_color if itm else UI_BORDER_WOOD
-                self.draw_pixel_frame(screen, sr, UI_PANEL_BG, bd_col, is_hov, 1.0)
-                if itm:
-                    self.draw_item_icon(screen, itm.icon, sr.x + 26, sr.y + 6, 32)
-                    short_name = itm.name.split(" ")[0][:8]
-                    nm = self.font_small.render(short_name, True, itm.rarity_color)
-                    screen.blit(nm, (sr.x + (sr.width - nm.get_width()) // 2, sr.y + 38))
-                    if is_hov:
-                        hovered_item = itm
-                        hovered_from_inventory = True
-
-        hint_s = self.font_small.render("ЛКМ — Использовать/Надеть | Цифры [1-4] — Расходник на пояс | ПКМ — Выбросить", True, UI_TEXT_DIM)
-        screen.blit(hint_s, (wx + (win_w - hint_s.get_width()) // 2, wy + win_h - 26))
-
+        hint = "Перетащи вещь, чтобы надеть · Правая кнопка снимает сумку или выбрасывает вещь из поклажи"
+        self._draw_inventory_label(screen, hint, self.modal_rect.centerx, wy + 544, UI_TEXT_DIM, align="midtop")
         if drag_item:
             self.draw_item_icon(screen, drag_item.icon, hover_pos[0] - 16, hover_pos[1] - 16, 32)
         elif hovered_item:
-            self._render_item_tooltip(screen, player, hovered_item, ui_texts, hover_pos, compare=hovered_from_inventory)
+            self._render_item_tooltip(screen, player, hovered_item, ui_texts, hover_pos, compare=compares)
+
+    def _render_keyring(self, screen, player, ui_texts, x, y, hover_pos):
+        game = ui_texts.get("_game_ref")
+        local_keys = getattr(getattr(game, "dungeon", None), "jungle_keys", set())
+        collected_keys = set(local_keys)
+        for location in getattr(game, "jungle_locations", {}).values():
+            collected_keys.update(location[0].jungle_keys)
+        names = game.loc.get("jungle_route", {}) if game else {}
+        keys = []
+        for color, tint in JUNGLE_KEY_COLORS.items():
+            if color in collected_keys:
+                name = names.get(color, color)
+                if color not in local_keys:
+                    name += " · Другая локация"
+                    tint = tuple(round(channel * .62) for channel in tint)
+                keys.append((f"jungle_key_{color}", name, tint, None, 1))
+        counts = Counter(item.id for item in player.quest_items)
+        seen = set()
+        for item in player.quest_items:
+            if item.id not in seen:
+                keys.append((item.icon, item.name, item.rarity_color, item, counts[item.id]))
+                seen.add(item.id)
+        if not keys:
+            self._draw_inventory_label(screen, "Пока пусто", x, y + 8, UI_TEXT_DIM)
+            return None
+        hovered_item = None
+        name_rect = None
+        for index, (icon, name, color, item, count) in enumerate(keys):
+            rect = pygame.Rect(x + index * 44, y, 40, 36)
+            hovered = rect.collidepoint(hover_pos)
+            self.draw_pixel_frame(screen, rect, UI_PANEL_BG, color, hovered, 1.0)
+            self.draw_item_icon(screen, icon, rect.centerx - 16, rect.y + 2, 32)
+            if count > 1:
+                self._draw_inventory_label(screen, str(count), rect.right - 5, rect.bottom - 16, align="topright")
+            if hovered:
+                if item:
+                    hovered_item = item
+                else:
+                    name_rect = (*rect.midbottom, name, color)
+        if name_rect:
+            nx, ny, name, color = name_rect
+            label = self.font_small.render(name, True, color)
+            pos = label.get_rect(midtop=(nx, ny + 5)).inflate(14, 8)
+            self.draw_pixel_frame(screen, pos, UI_PANEL_BG, color, False, 1.0)
+            screen.blit(label, label.get_rect(center=pos.center))
+        return hovered_item
 
     def _render_journal_view(self, screen, wx, wy, win_w, win_h, ui_texts, hover_pos):
         title = self.font_title.render("ЖУРНАЛ ПОХОДА (ПОСЛЕДНИЕ 100 ЗАПИСЕЙ)", True, UI_BORDER_HIGHLIGHT)
@@ -469,15 +508,15 @@ class UIRendererMixin:
         list_top = wy + 90
         if game is not None:
             labels = game.loc["run_seed"]
-            rect = pygame.Rect(wx + win_w - 216, list_top, 190, 32)
+            rect = pygame.Rect(wx + 20, list_top, win_w - 40, 35)
             self.journal_seed_rect = rect
             hover = rect.collidepoint(hover_pos)
             self.draw_pixel_frame(screen, rect, UI_SLOT_BG, UI_BORDER_GOLD, hover, 1.0)
             message = game.seed_copy_message if pygame.time.get_ticks() < game.seed_copy_until else "copy"
             text = self.font_small.render(labels[message], True, UI_TEXT_MAIN)
-            screen.blit(text, text.get_rect(center=rect.center))
-            seed = self.font_ui.render(f'{labels["label"]}  {game.run_seed}', True, UI_TEXT_DIM)
-            screen.blit(seed, seed.get_rect(midleft=(wx + 24, rect.centery)))
+            screen.blit(text, text.get_rect(midright=(rect.right - 14, rect.centery)))
+            seed = self.font_ui.render(f'{labels["label"]}  {game.run_seed}', True, UI_TEXT_MAIN)
+            screen.blit(seed, seed.get_rect(midleft=(rect.x + 14, rect.centery)))
             list_top = rect.bottom + 8
 
         # Основное поле списка записей
@@ -549,6 +588,9 @@ class UIRendererMixin:
             elif item.weap_style == "thrown":
                 rarity_title += " • Метательное"
             add_wrapped(rarity_title, item.rarity_color)
+
+        if item.type == "bag":
+            add_wrapped(f"Дополнительные места: +{item.slots}", UI_TEXT_MAIN)
 
         # Лаконичный формат для Драгоценностей и Монет
         if item.type in ("gem", "currency_coin"):

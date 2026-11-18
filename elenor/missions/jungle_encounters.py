@@ -83,6 +83,7 @@ def populate_encounters(game):
         mob = Enemy(*point, kind=kind, state=state)
         if depth == 1:
             mob.max_hp, mob.dmg_min, mob.dmg_max, mob.xp_value = EARLY_STATS[kind]
+            mob.max_hp += 2
             mob.hp = mob.max_hp
             mob.phys_def = mob.mag_def = 0
             mob.speed = min(mob.speed, 2.7)

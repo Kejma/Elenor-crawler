@@ -105,8 +105,9 @@ class DevPanel:
                 p.mp = min(p.mp, float(p.max_mp))
                 game.add_popup(p.x, p.y, f"Откат -> Ур.{p.level}", (255, 140, 100))
         elif b_id == "act_unlock_bag":
-            p.unlocked_slots = 24
-            p.bag_name = "Бездонный кофр (24 яч.)"
+            for index, bag in enumerate(p.bag_slots):
+                if bag is None or bag.id != "void_chest_bag":
+                    game.equip_bag(game.make_item("void_chest_bag"), index)
         elif b_id == "act_gold":
             p.gold += 100
         elif b_id == "act_next_floor":

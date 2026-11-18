@@ -1,4 +1,6 @@
 """Pixel visibility for emissive overlays, shared by CPU and GPU rendering."""
+import math
+
 import numpy as np
 import pygame
 from elenor.config import VIEW_W, VIEW_H, TILE_W, TILE_H
@@ -13,9 +15,47 @@ def canopy_visibility(fov_mask, tile_x, tile_y):
     y0, y1 = max(0, tile_y + 3), min(VIEW_H, tile_y + TILE_H - 3)
     if x0 >= x1 or y0 >= y1:
         return 0.0
-    coverage = fov_mask[x0:x1, y0:y1].sum() / ((TILE_W - 6) * (TILE_H - 6))
+    coverage = fov_mask[x0:x1, y0:y1].sum() / ((x1 - x0) * (y1 - y0))
     strength = min(1.0, max(0.0, (float(coverage) - 0.35) / 0.48))
     return strength * strength * (3.0 - 2.0 * strength)
+
+
+class CanopyVisibility:
+    """Accumulate coverage in world tiles so a narrow moving ray cannot flash a sprite."""
+
+    def __init__(self):
+        self.grid = None
+        self.previous = {}
+        self.current = {}
+        self.time = 0.0
+        self.blend = 1.0
+
+    def begin_frame(self, grid, time):
+        if grid is not self.grid:
+            self.grid = grid
+            self.previous = {}
+            self.blend = 1.0
+        else:
+            self.previous = self.current
+            dt = min(0.10, max(0.0, time - self.time))
+            self.blend = 1.0 - math.exp(-dt * 12.0)
+        self.current = {}
+        self.time = time
+
+    def sample(self, tile, mask, x, y):
+        target = canopy_visibility(mask, x, y)
+        old = self.previous.get(tile, 0.0)
+        value = old + (target - old) * self.blend
+        if value > 0.006 or target > 0.0:
+            self.current[tile] = value
+        return value
+
+
+def canopy_opacity(tree_x, tree_y, player_x, player_y):
+    horizontal = (1.28 - abs(player_x - (tree_x + 0.5))) / 0.46
+    vertical = min(player_y - tree_y + 2.0, tree_y + 0.55 - player_y) / 0.42
+    blend = max(0.0, min(1.0, horizontal, vertical))
+    return round(255 - 150 * blend * blend * (3.0 - 2.0 * blend))
 
 
 def overlay_visibility(fov_mask, lights, cam_x, cam_y):

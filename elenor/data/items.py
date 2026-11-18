@@ -1,3 +1,14 @@
+BAG_CAPACITIES = {
+    "small_pouch": 4,
+    "waxed_pouch": 5,
+    "pouch_bag": 6,
+    "reed_satchel": 7,
+    "scout_satchel": 8,
+    "frame_pack": 9,
+    "travel_backpack": 10,
+    "void_chest_bag": 11,
+}
+
 BASE_ITEMS_DB = {
     # Ключи головоломок не участвуют в случайном луте. Тексты — в locales.
     "focusing_lens": {"type": "quest_key", "rarity": "rare", "icon": "trinket"},
@@ -218,9 +229,17 @@ BASE_ITEMS_DB = {
     "scroll_spark": {"type": "consumable_spell", "cast_type": "beam", "status": "stun", "status_dur": 1.5, "cooldown": 1.2, "power": 10, "color": [90, 235, 255], "icon": "skill_zap"},
     "scroll_fireball": {"type": "consumable_spell", "cast_type": "aoe_cursor", "aoe_radius": 2.1, "status": "poison", "status_dur": 5.0, "cooldown": 1.5, "power": 12, "color": [110, 245, 95], "icon": "bomb"},
     "oblivion_seal": {"type": "consumable_eraser", "icon": "trinket"},
-    "small_pouch": {"type": "bag", "rarity": "common", "slots": 6, "icon": "bag_small"},
-    "pouch_bag": {"type": "bag", "rarity": "uncommon", "slots": 10, "icon": "bag_small"},
-    "scout_satchel": {"type": "bag", "rarity": "rare", "slots": 15, "icon": "bag_big"},
-    "travel_backpack": {"type": "bag", "rarity": "epic", "slots": 20, "icon": "bag_big"},
-    "void_chest_bag": {"type": "bag", "rarity": "legendary", "slots": 24, "icon": "bag_big"},
+    **{
+        item_id: {"type": "bag", "slots": BAG_CAPACITIES[item_id], "rarity": rarity, "icon": icon}
+        for item_id, rarity, icon in (
+            ("small_pouch", "common", "bag_small"),
+            ("waxed_pouch", "common", "bag_waxed"),
+            ("pouch_bag", "uncommon", "bag_leather"),
+            ("reed_satchel", "uncommon", "bag_reed"),
+            ("scout_satchel", "rare", "bag_scout"),
+            ("frame_pack", "rare", "bag_frame"),
+            ("travel_backpack", "epic", "bag_big"),
+            ("void_chest_bag", "legendary", "bag_void"),
+        )
+    },
 }

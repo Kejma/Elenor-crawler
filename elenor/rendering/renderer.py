@@ -9,7 +9,7 @@ from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
 from elenor.rendering.lighting import GPULightShader
-from elenor.rendering.visibility import canopy_visibility
+from elenor.rendering.visibility import CanopyVisibility, canopy_opacity
 from elenor.ui.renderer import UIRendererMixin
 
 class Renderer(UIRendererMixin):
@@ -24,6 +24,7 @@ class Renderer(UIRendererMixin):
         self.chill_cache = {}
         self.emissive_cache = {}
         self.alpha_mask_cache = {}
+        self.canopy_visibility = CanopyVisibility()
         self.jungle_attack_cache = {}
         self._shadow_small = pygame.Surface((10, 4), pygame.SRCALPHA)
         pygame.draw.ellipse(self._shadow_small, (8, 6, 12, 120), (0, 0, 10, 4))
@@ -65,8 +66,8 @@ class Renderer(UIRendererMixin):
         ]
         self.bag_btn_rect = pygame.Rect(SCREEN_W - 176, hud_y + 22, 156, 56)
         self.inv_slot_rects = []
+        self.bag_slot_rects = []
         self.equip_slot_rects = {}
-        self.stat_plus_rects = {}
         self.perk_card_rects = []
         self.perk_glow_cache = {}
         self.modal_rect = pygame.Rect(0, 0, 0, 0)
@@ -213,7 +214,7 @@ class Renderer(UIRendererMixin):
 
     def get_world_loot_pair(self, item):
         """Builds crisp 16x20 pixel-art sprites for coins, gems, and equipment on the dungeon floor!"""
-        if item is None or item.type not in ("equipment", "currency_coin", "gem"):
+        if item is None or item.type not in ("equipment", "currency_coin", "gem", "bag"):
             return self.assets["loot"]
         if not hasattr(self, "world_item_cache"):
             self.world_item_cache = {}
@@ -438,10 +439,11 @@ class Renderer(UIRendererMixin):
         elif icon_name == "trinket":
             pygame.draw.polygon(surface, (255, 165, 45), [(cx, cy - 9), (cx + 9, cy), (cx, cy + 9), (cx - 9, cy)])
             pygame.draw.circle(surface, (255, 240, 180), (cx, cy), 3)
-        elif icon_name in ("bag_small", "bag_big"):
-            col = (155, 100, 55) if icon_name == "bag_small" else (185, 125, 60)
-            pygame.draw.rect(surface, col, (cx - 9, cy - 5, 18, 15))
-            pygame.draw.rect(surface, (235, 195, 85), (cx - 4, cy - 1, 8, 4))
+        elif icon_name.startswith("bag_"):
+            from elenor.rendering.bag_icons import draw_bag_icon
+            draw_bag_icon(surface, icon_name, x, y, size)
+        elif icon_name.startswith("jungle_key_") and icon_name in self.assets:
+            surface.blit(pygame.transform.scale(self.assets[icon_name][0], (size, size)), (x, y))
         elif icon_name == "lock":
             pygame.draw.rect(surface, (95, 88, 102), (cx - 7, cy - 2, 14, 11))
             pygame.draw.rect(surface, (95, 88, 102), (cx - 4, cy - 8, 8, 7), 2)
@@ -522,6 +524,7 @@ class Renderer(UIRendererMixin):
         cam_y = float(round(cam_y))
 
         now_sec = pygame.time.get_ticks() * 0.001
+        self.canopy_visibility.begin_frame(dungeon.grid, now_sec)
         for role_id, anim_info in self.anim_bank.items():
             fr_list = anim_info["frames"]
             if len(fr_list) > 1:
@@ -616,11 +619,8 @@ class Renderer(UIRendererMixin):
                     key = "floor_pebble_shore" if end else "floor_lake_deep"
                 elif t_val in TALL_TREE_MAP:
                     key, tree_asset_key = TALL_TREE_MAP[t_val]
-                    visible_base = (
-                        canopy_visibility(fov_mask, sx, sy) if t_val != 5
-                        else float((c, r) in visible_tiles)
-                    )
-                    if visible_base > 0.0:
+                    visible_base = self.canopy_visibility.sample((c, r), fov_mask, sx, sy)
+                    if visible_base > 0.006:
                         if t_val != 5 and (c*17 + r*23) % 9 == 0:
                             tree_asset_key = {21:"tree_jungle",22:"tree_palm",56:"tree_bone",57:"tree_dead_mangrove"}[t_val]
                         tall_trees_to_draw.append((c, r, tree_asset_key, visible_base))
@@ -697,8 +697,7 @@ class Renderer(UIRendererMixin):
         }]
 
         for (tc, tr, tree_asset_key, visible_base) in tall_trees_to_draw:
-            behind_canopy = (tr - 1.8 <= player.y <= tr + 0.35) and (abs(player.x - (tc + 0.5)) <= 1.05)
-            t_alpha = 105 if behind_canopy else 255
+            t_alpha = canopy_opacity(tc, tr, player.x, player.y)
             render_list.append({
                 "wx": float(tc), "wy": float(tr),
                 "is_tree": True,
@@ -776,7 +775,7 @@ class Renderer(UIRendererMixin):
         render_list.sort(key=lambda item: item["wy"])
 
         use_shadows = fx_mgr.flags.get("drop_shadows", True) if fx_mgr else True
-        scene_fov = fov_mask.copy() if tall_trees_to_draw and dungeon.thickets else fov_mask
+        scene_fov = fov_mask.copy() if tall_trees_to_draw else fov_mask
         world_shadow_lights = [(br["x"] + 0.5, br["y"] + 0.5, br["radius"] / TILE_W) for br in dungeon.braziers]
         for obj in objects:
             if obj.kind in ("campfire", "fireplace"):
@@ -825,6 +824,29 @@ class Renderer(UIRendererMixin):
                     foot_cx = draw_x + ew * 0.5
                     self.diff_canvas.blit(sh_stamp, (int(round(foot_cx - sh_w * 0.5 + sh_dx)), int(round(sole_sy - sh_h * 0.5 + sh_dy))))
 
+                is_tree = ent.get("is_tree", False)
+                if is_tree:
+                    opacity = ent["alpha"]
+                    for canvas, sprite in ((self.diff_canvas, d_surf), (self.norm_canvas, n_surf)):
+                        if opacity < 255:
+                            sprite = sprite.copy()
+                            sprite.set_alpha(opacity)
+                        canvas.blit(sprite, (draw_x, draw_y))
+                    x0, x1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
+                    y0, y1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
+                    if x0 < x1 and y0 < y1:
+                        key = id(d_surf)
+                        mask = self.alpha_mask_cache.get(key)
+                        if mask is None:
+                            mask = pygame.surfarray.array_alpha(d_surf) > 220
+                            self.alpha_mask_cache[key] = mask
+                        alpha = mask[x0 - draw_x:x1 - draw_x, y0 - draw_y:y1 - draw_y]
+                        view = scene_fov[x0:x1, y0:y1]
+                        coverage = ent["canopy_visibility"]
+                        strength = opacity / 255.0
+                        np.copyto(view, view * (1.0 - strength) + coverage * strength, where=alpha)
+                    continue
+
                 if ent["alpha"] < 255:
                     d_tmp = d_surf.copy()
                     d_tmp.set_alpha(ent["alpha"])
@@ -838,13 +860,10 @@ class Renderer(UIRendererMixin):
                         if cx0 < cx1 and cy0 < cy1:
                             mask = self.alpha_mask_cache.get(id(d_surf))
                             if mask is None:
-                                threshold = 220 if ent.get("is_tree", False) else 15
-                                mask = pygame.surfarray.array_alpha(d_surf) > threshold
+                                mask = pygame.surfarray.array_alpha(d_surf) > 15
                                 self.alpha_mask_cache[id(d_surf)] = mask
                             alpha = mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
                             source = fov_mask[cx0:cx1, cy0:cy1]
-                            if ent.get("is_tree", False):
-                                source = np.maximum(source, ent["canopy_visibility"])
                             np.copyto(scene_fov[cx0:cx1, cy0:cy1], source, where=alpha)
                     em_role = ent.get("emissive_role")
                     if em_role:
@@ -852,9 +871,8 @@ class Renderer(UIRendererMixin):
                         self.emissive_canvas.blit(em_s, (draw_x, draw_y))
 
                     if not ent.get("is_light_source", False):
-                        y_start_depth = draw_y + 28 if ent.get("is_tree", False) else draw_y
                         cx0, cx1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
-                        cy0, cy1 = max(0, y_start_depth), min(VIEW_H, draw_y + eh)
+                        cy0, cy1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
                         if cx0 < cx1 and cy0 < cy1:
                             s_id = id(d_surf)
                             a_mask = self.alpha_mask_cache.get(s_id)
@@ -1697,7 +1715,7 @@ class Renderer(UIRendererMixin):
         used_slots = sum(1 for i in range(player.unlocked_slots) if player.inventory[i] is not None)
         slot_col = (255, 110, 95) if used_slots >= player.unlocked_slots else (255, 220, 95)
         screen.blit(self.font_ui.render(ui_texts["bag_btn"], True, UI_TEXT_MAIN), (self.bag_btn_rect.x + 42, self.bag_btn_rect.y + 10))
-        cnt_surf = self.font_small.render(f"Яч: {used_slots}/{player.unlocked_slots}", True, slot_col)
+        cnt_surf = self.font_small.render(f"{used_slots} / {player.unlocked_slots}", True, slot_col)
         screen.blit(cnt_surf, (self.bag_btn_rect.x + 42, self.bag_btn_rect.y + 29))
 
         world_hover_item = ui_texts.get("_world_hover_item")

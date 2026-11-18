@@ -4,6 +4,12 @@ import pygame
 import math
 
 
+from elenor.audio.voices import enemy_voice_waves
+
+
+MENU_MUSIC_GAIN = 0.25
+
+
 class SoundSynth:
     def __init__(self):
         self.enabled = False
@@ -21,6 +27,8 @@ class SoundSynth:
             self.disco_cur_muff = [0.0, 0.0]
             self._build_bank()
             self._build_fishing_bank()
+            for name, wave, cutoff in enemy_voice_waves(self.freq):
+                self._register(name, wave, make_muff=True, cutoff=cutoff)
         except Exception:
             self.enabled = False
 
@@ -253,9 +261,9 @@ class SoundSynth:
         if self.enabled:
             for snd in self.sounds.values():
                 snd.set_volume(self.volume)
-            menu_ch = getattr(self, "menu_channel", None)
-            if menu_ch is not None and menu_ch.get_busy():
-                menu_ch.set_volume(self.volume * 0.50)
+            menu_sound = getattr(self, "menu_music_sound", None)
+            if menu_sound is not None:
+                menu_sound.set_volume(self.volume * MENU_MUSIC_GAIN)
 
     def start_menu_music(self, track_filename="scottishe Sunshine.json"):
         """Компилирует трек из JSON при первом вызове и запускает бесконечный луп в Главном меню."""
@@ -291,7 +299,9 @@ class SoundSynth:
                 return
 
         if self.menu_music_sound is not None:
-            self.menu_channel.set_volume(self.volume * 0.50)
+            # The mixer restores channel volume after a fade. Keep gain on the track.
+            self.menu_music_sound.set_volume(self.volume * MENU_MUSIC_GAIN)
+            self.menu_channel.set_volume(1.0)
             self.menu_channel.play(self.menu_music_sound, loops=-1, fade_ms=400)
 
     def stop_menu_music(self, fade_ms=500):

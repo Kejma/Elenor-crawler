@@ -457,8 +457,8 @@ class CombatMixin:
             self._execute_melee_swing(target_wx, target_wy)
 
 
-    def _physical_attack_context(self):
-        if not self.player.passive_power("quiet_work"):
+    def _physical_attack_context(self, *, check_surprise=False):
+        if not check_surprise and not self.player.passive_power("quiet_work"):
             return {}
         return {"unaware_targets": {mob for mob in self.mobs if mob.state != "combat"}}
 
@@ -543,7 +543,7 @@ class CombatMixin:
         dist = max(0.001, math.hypot(dx, dy))
         nx, ny = dx / dist, dy / dist
 
-        action = self._physical_attack_context()
+        action = self._physical_attack_context(check_surprise=True)
         # 1. МЕТАТЕЛЬНОЕ ОРУЖИЕ В ПРАВОЙ РУКЕ (с замедлением при броске)
         if style == "thrown" and weap is not None:
             self.emit_noise(px, py, 4.2)
@@ -654,18 +654,15 @@ class CombatMixin:
             for hit_i in range(multi_hit):
                 if m not in self.mobs or m.hp <= 0:
                     break
-                dmg, is_crit = self.player.roll_melee_damage()
+                was_unaware = m.state != "combat" or (hit_i == 0 and m in action["unaware_targets"])
+                dmg, is_crit = self.player.roll_melee_damage(unaware=was_unaware)
 
-                bs_bonus = getattr(weap, "backstab_bonus", 0.0) if weap else 0.0
-                is_vulnerable = (m.state != "combat" or m.stun_timer > 0 or m.root_timer > 0 or m.slow_timer > 0)
-                was_unaware = m.state != "combat"
-                if was_unaware:
-                    dmg = int(dmg * (1 if hidden_strike else max(self.player.backstab_mult, bs_bonus)))
-                    is_crit = True
+                backstab = getattr(weap, "backstab_bonus", 0.0)
+                if backstab > 1.0 and (hidden_strike or was_unaware or max(m.stun_timer, m.root_timer, m.slow_timer) > 0):
+                    # Suited blades retain a modest precision advantage on vulnerable targets.
+                    dmg = int(dmg * (1.0 + min(0.30, (backstab - 1.0) * 0.18)))
+                if m.state != "combat":
                     m.alert_to_combat(self.sfx, self.add_popup)
-                elif bs_bonus > 1.0 and is_vulnerable:
-                    dmg = int(dmg * bs_bonus)
-                    is_crit = True
 
                 # Остриё на дистанции (Sweet Spot)
                 if weap and getattr(weap, "sweet_spot", False) and md >= reach * 0.56:

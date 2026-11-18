@@ -802,12 +802,7 @@ def handle_mirror_puzzle_interaction(game, obj):
             return True
 
         if ctrl and ctrl.emitter_state == "need_lens":
-            # Проверяем, есть ли у игрока в сумке или на поясе «Фокусирующая линза»
-            lens_itm = next(
-                (itm for itm in list(game.player.inventory) + list(game.player.hotbar)
-                 if itm and itm.id == "focusing_lens"),
-                None
-            )
+            lens_itm = game.player.find_quest_item("focusing_lens")
             if lens_itm is not None:
                 game.player.remove_item_everywhere(lens_itm)
                 ctrl.emitter_state = "ready"

@@ -52,11 +52,32 @@ class InventoryMixin:
         return self.make_item(random.choices(coin_ids, weights=c_weights, k=1)[0])
 
 
+    def roll_bag_drop(self, luck):
+        depth = getattr(self.dungeon, "floor_num", 1)
+        luck = max(0, luck - 1)
+        weights = [58, 26, 11 + luck, 4 + depth * .6, 1 + min(7, (depth - 1) * .8) + luck * .25]
+        pools = {}
+        for item_id, data in self.loc["items"].items():
+            if data.get("type") == "bag":
+                pools.setdefault(data["rarity"], []).append(item_id)
+        if not pools:
+            return None
+        rarities = [rarity for rarity in Item.RARITY_ORDER if rarity in pools]
+        rarity = random.choices(rarities, weights=[weights[Item.RARITY_ORDER.index(r)] for r in rarities], k=1)[0]
+        return self.make_item(random.choice(pools[rarity]))
+
+
     def roll_item_by_rarity(self, allowed_types=None, *, luck=None):
         """Rolls an item using Luck-scaled weights; any weapon can roll at any rarity!"""
         tiers = ["common", "uncommon", "rare", "epic", "legendary"]
         if luck is None:
             luck = getattr(getattr(self, "player", None), "luck", 1)
+        if allowed_types and set(allowed_types) == {"bag"}:
+            return self.roll_bag_drop(luck)
+        if (allowed_types is None or "bag" in allowed_types) and random.random() < 0.18:
+            bag = self.roll_bag_drop(luck)
+            if bag:
+                return bag
         weights = get_rarity_weights(luck)
         chosen_rarity = random.choices(tiers, weights=weights, k=1)[0]
 
@@ -64,7 +85,7 @@ class InventoryMixin:
         non_weapon_candidates = [
             item_id for item_id, data in self.loc["items"].items()
             if not (data.get("type") == "equipment" and data.get("slot") == "right_hand")
-            and data.get("type") not in ("currency_coin", "gem", "quest_key")
+            and data.get("type") not in ("currency_coin", "gem", "quest_key", "bag")
             and not data.get("is_torch", False)
             and data.get("rarity", "common") == chosen_rarity
             and (allowed_types is None or data.get("type") in allowed_types)
@@ -78,7 +99,7 @@ class InventoryMixin:
         if not non_weapon_candidates:
             non_weapon_candidates = [
                 item_id for item_id, data in self.loc["items"].items()
-                if data.get("type") not in ("currency_coin", "gem", "quest_key")
+                if data.get("type") not in ("currency_coin", "gem", "quest_key", "bag")
                 and not data.get("is_torch", False)
                 and (allowed_types is None or data.get("type") in allowed_types)
             ]
@@ -144,7 +165,9 @@ class InventoryMixin:
     def drop_item_on_floor(self, item):
         if not item:
             return
-        self.player.remove_item_everywhere(item)
+        if not self.player.remove_item_everywhere(item):
+            self.report_bag_space()
+            return
         tx, ty = int(self.player.x), int(self.player.y)
         self.objects.append(Interactable(tx, ty, "loot", item))
         self.sfx.play("step")
@@ -196,10 +219,22 @@ class InventoryMixin:
         self.set_thought(line, important=True)
 
 
+    def report_bag_space(self):
+        self.sfx.play("hurt")
+        self.add_popup(self.player.x, self.player.y, self.loc["ui"]["bag_space_needed"], (255, 165, 120))
+
+    def equip_bag(self, item, index):
+        if not self.player.change_bag(index, item):
+            self.report_bag_space()
+            return False
+        self.trigger_event_thought("bag_upgrade", item=item.name)
+        self.sfx.play("ui")
+        return True
+
     def _pickup_loot_object(self, obj):
-        self.add_log("event", f"Подобрано: {obj.item.name}.")
         if obj.item.type == "currency_coin":
             obj.used = True
+            self.add_log("event", f"Подобрано: {obj.item.name}.")
             cp_gain = obj.item.copper_value
             self.player.gold += cp_gain
             self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + cp_gain
@@ -209,10 +244,19 @@ class InventoryMixin:
             self.trigger_event_thought("pickup_coin", item=obj.item.name.lower(), val=val_str)
             self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str}", (255, 215, 75))
             return True
-        if obj.item.type == "bag" and obj.item.slots > self.player.unlocked_slots:
-            obj.used = True
-            self.use_or_equip_item(obj.item)
-            self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{obj.item.name}", obj.item.rarity_color)
+        if obj.item.type == "quest_key":
+            obj.used = self.player.add_item_to_inventory(obj.item)
+            if obj.used:
+                self.add_log("event", f"Подобрано: {obj.item.name}.")
+                self.sfx.play("ui")
+                self.trigger_event_thought("pickup", item=obj.item.name)
+                self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{obj.item.name}", obj.item.rarity_color)
+            return True
+        if obj.item.type == "bag" and None in self.player.bag_slots:
+            obj.used = self.equip_bag(obj.item, self.player.bag_slots.index(None))
+            if obj.used:
+                self.add_log("event", f"Подобрано: {obj.item.name}.")
+                self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{obj.item.name}", obj.item.rarity_color)
             return True
         if obj.item.type == "equipment" and self.player.try_auto_equip_if_slot_empty(obj.item):
             obj.used = True
@@ -237,6 +281,8 @@ class InventoryMixin:
             # Переполненная сумка — ВАЖНАЯ реплика!
             self.trigger_event_thought("bag_full", force_important=True)
             self.sfx.play("hurt")
+        if obj.used:
+            self.add_log("event", f"Подобрано: {obj.item.name}.")
         return True
 
 
@@ -338,13 +384,17 @@ class InventoryMixin:
                 self.trigger_event_thought("bag_full", force_important=True)
                 self.sfx.play("hurt")
 
-        elif item.type == "bag":
-            if item.slots > self.player.unlocked_slots:
-                self.player.unlocked_slots = item.slots
-                self.player.bag_name = f"{item.name} ({item.slots} яч.)"
-                self.player.remove_item_everywhere(item)
-                self.trigger_event_thought("bag_upgrade", item=item.name)
-                self.sfx.play("heal")
+        elif item.type == "bag" and item not in self.player.bag_slots:
+            slots = self.player.bag_slots
+            if None in slots:
+                self.equip_bag(item, slots.index(None))
+            else:
+                target = min(range(len(slots)), key=lambda i: slots[i].slots)
+                if item.slots > slots[target].slots:
+                    self.equip_bag(item, target)
+                else:
+                    self.sfx.play("ui")
+                    self.add_popup(self.player.x, self.player.y, self.loc["ui"]["bag_equip_hint"], (215, 205, 190))
 
 
     def _flush_overflow_drops(self, drop_tx, drop_ty):

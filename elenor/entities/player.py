@@ -1,4 +1,5 @@
 from elenor.config import SHALLOW_WATER
+from elenor.data.items import BAG_CAPACITIES
 from elenor.data.abilities import (
     PASSIVES, PASSIVE_SLOT_LIMIT, acquisition_bonuses, passive_power_at, perk_branch, spell_school,
 )
@@ -91,7 +92,6 @@ class Player:
         self.perk_lifesteal = 0
         self.hp_regen = 0.0
         self.perk_mp_regen = 0.0
-        self.backstab_mult = 1.8
 
         self.luck = 1
         self.hp = float(self.max_hp)
@@ -104,11 +104,11 @@ class Player:
         self.attack_cd = 0.0
         self.step_sound_cd = 0.0
 
-        # Expanded to 24 max slots (starts with 2 pockets, or 4 for Hoarder!)
-        self.max_possible_slots = 24
-        self.unlocked_slots = 4 if self.quirk == "hoarder" else 2
-        self.bag_name = f"Карманы ({self.unlocked_slots} яч.)"
+        self.pocket_slots = 4 if self.quirk == "hoarder" else 2
+        self.bag_slots = [None, None]
+        self.max_possible_slots = self.pocket_slots + len(self.bag_slots) * max(BAG_CAPACITIES.values())
         self.inventory = [None] * self.max_possible_slots
+        self.quest_items = []
 
         self.equipment = {
             "right_hand": None,
@@ -125,6 +125,42 @@ class Player:
         self.ability_slots = [None] * 4
         self.guard_timer = self.evade_timer = self.stealth_timer = 0.0
         self.hotbar = [None] * 4
+
+    @property
+    def unlocked_slots(self):
+        return self.pocket_slots + sum(bag.slots for bag in self.bag_slots if bag)
+
+    def change_bag(self, index, bag=None, *, pocket_index=None, keep_old=True):
+        """Equip or take off one bag, leaving everything in place if it will not fit."""
+        old = self.bag_slots[index]
+        if old is bag or (bag is not None and (bag.type != "bag" or bag in self.bag_slots)):
+            return False
+
+        capacity = self.unlocked_slots + (bag.slots if bag else 0) - (old.slots if old else 0)
+        updated = [None if item is bag else item for item in self.inventory]
+        items_to_move = [item for item in updated[capacity:] if item is not None]
+        if old and keep_old:
+            # Prefer the freed slot from which the new bag came, or the chosen drop slot.
+            if pocket_index is None and bag is not None:
+                pocket_index = next((i for i, item in enumerate(self.inventory) if item is bag), None)
+            if pocket_index is not None and pocket_index < capacity and updated[pocket_index] is None:
+                updated[pocket_index] = old
+            else:
+                items_to_move.append(old)
+        free = [i for i in range(capacity) if updated[i] is None]
+        if len(items_to_move) > len(free):
+            return False
+        updated[capacity:] = [None] * (len(updated) - capacity)
+        for index_in_pockets, item in zip(free, items_to_move):
+            updated[index_in_pockets] = item
+        self.bag_slots[index] = bag
+        self.inventory[:] = updated
+        return True
+
+    def find_quest_item(self, item_id):
+        # Include items acquired before the dedicated quest storage was introduced.
+        return next((item for slots in (self.quest_items, self.inventory, self.hotbar)
+                     for item in slots if item and item.id == item_id), None)
 
     @property
     def max_hp(self):
@@ -202,7 +238,12 @@ class Player:
 
     @property
     def crit_chance(self):
-        return min(0.75, self.cunning * 0.05 + self.perk_crit + self._sum_equip("crit_bonus"))
+        equipment_bonus = self._sum_equip("crit_bonus")
+        return min(0.28, 0.025 + self.cunning * 0.02 + (self.perk_crit + equipment_bonus) * 0.55)
+
+    @staticmethod
+    def roll_physical_crit(chance, unaware=False):
+        return random.random() < min(0.35, chance + (0.07 if unaware else 0.0))
 
     def gain_xp(self, amount):
         self.xp += amount
@@ -590,6 +631,9 @@ class Player:
         return self.is_moving
 
     def add_item_to_inventory(self, item):
+        if item.type == "quest_key":
+            self.quest_items.append(item)
+            return True
         placed = False
         for i in range(self.unlocked_slots):
             if self.inventory[i] is None:
@@ -615,6 +659,11 @@ class Player:
                 break
 
     def remove_item_everywhere(self, item):
+        if item in self.bag_slots:
+            if not self.change_bag(self.bag_slots.index(item), keep_old=False):
+                return False
+        if item in self.quest_items:
+            self.quest_items.remove(item)
         self.remove_item_from_pockets(item)
         for k, v in self.equipment.items():
             if v is item:
@@ -625,6 +674,7 @@ class Player:
         for a in range(len(self.ability_slots)):
             if self.ability_slots[a] is item:
                 self.ability_slots[a] = None
+        return True
 
     def melee_damage_range(self):
         weap = self.equipment.get("right_hand")
@@ -635,11 +685,11 @@ class Player:
         stat_add = int(round(self.phys_attack * stat_scale))
         return w_min + stat_add, w_max + stat_add
 
-    def roll_melee_damage(self):
+    def roll_melee_damage(self, unaware=False):
         weap = self.equipment.get("right_hand")
         base = random.randint(*self.melee_damage_range())
-        is_crit = random.random() < self.crit_chance
-        crit_mult = 1.75 + (getattr(weap, "crit_bonus", 0.0) * 1.5)
+        is_crit = self.roll_physical_crit(self.crit_chance, unaware)
+        crit_mult = 1.60 + getattr(weap, "crit_bonus", 0.0) * 0.60
         if is_crit:
             return int(base * crit_mult), True
         return base, False

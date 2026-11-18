@@ -88,14 +88,16 @@ class ProgressionMixin:
             ]
             if not candidates:
                 break
+            upgrades = [choice for choice in candidates if choice[0] in self.player.perks]
+            discoveries = [choice for choice in candidates if choice[0] not in self.player.perks]
+            if upgrades and discoveries:
+                candidates = upgrades if random.random() < 0.25 else discoveries
             cand_weights = []
             for pid, pdata in candidates:
-                base_w = 1.0
                 branch = self._get_perk_branch(pid, pdata)
                 branch_share = aff.get(branch, 0.0) / total_aff
                 affinity_mult = 1.0 + 1.45 * branch_share
-                owned_mult = 1.25 if pid in self.player.perks else 1.0
-                cand_weights.append(base_w * affinity_mult * owned_mult)
+                cand_weights.append(affinity_mult)
 
             picked_pid, picked_data = random.choices(candidates, weights=cand_weights, k=1)[0]
             used_ids.add(picked_pid)

@@ -7,6 +7,7 @@ import pygame
 
 from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H
 from elenor.audio.synth import SoundSynth
+from elenor.audio.voices import next_call_delay
 from elenor.world.dungeon import Dungeon
 from elenor.world.run_seed import derived_seed, generation_random
 from elenor.entities import Player, Enemy, Interactable, FloatingPopup
@@ -82,6 +83,24 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             self.sfx.play(name)
 
 
+    def update_enemy_voices(self, dt):
+        self.enemy_voice_cooldown = max(0.0, self.enemy_voice_cooldown - dt)
+        nearby = []
+        for mob in self.mobs:
+            if mob.hp <= 0 or mob.state == "sleeping" or mob.stun_timer > 0:
+                continue
+            distance = math.hypot(mob.x - self.player.x, mob.y - self.player.y)
+            if distance > 12.0:
+                continue
+            mob.voice_timer = max(0.0, mob.voice_timer - dt)
+            if mob.voice_timer == 0.0:
+                nearby.append((distance, mob))
+        if self.enemy_voice_cooldown == 0.0 and nearby:
+            _, mob = min(nearby, key=lambda entry: entry[0])
+            mob.voice_timer = next_call_delay(mob.kind)
+            self.enemy_voice_cooldown = 4.0
+            mob.play_voice(self.sfx, self.player, self.dungeon)
+
     def _load_balance_table(self):
         b_path = os.path.join(str(PROJECT_ROOT), "locales", "ru", "balance_table.json")
         if os.path.isfile(b_path):
@@ -116,6 +135,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.run_seed = random.SystemRandom().getrandbits(64) if seed is None else seed
         self.jungle_locations = {}
         self.fishing_catches = {}
+        self.enemy_voice_cooldown = 0.0
         if hasattr(self, "fx") and self.fx:
             self.fx.disco_active = False
         self.sfx.stop_disco_track()

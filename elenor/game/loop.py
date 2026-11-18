@@ -124,7 +124,8 @@ def main():
                     continue
 
             if game.inv_open and game.journal_open and not game.levelup_choices:
-                copy_click = click_world and game.renderer.journal_seed_rect.collidepoint(event.pos)
+                copy_click = (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                              and game.renderer.journal_seed_rect.collidepoint(event.pos))
                 copy_key = (key_down and event.key == pygame.K_c
                             and getattr(event, "mod", 0) & (pygame.KMOD_CTRL | pygame.KMOD_GUI))
                 if copy_click or copy_key:
@@ -246,8 +247,13 @@ def main():
                                         game.sfx.play("ui")
                                         break
                             else:
+                                for i, rect in enumerate(game.renderer.bag_slot_rects):
+                                    if rect.collidepoint(event.pos) and game.player.bag_slots[i]:
+                                        game.drag_item = game.player.bag_slots[i]
+                                        game.drag_source = ("bag", i)
+                                        break
                                 for s_key, s_rect in game.renderer.equip_slot_rects.items():
-                                    if s_key != "bag" and s_rect.collidepoint(event.pos):
+                                    if s_rect.collidepoint(event.pos):
                                         itm = game.player.equipment.get(s_key)
                                         if itm:
                                             game.drag_item = itm
@@ -267,7 +273,14 @@ def main():
                     if game.levelup_choices and game.levelup_choices.get("mode") == "erase":
                         game.levelup_choices = None
                         game.sfx.play("ui")
-                    elif game.inv_open:
+                    elif game.inv_open and not game.journal_open:
+                        for i, rect in enumerate(game.renderer.bag_slot_rects):
+                            if rect.collidepoint(event.pos) and game.player.bag_slots[i]:
+                                if game.player.change_bag(i):
+                                    game.sfx.play("ui")
+                                else:
+                                    game.report_bag_space()
+                                break
                         for i, sr in enumerate(game.renderer.inv_slot_rects):
                             if i < game.player.unlocked_slots and sr.collidepoint(event.pos):
                                 itm = game.player.inventory[i]
@@ -287,22 +300,49 @@ def main():
                     game.drag_item = None
                     game.drag_source = None
                     continue
+                if game.drag_item and game.inv_open and not game.journal_open and game.drag_item.type == "bag":
+                    bag_target = next((i for i, rect in enumerate(game.renderer.bag_slot_rects)
+                                       if rect.collidepoint(event.pos)), None)
+                    from_bag = game.drag_source[0] == "bag"
+                    if bag_target is not None or from_bag:
+                        if from_bag:
+                            source = game.drag_source[1]
+                            if bag_target is not None:
+                                slots = game.player.bag_slots
+                                slots[source], slots[bag_target] = slots[bag_target], slots[source]
+                                if source != bag_target:
+                                    game.sfx.play("ui")
+                            elif not game.renderer.modal_rect.collidepoint(event.pos):
+                                game.drop_item_on_floor(game.drag_item)
+                            else:
+                                pocket = next((i for i, rect in enumerate(game.renderer.inv_slot_rects)
+                                               if i < game.player.unlocked_slots and rect.collidepoint(event.pos)), None)
+                                if pocket is not None and game.player.inventory[pocket] is None:
+                                    if game.player.change_bag(source, pocket_index=pocket):
+                                        game.sfx.play("ui")
+                                    else:
+                                        game.report_bag_space()
+                        else:
+                            game.equip_bag(game.drag_item, bag_target)
+                        game.drag_item = None
+                        game.drag_source = None
+                        continue
                 if game.drag_item:
                     dropped = False
                     for i, hr in enumerate(game.renderer.hotbar_rects):
-                        if hr.collidepoint(mouse_pos) and game.drag_item.type in ("consumable", "consumable_spell", "consumable_eraser"):
+                        if hr.collidepoint(event.pos) and game.drag_item.type in ("consumable", "consumable_spell", "consumable_eraser"):
                             game.player.hotbar[i] = game.drag_item
                             game.sfx.play("ui")
                             dropped = True
                             break
 
                     if not dropped and game.inv_open:
-                        if not game.renderer.modal_rect.collidepoint(mouse_pos):
+                        if not game.renderer.modal_rect.collidepoint(event.pos):
                             game.drop_item_on_floor(game.drag_item)
                             dropped = True
                         else:
                             for s_key, s_rect in game.renderer.equip_slot_rects.items():
-                                if s_key != "bag" and s_rect.collidepoint(mouse_pos):
+                                if s_rect.collidepoint(event.pos):
                                     if game.drag_source == ("equip", s_key):
                                         game.player.unequip_slot(s_key)
                                         game.sfx.play("ui")
@@ -315,7 +355,7 @@ def main():
 
                             if not dropped:
                                 for i, sr in enumerate(game.renderer.inv_slot_rects):
-                                    if i < game.player.unlocked_slots and sr.collidepoint(mouse_pos):
+                                    if i < game.player.unlocked_slots and sr.collidepoint(event.pos):
                                         if game.drag_source == ("pocket", i):
                                             game.use_or_equip_item(game.drag_item)
                                         elif game.drag_source and game.drag_source[0] == "pocket":
@@ -477,6 +517,8 @@ def main():
                 if game.can_trigger_background_thought(chance=0.55):
                     game.set_thought(game.pick_text(game.player.thoughts["ambient"], "player_ambient"), important=False, chance=1.0)
 
+            if dt > 0:
+                game.update_enemy_voices(dt)
             for m in list(game.mobs):
                 m.update_ai(
                     dt, game.player, game.dungeon, game.mobs, game.projectiles, game.sfx, game.add_popup,
@@ -528,8 +570,9 @@ def main():
                                     pr.mag_dmg = max(1, int(pr.mag_dmg * 0.50))
                                     pr.knockback = max(0.05, pr.knockback * 0.35)
 
-                                is_crit = was_unaware or (random.random() < getattr(pr, "crit_chance", 0.0))
-                                raw_d = int(pr.mag_dmg * (1.75 if is_crit else 1.0))
+                                surprised = was_unaware or m in pr.passive_action.get("unaware_targets", ())
+                                is_crit = game.player.roll_physical_crit(pr.crit_chance, surprised)
+                                raw_d = int(pr.mag_dmg * (1.60 if is_crit else 1.0))
                                 dmg = game._physical_hit_damage(
                                     m, raw_d, pr.armor_pierce, was_unaware, pr.passive_action,
                                 )

@@ -2,6 +2,7 @@ import math
 import random
 
 
+from elenor.audio.voices import choose_voice, next_call_delay
 from elenor.entities.effects import Projectile
 from elenor.entities.jungle_combat import ATTACKS, TRIBE, WARDEN_LEASH, update_jungle_combat
 
@@ -181,7 +182,7 @@ class Enemy:
 
         prof = MOB_PROFILES.get(kind, MOB_PROFILES["rat"])
         self.sprite = prof["sprite"]
-        self.max_hp = prof["hp"]
+        self.max_hp = round(prof["hp"] * (1.06 if prof.get("is_boss") else 1.16))
         self.hp = self.max_hp
         self.speed = prof["speed"]
         self.dmg_min = prof["dmg_min"]
@@ -219,6 +220,7 @@ class Enemy:
 
         self.solo_lines = []
         self.solo_timer = random.uniform(1.8, 4.0)
+        self.voice_timer = next_call_delay(kind, initial=True)
         self.solo_show_timer = 0.0
 
         self.path = []
@@ -250,7 +252,7 @@ class Enemy:
             return
         fl_mult_hp = 1.0 + (floor_num - 1) * profile.get("floor_hp_growth", 0.22)
         fl_mult_dmg = 1.0 + (floor_num - 1) * profile.get("floor_dmg_growth", 0.18)
-        self.max_hp = max(1, int(round(profile["hp"] * fl_mult_hp)))
+        self.max_hp = max(1, round(profile["hp"] * fl_mult_hp * (1.06 if self.is_boss else 1.16)))
         self.hp = self.max_hp
         self.phys_def = int(round(profile["phys_def"] + (floor_num - 1) * 0.5))
         self.mag_def = int(round(profile["mag_def"] + (floor_num - 1) * 0.5))
@@ -309,6 +311,13 @@ class Enemy:
                 self.chat_partner.current_speech = None
                 self.chat_partner.path_timer = 0.0
                 self.chat_partner.attack_cd = max(self.chat_partner.attack_cd, random.uniform(0.35, 0.75))
+
+    def play_voice(self, sfx, player, dungeon):
+        sound = choose_voice(self.kind)
+        if hasattr(sfx, "play_spatial"):
+            sfx.play_spatial(sound, self.x, self.y, player.x, player.y, dungeon, max_dist=12.0, base_gain=0.82)
+        elif math.hypot(self.x - player.x, self.y - player.y) < 8:
+            sfx.play(sound)
 
     def update_ai(self, dt, player, dungeon, all_mobs, projectiles, sfx, add_popup, on_player_hit):
         self.bump_x *= max(0.0, 1.0 - 14.0 * dt)
@@ -444,11 +453,9 @@ class Enemy:
                             self.current_speech = None
                             if self.chat_partner:
                                 self.chat_partner.current_speech = line
+                        speaker = self.chat_partner if self.chat_index % 2 and self.chat_partner else self
                         self.chat_index += 1
-                        if hasattr(sfx, "play_spatial"):
-                            sfx.play_spatial("mob_talk", self.x, self.y, player.x, player.y, dungeon, max_dist=14.0)
-                        elif dist <= 7.5:
-                            sfx.play("mob_talk")
+                        speaker.play_voice(sfx, player, dungeon)
                     else:
                         self.current_speech = None
                         self.state = "patrolling"
@@ -467,10 +474,7 @@ class Enemy:
                         self.solo_timer = random.uniform(4.5, 8.0)
                         self.solo_show_timer = 4.0
                         self.current_speech = random.choice(self.solo_lines)
-                        if hasattr(sfx, "play_spatial"):
-                            sfx.play_spatial("mob_talk", self.x, self.y, player.x, player.y, dungeon, max_dist=14.0)
-                        elif dist <= 8.5:
-                            sfx.play("mob_talk")
+                        self.play_voice(sfx, player, dungeon)
 
             if self.state == "patrolling":
                 if self.jungle_home is not None and distance_home > 3.0:
@@ -502,7 +506,7 @@ class Enemy:
                     self.solo_timer = random.uniform(5.0, 8.5)
                     self.solo_show_timer = 3.2
                     self.current_speech = random.choice(self.solo_lines)
-                    sfx.play("mob_talk")
+                    self.play_voice(sfx, player, dungeon)
 
         if abs(dx) > 0.08:
             self.facing = 1 if dx > 0 else -1
