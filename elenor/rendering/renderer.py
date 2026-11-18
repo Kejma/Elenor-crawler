@@ -2,7 +2,7 @@ import math
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
-from elenor.config import DEEP_WATER, PEBBLE_SHORE, PIER, SHALLOW_WATER
+from elenor.config import DEEP_WATER, FALLEN_LOG, PEBBLE_SHORE, PIER, SHALLOW_WATER
 
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
@@ -13,6 +13,8 @@ class Renderer(UIRendererMixin):
     def __init__(self):
         self.assets = create_placeholder_assets()
         self.anim_bank = self.assets.pop("_anim_bank", {})
+        from elenor.rendering.jungle import river_log_sections
+        self.log_sections = river_log_sections(self.assets["hollow_log"])
         self.hero_cache = {}
         self.rot_cache = {}
         self.flip_cache = {}
@@ -600,7 +602,12 @@ class Renderer(UIRendererMixin):
                 sx = int(c * TILE_W - cam_x)
                 sy = int(r * TILE_H - cam_y)
                 t_val = dungeon.grid[r][c]
-                if t_val in TALL_TREE_MAP:
+                if t_val == FALLEN_LOG:
+                    left = c > 0 and dungeon.grid[r][c - 1] == FALLEN_LOG
+                    right = c + 1 < dungeon.width and dungeon.grid[r][c + 1] == FALLEN_LOG
+                    end = left != right
+                    key = "floor_pebble_shore" if end else "floor_lake_deep"
+                elif t_val in TALL_TREE_MAP:
                     key, tree_asset_key = TALL_TREE_MAP[t_val]
                     if (c, r) in visible_tiles:
                         if t_val != 5 and (c*17 + r*23) % 9 == 0:
@@ -611,6 +618,10 @@ class Renderer(UIRendererMixin):
                 d_surf, n_surf = self.get_tile_pair(key, c, r)
                 self.diff_canvas.blit(d_surf, (sx, sy))
                 self.norm_canvas.blit(n_surf, (sx, sy))
+                if t_val == FALLEN_LOG:
+                    bark, bark_normal = self.log_sections[(left, right)]
+                    self.diff_canvas.blit(bark, (sx, sy))
+                    self.norm_canvas.blit(bark_normal, (sx, sy))
 
                 # Автотайлинг мха (13 базовых форм + 3 узкие полосы) поверх любого пола!
                 if hasattr(dungeon, "moss_tiles") and (c, r) in dungeon.moss_tiles:

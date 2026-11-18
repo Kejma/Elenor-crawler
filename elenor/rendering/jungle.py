@@ -1,6 +1,7 @@
 """Procedural diffuse + normal asset generator for the Jungle & Marble Temple campaign."""
 
 import math
+import pygame
 import numpy as np
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals
 
@@ -2638,3 +2639,32 @@ def _register_bone_jungle_and_caves(assets):
                 af_d.set_at((x, y), col)
                 af_n.set_at((x, y), nc)
     assets["abyssal_fissure"] = enforce_crisp_rim_normals(af_d, af_n)
+
+
+def river_log_sections(pair):
+    """Extend the authored hollow-log sprite into a continuous walkable trunk."""
+    from elenor.rendering.normals import flip_normal_pair_x
+
+    body = pair[0].get_bounding_rect()
+    strip = tuple(pygame.transform.scale(surface.subsurface(body), (16, 12)) for surface in pair)
+    mirrored = flip_normal_pair_x(*strip)
+    middle = tuple(
+        pygame.transform.scale(surface.subsurface((6, 0, 4, 12)), (16, 12)) for surface in strip
+    )
+    sections = {}
+    for left, right in ((False, True), (True, True), (True, False), (False, False)):
+        tiles = []
+        for source, end, grain in zip(strip, mirrored, middle):
+            tile = pygame.Surface((16, 16), pygame.SRCALPHA)
+            if not left and not right:
+                tile.blit(source, (0, 2))
+            else:
+                first, last = (0 if left else 5), (16 if right else 11)
+                tile.blit(grain, (first, 2), (first, 0, last-first, 12))
+                if not left:
+                    tile.blit(source, (1, 2), (0, 0, 4, 12))
+                if not right:
+                    tile.blit(end, (11, 2), (12, 0, 4, 12))
+            tiles.append(tile)
+        sections[left, right] = tuple(tiles)
+    return sections

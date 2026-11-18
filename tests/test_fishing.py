@@ -11,7 +11,7 @@ from elenor.minigames.fishing import (
     update_fishing,
 )
 from test_mirror_puzzles import HeadlessGame, Interactable
-from elenor.config import DEEP_WATER, SHALLOW_WATER
+from elenor.config import DEEP_WATER, FALLEN_LOG, SHALLOW_WATER
 from elenor.missions.jungle import populate_jungle_floor
 from elenor.rendering.fishing import FISH_CATALOG_SPECS
 from elenor.world.dungeon import Dungeon
@@ -214,6 +214,54 @@ class FishingTests(unittest.TestCase):
                     info["sealed_rect"].center,
                     reachable_floor_tiles(dungeon, dungeon.start_pos),
                 )
+
+    def test_river_has_fords_in_separate_reaches_and_a_walkable_log(self):
+        random.seed(1)
+        dungeon = Dungeon(puzzle_chance=0)
+        dungeon.generate(campaign="jungle")
+        seen = reachable_floor_tiles(dungeon, dungeon.start_pos)
+        shallows = [
+            y
+            for y in range(8, dungeon.height - 8)
+            if dungeon.grid[y][72:147].count(SHALLOW_WATER) >= 5
+            and DEEP_WATER not in dungeon.grid[y][72:147]
+        ]
+        ford_heads = [y for y in shallows if y - 1 not in shallows]
+        self.assertIn(len(ford_heads), (2, 3))
+        self.assertGreaterEqual(
+            min(b - a for a, b in zip(ford_heads, ford_heads[1:])), 20
+        )
+        for y in ford_heads:
+            cross_section = {
+                (x, y) for x in range(72, 147) if dungeon.grid[y][x] == SHALLOW_WATER
+            }
+            self.assertTrue(cross_section <= seen)
+        logs = {
+            (x, y)
+            for y, line in enumerate(dungeon.grid)
+            for x, tile in enumerate(line)
+            if tile == FALLEN_LOG
+        }
+        self.assertGreater(len(logs), 5)
+        self.assertTrue(logs <= seen)
+        self.assertEqual(len({y for _, y in logs}), 1)
+
+    def test_temple_turns_toward_an_atrium_with_jungle_intrusion(self):
+        random.seed(35)
+        dungeon = Dungeon(puzzle_chance=0)
+        dungeon.generate(2, campaign="jungle", interior="temple")
+        start = dungeon.start_pos
+        exit_tile = next(iter(dungeon.passages))
+        treasure = next(
+            (x, y) for x, y, kind in dungeon.jungle_props if kind == "chest"
+        )
+        screen_axis = 1 if exit_tile[0] != start[0] else 0
+        self.assertGreater(abs(treasure[screen_axis] - start[screen_axis]), 25)
+        self.assertTrue(any(22 in row for row in dungeon.grid))
+        self.assertTrue(any(SHALLOW_WATER in row for row in dungeon.grid))
+        self.assertIn("ov_mangrove_roots", dungeon.overlays.values())
+        self.assertIn("ov_jungle_vines", dungeon.overlays.values())
+        self.assertIn(treasure, reachable_floor_tiles(dungeon, start))
 
     def test_touching_jungle_trees_occlude_the_view(self):
         random.seed(12)

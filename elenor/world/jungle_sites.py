@@ -95,6 +95,8 @@ class Plan:
         self.floor = set()
         self.bridges = set()
         self.hut_entries = set()
+        self.landing_approaches = set()
+        self.crossing_approaches = []
 
     def inside(self, point, margin=1):
         x, y = point
@@ -393,71 +395,71 @@ def furnish_hut(plan, hut, door, outward, contents):
     plan.room(floor)
 
 
-def hut_candidates(plan, limit, street):
-    """Lots along the usable edge of a street, facing the closest fork or court."""
-    for door in sorted(dilate(street, 2) - dilate(street, 1)):
-        if not limit.collidepoint(door):
-            continue
-        for outward in CARDINAL:
-            threshold = offset(door, outward)
-            if offset(threshold, outward) not in street:
-                continue
-            width, depth = plan.rng.choice(((5, 6), (6, 7), (7, 5), (8, 6), (6, 8)))
-            tangent = -outward[1], outward[0]
-            start = offset(door, tangent, -plan.rng.randint(1, width - 2))
-            footprint = {
-                offset(offset(start, tangent, side), outward, -row)
-                for side in range(width)
-                for row in range(depth)
-            }
-            if all(
-                limit.collidepoint(point) and plan.inside(point, 2)
-                for point in footprint
-            ):
-                yield door, outward, footprint
+def village(plan, center, facing):
+    """Build the enclosure before the road. Entrances and hut doors face the common."""
+    axis = axis_frame(center, facing)
+    side = -facing[1], facing[0]
+    angle = atan2(facing[1], facing[0])
+    inside = oval(center, 17, 15, angle, 0.03, plan.rng.random() * tau)
+    ring = dilate(inside) - inside
+    plan.paint(inside, 10)
+    gates = set()
+    contacts = []
+    for sign in (-1, 1):
+        lane = {
+            axis(distance * sign, across)
+            for distance in range(10, 21)
+            for across in (0, 1)
+        }
+        gates.update(lane)
+        contacts.append(axis(20 * sign))
+    stakes = {point for point in ring - gates if (point[0] + point[1]) % 3 == 0}
+    plan.paint(ring - gates - stakes, 18, walk=False)
+    plan.paint(stakes, 10)
+    for point in sorted(stakes):
+        plan.prop(point, "bone_spike_barricade")
+    plan.paint(gates, 12)
+    plan.routes.update(gates)
 
-
-def village(plan, center, cells):
-    plan.clearing(cells, 10)
-    # An irregular common branches away from the old trail.
-    court = oval(center, 5.5, 3.8, plan.rng.random() * pi, 0.2)
-    street = (plan.routes & cells) | court
-    plan.paint(court - plan.water - plan.structure, 24)
-    plan.routes.update(court & plan.floor)
-    limit = bounds(cells).inflate(-2, -2)
-    lots = list(hut_candidates(plan, limit, street))
-    plan.rng.shuffle(lots)
-    chosen = []
-    for door, outward, footprint in lots:
-        setback = dilate(footprint, 1)
-        if setback & (plan.routes | plan.water | plan.structure | plan.occupied):
-            continue
-        if any(
-            hypot(door[0] - other[0], door[1] - other[1]) < 6 for other, _, _ in chosen
-        ):
-            continue
-        chosen.append((door, outward, footprint))
-        plan.structure.update(footprint)
-        if len(chosen) == 6:
-            break
-    contents = plan.rng.sample(HUT_GROUPS, len(HUT_GROUPS))
-    for index, (door, outward, footprint) in enumerate(chosen):
-        plan.paint({offset(door, outward)}, 24)
-        furnish_hut(
-            plan, bounds(footprint), door, outward, contents[index % len(contents)]
-        )
-    # The square is open even with market furniture and drying racks at its rim.
-    outer = (dilate(court, 3) - court) & plan.floor - plan.structure
-    totem_anchor = offset(center, plan.rng.choice(CARDINAL), 5)
-    prop_group(
-        plan, ("tribal_totem", "campfire", "fruit_basket"), outer, totem_anchor, 1
-    )
-    if not any(kind == "tribal_totem" for _, _, kind in plan.d.jungle_props):
-        point = min(court & plan.floor - plan.occupied)
-        plan.prop(point, "tribal_totem", on_route=True)
+    # Narrow decks serve the inward doors. The common itself is a clearing.
+    hearth = oval(center, 5, 4, angle, 0.18)
+    plan.paint(hearth, 11)
+    plan.routes.update(hearth)
+    behind = tuple(-a for a in side)
+    layout = [
+        (axis(-7, -7), side),
+        (axis(7, -7), side),
+        (axis(-6, 8), behind),
+        (axis(6, 8), behind),
+    ]
+    if plan.rng.random() < 0.6:
+        layout.append((axis(0, -9), side))
+    plan.rng.shuffle(layout)
+    layout = layout[: plan.rng.randint(3, len(layout))]
+    for (door, outward), contents in zip(
+        layout, plan.rng.sample(HUT_GROUPS, len(HUT_GROUPS))
+    ):
+        frame = axis_frame(door, outward)
+        width = plan.rng.choice((2, 2, 3))
+        footprint = axis_rect(frame, -4, 0, -width, width)
+        if not footprint <= inside or footprint & plan.structure:
+            footprint = axis_rect(frame, -3, 0, -2, 2)
+        furnish_hut(plan, bounds(footprint), door, outward, contents)
+        steps = axis_rect(frame, 1, 3, 0, 0) - plan.structure
+        plan.paint(steps, 13)
+        plan.routes.update(steps)
+    for point, kind in (
+        (center, "campfire"),
+        (axis(0, -2), "tribal_totem"),
+        (axis(-2, 1), "tribal_drum"),
+        (axis(2, 2), "fruit_basket"),
+    ):
+        plan.prop(point, kind, on_route=True)
     plan.lamp(center, 156)
-    detail_patch(plan, cells & plan.floor - plan.structure, "ov_bamboo_leaves", 3)
-    plan.room(cells)
+    detail_patch(plan, inside - hearth - plan.structure, "ov_bamboo_leaves", 4)
+    plan.structure.update(inside | ring | gates)
+    plan.room(inside)
+    return contacts
 
 
 def axis_frame(origin, forward):
@@ -478,23 +480,25 @@ def axis_rect(point, first, last, left, right):
     }
 
 
-def entrance(plan, center, kind, facing):
+def entrance(plan, center, kind, facing, compact=False):
     """A landmark with a forecourt and a threshold built into its enclosing mass."""
     point = axis_frame(center, facing)
     if kind == "temple":
-        temple_front(plan, point)
+        temple_front(plan, point, compact)
     else:
-        cave_mouth(plan, point)
+        cave_mouth(plan, point, compact)
 
 
-def temple_front(plan, point):
+def temple_front(plan, point, compact):
+    length = 20 if compact else 25
+    flank = 7 if compact else 10
     court = axis_rect(point, -5, 10, -8, 8)
     plan.clearing(court, 24)
     terrace = axis_rect(point, 6, 13, -7, 7)
     plan.paint(terrace, 29)
-    building = axis_rect(point, 14, 25, -10, 10)
+    building = axis_rect(point, 14, length, -flank, flank)
     plan.paint(building - plan.routes, 20, walk=False)
-    temple_face = axis_rect(point, 14, 16, -9, 9)
+    temple_face = axis_rect(point, 14, 16, 1 - flank, flank - 1)
     plan.paint(temple_face - plan.routes, 19, walk=False)
     plan.structure.update(court | terrace | building)
     for depth, side_tile in ((4, 16), (5, 30), (8, 31), (12, 16)):
@@ -517,9 +521,10 @@ def temple_front(plan, point):
     plan.room(court)
 
 
-def cave_mouth(plan, point):
+def cave_mouth(plan, point, compact):
     angle = atan2(point(1)[1] - point(0)[1], point(1)[0] - point(0)[0])
-    wall = oval(point(15), 12, 10, angle, 0.25, plan.rng.random() * tau)
+    rx, ry = (8, 7) if compact else (12, 10)
+    wall = oval(point(15), rx, ry, angle, 0.22, plan.rng.random() * tau)
     forecourt = oval(point(2), 10, 7, angle, 0.2)
     plan.clearing(forecourt, 11)
     plan.paint(wall - plan.routes, 34, walk=False)
@@ -692,71 +697,125 @@ def cloister(plan, point, bands, side, colors):
     plan.lamp(point((first + last) // 2, side), 115)
 
 
+def ruined_atrium(plan, point, chamber, flooded):
+    """Rain and roots enter through a breach on the side of the gallery."""
+    side = plan.rng.choice((-1, 1))
+    breach = axis_rect(point, 14, 19, 3 * side, 3 * side)
+    opening = oval(point(16, 7 * side), 5.4, 4, 0.4, 0.24, plan.rng.random() * tau)
+    drift = (opening & dilate(chamber, 3)) - plan.routes - plan.occupied
+    plan.paint(breach | drift, 11)
+    silt = oval(point(17, 5 * side), 3.2, 2.7, 0.4, 0.2) & drift
+    plan.paint(silt, SHALLOW_WATER)
+    plan.water.update(silt)
+    broken = {
+        point(step, side * 8)
+        for step in range(11, 22)
+        if point(step, side * 8) not in drift
+    }
+    plan.paint(broken, 20, walk=False)
+    detail_patch(plan, drift - silt, "ov_mangrove_roots", 3, radius=(1, 3))
+    detail_patch(plan, (chamber | drift) - silt, "ov_jungle_vines", 5, radius=(2, 4))
+    detail_patch(plan, chamber - plan.routes, "ov_marble_cracks", 3)
+    if flooded:
+        # The crossing bends between pools on opposite sides of a surviving sill.
+        pools = (
+            (point(13, -3 * side), 3.6, 2.3),
+            (point(20, 3 * side), 3.6, 2.8),
+        )
+        for center, rx, ry in pools:
+            patch = oval(center, rx, ry, 0.3, 0.14) & chamber - plan.occupied
+            plan.paint(patch, SHALLOW_WATER)
+            plan.water.update(patch)
+            detail_patch(plan, patch, "ov_water_lily", 2, radius=(1, 2))
+        plan.mist(point(16), 5.0, (0.42, 0.62, 0.66))
+    vegetation = sorted(
+        drift - plan.water - plan.routes,
+        key=lambda p: hypot(
+            p[0] - point(16, 6 * side)[0], p[1] - point(16, 6 * side)[1]
+        ),
+    )
+    for tile in vegetation[:2]:
+        plan.paint({tile}, 22, walk=False)
+    plan.light(point(16, 2 * side), 156, (0.6, 0.77, 0.67))
+
+
 def build_temple(plan, origin, forward):
-    """Draw an entrance spine with paced thresholds and off-axis annexes."""
-    point = axis_frame(origin, forward)
+    """A collapsed main nave forces a turn through an overgrown cross gallery."""
+    first_axis = axis_frame(origin, forward)
     wall, floor, trim, motif = plan.rng.choice(
         ((19, 14, 30, 16), (35, 28, 15, 31), (36, 29, 30, 16))
     )
-    intervals = (
-        (6, plan.rng.choice((9, 11)), 9, False),
-        (25, plan.rng.choice((15, 19)), plan.rng.choice((11, 15)), False),
-        (52, plan.rng.choice((19, 23)), plan.rng.choice((13, 17)), False),
-        (82, 19, plan.rng.choice((13, 17)), True),
+    colors = wall, floor, trim
+    plan_style = plan.rng.choice(("flooded", "cloister", "crypt"))
+    handedness = plan.rng.choice((-1, 1))
+    turn = -forward[1] * handedness, forward[0] * handedness
+    corner = first_axis(31)
+    cross_axis = axis_frame(corner, turn)
+    vestibule = axial_chamber(first_axis, 6, plan.rng.choice((9, 11)), 9)
+    nave = axial_chamber(
+        first_axis, 25, plan.rng.choice((17, 19)), plan.rng.choice((13, 17))
     )
-    chambers = []
-    for depth, length, breadth, apse in intervals:
-        room = axial_chamber(point, depth, length, breadth, apse)
-        chambers.append(room)
-        wall_shell(plan, room, wall)
-        plan.room(room)
-    for index, ((depth, _, _, _), room) in enumerate(zip(intervals, chambers)):
-        if index == len(intervals) - 1:
-            temple_sanctuary(plan, point, depth, room, floor)
-        elif index == 0:
-            plan.paint(room, 24)
-            plan.paint(room - erode(room, 1), trim)
-            for side in (-1, 1):
-                plan.prop(point(depth + 2, side * 3), "marble_urn")
-                plan.lamp(point(depth + 1, side * 2), 115)
-        else:
-            temple_gallery(plan, point, depth, room, (floor, trim, motif))
-    all_rooms = set().union(*chambers)
-    through = set()
-    for depth in range(85):
-        sleeves = (
-            (0, 1) if depth in range(32, 42) or depth in range(64, 73) else (-1, 0, 1)
-        )
-        strip = {point(depth, side) for side in sleeves}
-        through.update(strip)
-        aisle(plan, strip - all_rooms, floor if depth % 3 == 0 else trim)
-        plan.routes.update(strip)
-    # The cross section contracts at vestibules and opens again into the naves.
-    hallway_rim = dilate(through) - through - all_rooms
-    plan.paint(hallway_rim, wall, walk=False)
-    plan.structure.update(through | hallway_rim)
-    for step, span in ((13, 3), (38, 2), (64, 2)):
-        door_band(plan, point, step, span, 31)
-        plan.lamp(point(step + 2, 1), 106)
+    flooded = plan_style == "flooded"
+    court = axial_chamber(cross_axis, 16, 15, 15, apse=flooded)
+    sanctuary = axial_chamber(cross_axis, 36, plan.rng.choice((15, 17)), 15, True)
+    for chamber in (vestibule, nave, court, sanctuary):
+        wall_shell(plan, chamber, wall)
+        plan.room(chamber)
+    plan.paint(vestibule, 24)
+    plan.paint(vestibule - erode(vestibule), trim)
+    for side in (-1, 1):
+        plan.prop(first_axis(8, side * 3), "marble_urn")
+        plan.lamp(first_axis(7, side * 2), 107)
+    temple_gallery(plan, first_axis, 25, nave, (floor, trim, motif))
+    plan.paint(court, 29 if flooded else floor)
+    plan.paint(court - erode(court), trim)
+    temple_sanctuary(plan, cross_axis, 36, sanctuary, floor)
+    chambers = vestibule | nave | court | sanctuary
+    threshold = axis_rect(first_axis, 1, 32, -1, 1)
+    gallery = axis_rect(cross_axis, 0, 37, -1, 1)
+    through = threshold | gallery
+    plan.paint(dilate(through) - through - chambers, wall, walk=False)
+    plan.structure.update(dilate(through))
+    aisle(plan, through - chambers, trim)
+    plan.routes.update(through)
+    for band in (13, 17):
+        door_band(plan, first_axis, band, 3, 31)
+        plan.lamp(first_axis(band, 1), 94)
+    plan.lamp(cross_axis(25, 1), 109)
+    # Rubble occupies the old nave ahead of the turn, including its former exit.
+    collapse = axis_rect(first_axis, 33, 37, -2, 2)
+    plan.paint(collapse, 20, walk=False)
+    plan.routes.difference_update(collapse)
+    for side in (-1, 1):
+        rubble = first_axis(32, side * 3)
+        plan.routes.discard(rubble)
+        plan.prop(rubble, plan.rng.choice(("fallen_colossus", "marble_pillar_broken")))
+    detail_patch(plan, nave - collapse, "ov_marble_cracks", 5)
+    ruined_atrium(plan, cross_axis, court, flooded)
     options = ["archive", "burials", "baths", "offerings"]
     plan.rng.shuffle(options)
-    side = plan.rng.choice((-1, 1))
-    layout = plan.rng.choice(("cloister", "annexes", "paired"))
-    if layout == "cloister":
-        annexes = ((25, 19), (52, 19), (78, -18))
-    elif layout == "paired":
-        annexes = ((48, 18), (53, -19), (78, 20), (24, -17))
-    else:
-        annexes = ((24, 17), (53, -23), (78, 18))
-    for depth, reach in annexes:
-        purpose = options.pop()
-        branch_room(plan, point, depth, reach * side, purpose, (wall, floor, trim))
-    if layout == "cloister":
-        cloister(plan, point, (25, 52), 19 * side, (wall, floor, trim))
-    plan.feature(point(1), "up", "door_open")
-    plan.light(point(1), 123, (0.71, 0.86, 0.73))
-    plan.prop(point(83, 0), "chest", on_route=True)
-    return point(4), point
+    branch_room(plan, first_axis, 24, -14 * handedness, options.pop(), colors)
+    if plan_style == "cloister":
+        # An aisle on the outside of the atrium bypasses its wet centre.
+        first, last = 11, 23
+        reach = plan.rng.choice((-10, 10))
+        for step in (first, last):
+            turn_cells = axis_rect(
+                cross_axis,
+                step,
+                step + 1,
+                min(2 if reach > 0 else -2, reach),
+                max(2 if reach > 0 else -2, reach),
+            )
+            plan.paint(dilate(turn_cells) - turn_cells - plan.floor, wall, walk=False)
+            aisle(plan, turn_cells, trim)
+        cloister(plan, cross_axis, (first, last + 1), reach, colors)
+    elif plan_style == "crypt":
+        branch_room(plan, cross_axis, 17, -16, options.pop(), colors)
+    plan.feature(first_axis(1), "up", "door_open")
+    plan.light(first_axis(1), 123, (0.71, 0.86, 0.73))
+    plan.prop(cross_axis(37), "chest", on_route=True)
+    return first_axis(4), cross_axis
 
 
 CAVE_GROUPS = (

@@ -3,7 +3,7 @@ import os
 import random
 import pygame
 
-from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, SHALLOW_WATER
+from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, SHALLOW_WATER, FALLEN_LOG
 from elenor.entities import Enemy, Interactable, Particle
 from elenor.missions.rats import update_mission_audio
 from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas
@@ -323,7 +323,7 @@ def main():
                         for _ in range(3):
                             ang = random.uniform(0, 6.28)
                             game.particles.append(Particle(game.player.x, game.player.y, math.cos(ang) * 1.4, math.sin(ang) * 1.4 - 0.8, (115, 200, 245), 2.2, 0.22))
-                    elif t_step in (4, PIER):
+                    elif t_step in (4, PIER, FALLEN_LOG):
                         game.sfx.play("step_wood")
                     elif t_step == 0:
                         game.sfx.play("step_stone")
