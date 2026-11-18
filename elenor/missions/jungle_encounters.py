@@ -40,9 +40,6 @@ EARLY_STATS = {
     "cave_piercer": (14, 3, 6, 14),
     "cave_angler": (15, 3, 6, 14),
 }
-START_SUPPLIES = ("rusty_dagger", "pitch_torch", "potion_hp")
-
-
 def populate_encounters(game, Interactable):
     d = game.dungeon
     depth = d.floor_num
@@ -55,14 +52,6 @@ def populate_encounters(game, Interactable):
         (x, y) for x, y in crossing - occupied - d.doors.keys() - d.levers.keys()
         if d.grid[y][x] not in (SHALLOW_WATER, DEEP_WATER, PIER, 32, 43, 44)
     }
-    if not d.interior:
-        supplies = {1: START_SUPPLIES, 2: ("potion_hp", "cloth_tunic")}.get(depth, ("potion_hp",))
-        safe_reach = reachable_floor_tiles(d, start, blocked, max_distance=5)
-        candidates = sorted(open_tiles & safe_reach, key=lambda p: (math.dist(p, start), p))
-        for point, item in zip(candidates, supplies):
-            game.objects.append(Interactable(*point, "loot", game.make_item(item, rarity="common")))
-            open_tiles.remove(point)
-
     # Approaches stay safe even on the other side of a bend or a closed door.
     entry_buffer = 10 if d.interior else (13 if depth == 1 else 10)
     quiet = [start, *d.passages]
@@ -80,7 +69,12 @@ def populate_encounters(game, Interactable):
     rng = random
     rng.shuffle(groups)
     placed = []
-    limit = (6 if d.interior else 5) if depth == 1 else (8 if d.interior else 10) + min(4, depth - 2)
+    if d.interior:
+        compact = d.jungle_gate is None
+        limit = (5 if compact else 9) + min(5, depth - 1)
+    else:
+        limit = 11 if depth == 1 else 16 + min(8, depth - 2)
+    spacing = 6.0 if d.interior else 7.5
 
     def spawn(point, kind, state):
         mob = Enemy(*point, kind=kind, state=state)
@@ -114,11 +108,11 @@ def populate_encounters(game, Interactable):
             spawn(rng.choice(roomy), boss[1], "guarding")
             break
 
-    for habitat, cells in groups:
+    for habitat, cells in groups * 3:
         if len(placed) >= limit:
             break
         kinds = [kind for earliest, kind in HABITATS[habitat] if earliest <= depth]
-        candidates = [p for p in sorted(cells) if all(math.dist(p, q) >= 9 for q in placed)]
+        candidates = [p for p in sorted(cells) if all(math.dist(p, q) >= spacing for q in placed)]
         if not candidates or not kinds:
             continue
         anchor = rng.choice(candidates)
@@ -128,6 +122,6 @@ def populate_encounters(game, Interactable):
         )
         spawn(anchor, kind, "guarding" if hold else "patrolling")
         companions = [p for p in candidates if 2 <= math.dist(anchor, p) <= 4]
-        if depth > 1 and len(placed) < limit and companions and (kind == "tribal_shaman" or rng.random() < 0.45):
+        if len(placed) < limit and companions and (kind == "tribal_shaman" or rng.random() < (0.25 if depth == 1 else 0.70)):
             allies = [other for other in kinds if other != "tribal_shaman"]
             spawn(rng.choice(companions), rng.choice(allies), "guarding" if hold else "patrolling")

@@ -4,15 +4,15 @@ import unittest
 from unittest.mock import Mock
 
 from elenor.entities import Enemy
-from elenor.entities.jungle_combat import ATTACKS, HEAL, STOMP
-from elenor.missions.jungle_encounters import EARLY_STATS, GUARDIANS, HABITATS, START_SUPPLIES
+from elenor.entities.jungle_combat import ATTACKS, HEAL, POUNCE, STOMP
+from elenor.missions.jungle_encounters import EARLY_STATS, GUARDIANS, HABITATS
 from elenor.puzzles.mirrors import reachable_floor_tiles
 from elenor.world.dungeon import Dungeon
 from test_mirror_puzzles import HeadlessGame, empty_dungeon
 
 
 class JungleEncountersTests(unittest.TestCase):
-    def test_first_valley_has_local_enemies_and_reachable_starter_supplies(self):
+    def test_first_valley_has_local_enemies_and_reachable_equipment_cache(self):
         random.seed(19)
         dungeon = Dungeon(puzzle_chance=1)
         dungeon.generate(campaign="jungle")
@@ -28,8 +28,10 @@ class JungleEncountersTests(unittest.TestCase):
         self.assertTrue(all(m.kind in EARLY_STATS and m.phys_def == 0 for m in game.mobs))
         self.assertTrue(all(math.dist((m.x, m.y), dungeon.start_pos) > 12 for m in game.mobs))
         near_start = reachable_floor_tiles(dungeon, dungeon.start_pos, max_distance=5)
-        supplies = {o.item.id for o in game.objects if o.kind == "loot" and (o.x, o.y) in near_start}
-        self.assertTrue(set(START_SUPPLIES) <= supplies)
+        self.assertFalse(any(o.kind == "loot" and (o.x, o.y) in near_start for o in game.objects))
+        self.assertTrue(any(o.kind == "campfire" and (o.x, o.y) in near_start for o in game.objects))
+        self.assertIn(dungeon.jungle_starter_cache, reachable_floor_tiles(dungeon, dungeon.start_pos))
+        self.assertNotIn(dungeon.jungle_starter_cache, near_start)
 
     def arena(self):
         dungeon = empty_dungeon()
@@ -82,3 +84,32 @@ class JungleEncountersTests(unittest.TestCase):
         self.assertTrue(any(obj.item.type == "equipment" for obj in game.objects))
         game.trigger_event_thought.assert_called_once()
         self.assertEqual(game.trigger_event_thought.call_args.args[0], "jungle_guardian_defeated")
+
+    def test_wasp_lunge_moves_across_frames(self):
+        dungeon, game = self.arena()
+        wasp = Enemy(10, 10, "giant_wasp", state="combat")
+        game.player.x, game.player.y = 12.6, 10.5
+        on_hit = Mock()
+        args = (game.player, dungeon, [wasp], [], game.sfx, game.add_popup, on_hit)
+
+        wasp.update_ai(0.05, *args)
+        wasp.update_ai(POUNCE.windup, *args)
+        self.assertEqual(wasp.x, 10.5)
+        wasp.update_ai(0.05, *args)
+        self.assertGreater(wasp.x, 10.5)
+        self.assertLess(wasp.x, 11.3)
+        self.assertIsNotNone(wasp.jungle_dash)
+        for _ in range(5):
+            wasp.update_ai(0.05, *args)
+        on_hit.assert_called_once()
+
+    def test_hunter_commits_to_melee_at_close_range(self):
+        dungeon, game = self.arena()
+        hunter = Enemy(10, 10, "tribal_hunter", state="combat")
+        game.player.x, game.player.y = 11.7, 10.5
+        on_hit = Mock()
+        args = (game.player, dungeon, [hunter], [], game.sfx, game.add_popup, on_hit)
+        hunter.update_ai(0.05, *args)
+        self.assertEqual(hunter.jungle_windup[0].form, "strike")
+        hunter.update_ai(0.12, *args)
+        on_hit.assert_called_once()

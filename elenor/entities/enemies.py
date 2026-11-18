@@ -205,6 +205,7 @@ class Enemy:
         self.pending_pentagram = False
         self.jungle_home = (self.x, self.y) if kind in ATTACKS else None
         self.jungle_windup = None
+        self.jungle_dash = None
         self.jungle_impact = None
         self.jungle_impact_timer = 0.0
         self.patrol_dir = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
@@ -364,6 +365,7 @@ class Enemy:
             self.stun_timer = max(0.0, self.stun_timer - dt)
             self.cast_windup_timer = 0.0
             self.jungle_windup = None
+            self.jungle_dash = None
             return
 
         if self.hp <= 0:
@@ -378,6 +380,7 @@ class Enemy:
             if self.state == "combat" and distance_home > WARDEN_LEASH:
                 self.state = "returning"
                 self.jungle_windup = None
+                self.jungle_dash = None
                 self.cast_windup_timer = 0.0
                 self.awareness = 0.0
                 self.path_timer = 0.0

@@ -77,6 +77,23 @@ class AbilityTests(unittest.TestCase):
         g._execute_skill_or_spell(item, 13, 10.5)
         self.assertEqual(front.hp, 100)
 
+    def test_equipped_weapon_raises_a_physical_skill_above_its_normal_hit(self):
+        d = empty_dungeon()
+        d._carve_rect(pygame.Rect(5, 5, 20, 20), 0)
+        game = HeadlessGame(d)
+        weapon = game.make_item("rusty_dagger", rarity="legendary")
+        game.player.equipment["right_hand"] = weapon
+        item = Item("heavy_strike", dict(game.loc["perks"]["heavy_strike"], type="combat_skill"))
+        enemy = Enemy(11, 10)
+        enemy.hp = enemy.max_hp = 250
+        enemy.phys_def = 3
+        game.mobs = [enemy]
+
+        game._execute_skill_or_spell(item, enemy.x, enemy.y)
+
+        normal_max = game.player.melee_damage_range()[1] - max(0, enemy.phys_def - weapon.armor_pierce)
+        self.assertGreater(250 - enemy.hp, normal_max)
+
 
 class RedesignTests(unittest.TestCase):
     def make_game(self):

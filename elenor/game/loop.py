@@ -14,7 +14,7 @@ from elenor.game.targeting import is_cursor_on_mob
 
 from elenor.minigames.fishing import press_fishing, start_fishing, update_fishing
 from elenor.ui.fishing import draw_fishing
-from elenor.ui.exploration_map import chart_surface, draw_map, draw_map_hud
+from elenor.ui.exploration_map import chart_surface, draw_map
 
 
 def main():
@@ -350,12 +350,14 @@ def main():
                 if game.player.step_sound_cd <= 0.0:
                     game.player.step_sound_cd = 0.28
                     t_step = game.dungeon.grid[int(game.player.y)][int(game.player.x)]
-                    if t_step in (2, SHALLOW_WATER):
+                    if t_step in (2, SHALLOW_WATER, 23, 32, 44):
+                        green = t_step in (23, 44)
                         game.sfx.play("step_water")
-                        game.fx.add_water_ripple(game.player.x, game.player.y)
+                        game.fx.add_water_ripple(game.player.x, game.player.y, green=green)
+                        splash = (130, 225, 100) if green else (115, 200, 245)
                         for _ in range(3):
                             ang = random.uniform(0, 6.28)
-                            game.particles.append(Particle(game.player.x, game.player.y, math.cos(ang) * 1.4, math.sin(ang) * 1.4 - 0.8, (115, 200, 245), 2.2, 0.22))
+                            game.particles.append(Particle(game.player.x, game.player.y, math.cos(ang) * 1.4, math.sin(ang) * 1.4 - 0.8, splash, 2.2, 0.22))
                     elif t_step in (4, PIER, FALLEN_LOG):
                         game.sfx.play("step_wood")
                     elif t_step == 0:
@@ -843,6 +845,9 @@ def main():
         ui_bundle["_survey_map"] = not game.inv_open and not game.dev_panel.reveal_map
         ui_bundle["_perks_db"] = game.loc.get("perks", {})
         ui_bundle["_world_hover_item"] = world_hover_item
+        ui_bundle["_show_map_hud"] = (
+            not game.inv_open and not game.levelup_choices and game.fishing_cast is None and not dev_open
+        )
         ui_bundle["_visual_fx"] = game.visual_fx
         ui_bundle["_fx_mgr"] = game.fx
         ui_bundle["_journal_open"] = game.journal_open
@@ -878,16 +883,15 @@ def main():
 
         if game.campaign == "jungle" and not game.inv_open:
             draw_fishing(screen, game, (world_mx, world_my), fov_mask)
-            for (x, y), action in game.dungeon.passages.items():
-                if math.hypot(x+.5-game.player.x, y+.5-game.player.y) <= 1.65:
-                    label = game.renderer.font_ui.render(game.loc["jungle_passages"][action], True, (246,225,178))
-                    rect = label.get_rect(midbottom=(VIEW_W*SCALE//2, VIEW_H*SCALE-16))
-                    pygame.draw.rect(screen, (23,32,27), rect.inflate(18,8), border_radius=4)
-                    screen.blit(label, rect)
-                    break
 
         if not game.inv_open and not game.levelup_choices and game.fishing_cast is None and not dev_open:
-            draw_map_hud(screen, game)
+            passage = game.nearby_passage()
+            if passage:
+                _, action = passage
+                label = game.renderer.font_ui.render(game.loc["jungle_passages"][action], True, (246, 225, 178))
+                rect = label.get_rect(midbottom=(VIEW_W * SCALE // 2, VIEW_H * SCALE - 16))
+                pygame.draw.rect(screen, (23, 32, 27), rect.inflate(18, 8), border_radius=4)
+                screen.blit(label, rect)
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)

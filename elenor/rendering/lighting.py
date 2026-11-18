@@ -48,6 +48,7 @@ class GPULightShader:
 
             uniform vec2 u_cam;
             uniform float u_time;
+            uniform bool u_temple_exposure;
             uniform vec3 u_fx_flags; // x = enable_ao, y = enable_bloom, z = enable_fog
             uniform int u_num_lights;
             uniform vec4 u_light_pos_rad[{self.MAX_LIGHTS}];
@@ -268,6 +269,11 @@ class GPULightShader:
                         }}
                     }}
 
+                    if (u_temple_exposure && ent_y < -9000.0) {{
+                        float peak = max(lit_out.r, max(lit_out.g, lit_out.b)) * 255.0;
+                        float excess = max(peak - 164.0, 0.0);
+                        if (excess > 0.0) lit_out *= (164.0 + 77.0 * excess / (77.0 + excess)) / peak;
+                    }}
                     fragColor = clamp(lit_out, 0.0, 1.0);
                 }} else {{
                     vec3 mult = vec3(0.74, 0.74, 0.80);
@@ -319,7 +325,7 @@ class GPULightShader:
         self.hud_pos_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
         self.hud_col_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, enable_fog=True, active_clouds=None, now_sec=0.0):
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, enable_fog=True, active_clouds=None, now_sec=0.0, temple_exposure=False):
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
@@ -386,6 +392,7 @@ class GPULightShader:
 
         self.prog["u_cam"].value = (float(cam_x), float(cam_y))
         self.prog["u_time"].value = float(now_sec)
+        self.prog["u_temple_exposure"].value = temple_exposure
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0, 1.0 if enable_fog else 0.0)
         self.prog["u_num_lights"].value = n_lgt
         self.prog["u_light_pos_rad"].write(self.pos_rad_buf.tobytes())

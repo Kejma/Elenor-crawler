@@ -13,6 +13,8 @@ from elenor.minigames.fishing import (
 from test_mirror_puzzles import HeadlessGame, Interactable
 from elenor.config import DEEP_WATER, FALLEN_LOG, SHALLOW_WATER
 from elenor.missions.jungle import populate_jungle_floor
+from elenor.entities.objects import JUNGLE_CHESTS
+from elenor.world.jungle_routes import route_kind
 from elenor.rendering.fishing import FISH_CATALOG_SPECS
 from elenor.world.dungeon import Dungeon
 from elenor.world.jungle_sites import CARDINAL, Plan, offset, village
@@ -139,7 +141,7 @@ class FishingTests(unittest.TestCase):
                 seen = reachable_floor_tiles(dungeon, dungeon.start_pos)
                 self.assertTrue(dungeon.passages.keys() <= seen)
                 self.assertTrue(
-                    {"forward", "temple", "cave"} <= set(dungeon.passages.values())
+                    {"temple", "cave"} <= set(dungeon.passages.values())
                 )
                 self.assertTrue(dungeon.fishing_edges.keys() <= seen)
                 self.assertTrue(game.mobs)
@@ -173,11 +175,14 @@ class FishingTests(unittest.TestCase):
             self.assertFalse(inside.explored_tiles)
             inside.explored_tiles[inside.start_pos] = "floor"
             self.assertFalse(inside.fishing_edges)
-            self.assertEqual(set(inside.passages.values()), {"up"})
-            treasure = next(obj for obj in game.objects if obj.kind == "chest")
+            expected = {"up", "onward"} if action == route_kind(1) else {"up"}
+            self.assertEqual(set(inside.passages.values()), expected)
+            self.assertEqual(inside.width < dungeon.width, action != route_kind(1))
+            treasure = next(obj for obj in game.objects if obj.kind in JUNGLE_CHESTS)
             treasure.used = True
-            fallen, survivor, *_ = game.mobs
-            game.mobs.remove(fallen)
+            self.assertTrue(game.mobs)
+            survivor = game.mobs[0]
+            fallen = game.mobs.pop() if len(game.mobs) > 1 else None
             survivor.hp -= 1
             remaining_hp = survivor.hp
             game.travel_jungle("up")
@@ -194,9 +199,18 @@ class FishingTests(unittest.TestCase):
             self.assertIn(survivor, game.mobs)
             self.assertEqual(survivor.hp, remaining_hp)
             game.travel_jungle("up")
-        game.travel_jungle("forward")
+        game.travel_jungle(route_kind(1))
+        through = game.dungeon
+        game.travel_jungle("onward")
+        self.assertIs(game.dungeon, through)
+        gate = through.doors[through.jungle_gate]
+        gate.locked = False
+        game.travel_jungle("onward")
         self.assertEqual(game.dungeon.floor_num, 2)
         game.travel_jungle("back")
+        self.assertIs(game.dungeon, through)
+        self.assertEqual(through.passages[int(game.player.x), int(game.player.y)], "onward")
+        game.travel_jungle("up")
         self.assertIs(game.dungeon, dungeon)
         self.assertEqual(dungeon.explored_tiles, {dungeon.start_pos: "trail"})
 
@@ -210,12 +224,16 @@ class FishingTests(unittest.TestCase):
                 game.campaign = "jungle"
                 game._populate_floor(2)
                 seen = reachable_floor_tiles(dungeon, dungeon.start_pos)
-                self.assertTrue(dungeon.passages.keys() <= seen)
+                self.assertTrue(all(pos in seen for pos, action in dungeon.passages.items() if action == "up"))
+                if dungeon.jungle_gate is not None:
+                    onward = next(pos for pos, action in dungeon.passages.items() if action == "onward")
+                    self.assertNotIn(onward, seen)
+                    self.assertTrue(dungeon.jungle_controls.keys() <= seen)
                 self.assertTrue(
                     any(
                         (obj.x, obj.y) in seen
                         for obj in game.objects
-                        if obj.kind == "chest"
+                        if obj.kind in JUNGLE_CHESTS
                     )
                 )
                 info = dungeon.mirror_puzzle_info
@@ -266,7 +284,7 @@ class FishingTests(unittest.TestCase):
         start = dungeon.start_pos
         exit_tile = next(iter(dungeon.passages))
         treasure = next(
-            (x, y) for x, y, kind in dungeon.jungle_props if kind == "chest"
+            (x, y) for x, y, kind in reversed(dungeon.jungle_props) if kind in JUNGLE_CHESTS
         )
         screen_axis = 1 if exit_tile[0] != start[0] else 0
         self.assertGreater(abs(treasure[screen_axis] - start[screen_axis]), 25)

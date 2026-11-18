@@ -33,7 +33,9 @@ def _spawn_particles(game, wx, wy, count, colors, spd_range=(1.0, 3.0), size=2.6
 
 def hit(game, mob, item, power, credit, nx, ny):
     mob.alert_to_combat(game.sfx, game.add_popup)
-    damage = max(1, int(power) - mob.phys_def)
+    weapon = game.player.equipment["right_hand"]
+    armor = max(0, mob.phys_def - getattr(weapon, "armor_pierce", 0))
+    damage = max(1, int(power) - armor)
     mob.hp -= damage
     mob.apply_knockback(nx, ny, item.knockback)
     mob.apply_status(
@@ -237,7 +239,7 @@ def update_physical(game, dt):
                 step = min(0.08, travel)
                 travel -= step
                 x, y = state["x"] + state["nx"] * step, state["y"] + state["ny"] * step
-                if game.dungeon.is_blocking_move(int(x), int(y)):
+                if game.dungeon.is_blocking_projectile(int(x), int(y)):
                     state["timer"] = 0
                     if kind == "knife":
                         _spawn_particles(game, x, y, 6, [(210, 220, 235), (255, 225, 130)], (1.0, 2.6), 2.2, 0.2)

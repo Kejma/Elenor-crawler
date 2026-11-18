@@ -160,12 +160,13 @@ class FXManager:
             pygame.draw.rect(self.decal_surf, (16, 14, 18, alpha), (ox, oy, 2, 2))
 
     # --- КРУГИ НА ВОДЕ (СТРОГО ПОД ПОДОШВАМИ САПОГ: wy + 0.36!) ---
-    def add_water_ripple(self, wx, wy):
+    def add_water_ripple(self, wx, wy, *, green=False):
         if not self.flags["water_ripples"]:
             return
         self.ripples.append({
             "wx": float(wx),
             "wy": float(wy) + 0.36,
+            "green": green,
             "timer": 0.55,
             "max_timer": 0.55
         })

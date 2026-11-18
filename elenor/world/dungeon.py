@@ -13,6 +13,7 @@ class Door:
         self.y = y
         self.is_open = False
         self.locked = locked_by_lever
+        self.key_color = None
 
 
 class Lever:
@@ -82,13 +83,18 @@ class Dungeon:
                 if 1 <= rx < self.width - 1 and 1 <= ry < self.height - 1:
                     self.grid[ry][rx] = floor_id
 
-    def generate(self, floor_num=1, *, campaign="rats", interior=None):
+    def generate(self, floor_num=1, *, campaign="rats", interior=None, route_variant=0):
         self.floor_num = floor_num
         self.thickets = set()
         self.passages = {}
+        self.jungle_gate = None
+        self.jungle_controls = {}
+        self.jungle_keys = set()
+        self.jungle_starter_cache = None
         self.explored_tiles = {}
         self.map_landmarks = {}
         self.interior = interior
+        self.jungle_route_variant = route_variant
         self.fishing_edges = {}
         self.rooms = []
         self.braziers = []
@@ -577,16 +583,22 @@ class Dungeon:
             return True
         return False
 
-    def is_blocking_sight(self, tx, ty):
+    def is_blocking_sight(self, tx, ty, *, include_thickets=True):
         if not (0 <= tx < self.width and 0 <= ty < self.height):
             return True
         # Isolated jungle trees admit light. Interlocking crowns occlude both light and vision.
-        if (tx, ty) in self.thickets or self.grid[ty][tx] in OPAQUE_WALL_TILES:
+        if (include_thickets and (tx, ty) in self.thickets) or self.grid[ty][tx] in OPAQUE_WALL_TILES:
             return True
         door = self.doors.get((tx, ty))
         if door and not door.is_open:
             return True
         return False
+
+    def is_blocking_projectile(self, tx, ty):
+        if not (0 <= tx < self.width and 0 <= ty < self.height):
+            return True
+        door = self.doors.get((tx, ty))
+        return self.grid[ty][tx] in OPAQUE_WALL_TILES or bool(door and not door.is_open)
 
     def has_line_of_sight(self, x0, y0, x1, y1, max_dist):
         dx = x1 - x0
@@ -594,13 +606,19 @@ class Dungeon:
         dist = math.hypot(dx, dy)
         if dist > max_dist:
             return False
-        steps = int(dist * 3.0) + 1
+        steps = int(dist * (8.0 if self.thickets else 3.0)) + 1
         for i in range(1, steps):
             t = i / steps
-            cx = int(x0 + dx * t)
-            cy = int(y0 + dy * t)
-            if self.is_blocking_sight(cx, cy):
+            x, y = x0 + dx * t, y0 + dy * t
+            cx, cy = math.floor(x), math.floor(y)
+            if self.is_blocking_sight(cx, cy, include_thickets=False):
                 return False
+            if (cx, cy) in self.thickets:
+                ox, oy = x - cx - 0.5, y - cy - 0.5
+                if (ox * ox + oy * oy <= 0.22 ** 2
+                        or abs(oy) <= 0.15 and (cx + (1 if ox > 0 else -1), cy) in self.thickets
+                        or abs(ox) <= 0.15 and (cx, cy + (1 if oy > 0 else -1)) in self.thickets):
+                    return False
         return True
 
     def find_path(self, start_tile, goal_tile, max_expanded=220):
@@ -726,8 +744,13 @@ class Dungeon:
                 for rx in range(self.width):
                     if row[rx] in OPAQUE_WALL_TILES:
                         base_bg[rx, ry] = True
+            roots = np.zeros((self.width, self.height), dtype=np.uint8)
             for x, y in self.thickets:
-                base_bg[x, y] = True
+                roots[x, y] = 1 + sum(
+                    bit for bit, dx, dy in ((2, 1, 0), (4, -1, 0), (8, 0, 1), (16, 0, -1))
+                    if (x + dx, y + dy) in self.thickets
+                )
+            self._fov_roots = roots
             self._base_block_grid = base_bg
 
         block_grid = self._base_block_grid.copy()
@@ -743,6 +766,13 @@ class Dungeon:
         ty = np.clip((wy // TILE_H).astype(np.int32), 0, self.height - 1)
 
         blocked = block_grid[tx, ty]
+        if self.thickets:
+            roots = self._fov_roots[tx, ty]
+            ox, oy = wx / TILE_W - tx - 0.5, wy / TILE_H - ty - 0.5
+            trunks = (ox * ox + oy * oy <= 0.22 ** 2)
+            branches_x = (np.abs(oy) <= 0.15) & np.where(ox > 0, roots & 2, roots & 4).astype(bool)
+            branches_y = (np.abs(ox) <= 0.15) & np.where(oy > 0, roots & 8, roots & 16).astype(bool)
+            blocked |= (roots != 0) & (trunks | branches_x | branches_y)
         # Защита от прострела диагональных стыков стен
         diag_step = (tx[:, 1:] != tx[:, :-1]) & (ty[:, 1:] != ty[:, :-1])
         diag_pinch = diag_step & block_grid[tx[:, 1:], ty[:, :-1]] & block_grid[tx[:, :-1], ty[:, 1:]]

@@ -25,6 +25,8 @@ def render_jungle_attacks(screen, mobs, cam_x, cam_y, fov, lights, cache):
         if not mob.jungle_windup:
             continue
         attack, target = mob.jungle_windup
+        if attack.form in ("strike", "sweep", "lunge"):
+            continue
         progress = 1.0 - mob.cast_windup_timer / attack.windup
         color = attack.color
         start = pixel(mob.x, mob.y)
@@ -44,9 +46,7 @@ def render_jungle_attacks(screen, mobs, cam_x, cam_y, fov, lights, cache):
             continue
 
         end = pixel(*target)
-        if attack.form == "lunge":
-            pygame.draw.line(layer, (*color, 145), start, end, 3)
-        radius = round((attack.radius + (0.14 if attack.form == "lunge" else 0)) * TILE_W * SCALE)
+        radius = round(attack.radius * TILE_W * SCALE)
         pygame.draw.circle(layer, (*color, 25 + round(29 * progress)), end, radius)
         pygame.draw.circle(layer, (*color, 190), end, radius, 2)
         pygame.draw.arc(layer, (*color, 255), (end[0] - radius, end[1] - radius, 2 * radius, 2 * radius),

@@ -6,7 +6,7 @@ from heapq import heappop, heappush
 from math import cos, hypot, pi, sin, tau
 import random
 
-from elenor.entities.objects import SOLID_INTERACTABLE_KINDS
+from elenor.entities.objects import JUNGLE_CHESTS, SOLID_INTERACTABLE_KINDS
 from elenor.config import (
     DEEP_WATER,
     FALLEN_LOG,
@@ -41,7 +41,9 @@ from elenor.world.jungle_sites import (
     MARSH_GROUPS,
     RUIN_GROUPS,
     BONE_GROUPS,
+    wall_shell,
 )
+from elenor.world.jungle_routes import add_through_route, route_kind
 
 WIDTH, HEIGHT = MAP_COLS * 2, MAP_ROWS * 2
 Point = tuple[int, int]
@@ -327,7 +329,6 @@ def shore_finish(plan, wet, deep, relief):
     detail_patch(plan, (wet - deep) & plan.floor, "ov_duckweed", 13)
     detail_patch(plan, wet - deep, "ov_shore_foam", 10, radius=(2, 4))
     detail_patch(plan, deep, "ov_fish_shadows", 9, radius=(2, 4))
-    detail_patch(plan, wet - deep, "ov_bobber_ripples", 6, radius=(1, 2))
     for x, y in plan.rng.sample(sorted(wet), min(8, len(wet))):
         plan.mist((x, y), plan.rng.uniform(3.6, 7))
 
@@ -616,34 +617,27 @@ def build_facade(plan, center, kind, facing, compact, lot):
     return point(-8)
 
 
-def place_facade(plan, kind, north):
+def place_facade(plan, kind, north, west=False):
     """Local lot search. Both banks have room outside the river's floodplain."""
-    candidates = [
-        (x, y)
-        for x in range(91, 115, 3)
-        for y in (range(12, 33, 3) if north else range(51, 73, 3))
-    ]
-    plan.rng.shuffle(candidates)
     forbidden = plan.water | plan.structure | plan.bridges | plan.floor
-    for compact in (False, True):
-        for center in candidates:
-            if center in forbidden:
-                continue
-            facing_options = list(CARDINAL)
-            plan.rng.shuffle(facing_options)
-            for facing in facing_options:
-                lot = facade_lot(center, facing, kind, compact)
-                point = axis_frame(center, facing)
-                layout = lot | axis_rect(point, -9, 0, 0, 1)
-                if layout & forbidden or not all(
-                    plan.inside(tile, 3) for tile in layout
-                ):
+    bands = (range(24, 53, 3), range(92, 117, 3))
+    for xs in (bands if west else bands[::-1]):
+        candidates = [(x, y) for x in xs
+                      for y in (range(13, 35, 3) if north else range(49, 73, 3))]
+        plan.rng.shuffle(candidates)
+        for compact in (False, True):
+            for center in candidates:
+                if center in forbidden:
                     continue
-                return build_facade(plan, center, kind, facing, compact, lot)
-    center = (106, 16 if north else 69)
-    facing = (1, 0)
-    lot = facade_lot(center, facing, kind, True)
-    return build_facade(plan, center, kind, facing, True, lot)
+                facing_options = list(CARDINAL)
+                plan.rng.shuffle(facing_options)
+                for facing in facing_options:
+                    lot = facade_lot(center, facing, kind, compact)
+                    point = axis_frame(center, facing)
+                    layout = lot | axis_rect(point, -9, 0, 0, 1)
+                    if not layout & forbidden and all(plan.inside(tile, 3) for tile in layout):
+                        return build_facade(plan, center, kind, facing, compact, lot)
+    raise LayoutError(f"No open hillside for {kind}")
 
 
 def glade_sites(plan, relief, region, ridge):
@@ -726,49 +720,59 @@ def join_access(plan, start, destinations, biome):
                     queue.append(point)
 
 
-def gateway(plan, side, y, action):
-    x = 2 if side == "west" else WIDTH - 3
-    boundary = 0 if side == "west" else WIDTH - 1
-    for yy in range(y - 1, y + 2):
-        for xx in range(min(x, boundary), max(x, boundary) + 1):
-            plan.d.grid[yy][xx] = 12
-            if xx == boundary:
-                plan.d.invisible_bounds.add((xx, yy))
-    plan.feature((x, y), action, "notice_board")
-    plan.lamp((x, y), 108)
-
-
 def surface(plan, relief):
     region = region_for(plan.d, plan.rng)
     ridge = surface_background(plan, relief, region)
     waterfront(plan, relief)
-    start = (plan.rng.randint(8, 12), plan.rng.randint(19, HEIGHT - 20))
-    hearth = (
-        plan.rng.randint(28, 34),
-        max(13, min(HEIGHT - 14, start[1] + plan.rng.randint(-11, 11))),
-    )
-    west_gate, east_gate = village(plan, hearth, (1, 0))
+    start = (plan.rng.randint(7, 13), plan.rng.randint(14, HEIGHT - 15))
     north = bool(plan.rng.getrandbits(1))
-    temple_gate = place_facade(plan, "temple", north)
-    cave_gate = place_facade(plan, "cave", not north)
-    end = WIDTH - 3, plan.rng.randint(18, HEIGHT - 19)
-    entry = 2, start[1]
-    gates = {west_gate, east_gate, temple_gate, cave_gate}
+    west_entry = plan.rng.choice(("temple", "cave", None))
+    temple_gate = place_facade(plan, "temple", north, west_entry == "temple")
+    cave_gate = place_facade(plan, "cave", not north, west_entry == "cave")
+    village_sites = [
+        (x, y) for x in (27, 34, 41, 99, 106, 112)
+        for y in range(22, HEIGHT - 21, 7)
+        if distance((x, y), start) >= 20
+    ]
+    plan.rng.shuffle(village_sites)
+    hearth = next((
+        p for p in village_sites
+        if not oval(p, 17, 17) & (plan.structure | plan.water | plan.floor)
+    ), None)
+    if hearth is None:
+        raise LayoutError("No dry clearing for the village")
+    village_gates = village(plan, hearth, plan.rng.choice(((1, 0), (0, 1), (0, -1))))
+    entry = 4, start[1]
+    gates = {*village_gates, temple_gate, cave_gate}
     impassable = (plan.water - plan.bridges) | (plan.structure - gates) | plan.occupied
-    main = set()
-    roads = []
-    for first, last in (
-        (start, west_gate),
-        (east_gate, temple_gate),
-        (temple_gate, end),
-    ):
-        points = path_curve(plan, first, last, impassable, relief)
-        roads.append(points)
-        main.update(trail(plan, points, 12, avoid=impassable))
-        main.update((first, last))
-        mark_trail(plan, points, main)
+    trunk = cave_gate if route_kind(plan.d.floor_num, plan.d.jungle_route_variant) == "cave" else temple_gate
+    main_road = path_curve(plan, start, trunk, impassable, relief)
+    main = trail(plan, main_road, 12, avoid=impassable)
+    main.update((start, trunk))
+    mark_trail(plan, main_road, main)
     landmark_entries = main
-    plan.d.jungle_habitats.append(("grove", dilate(set(roads[0]), 3) - plan.structure))
+    plan.d.jungle_habitats.append(("grove", dilate(set(main_road), 3) - plan.structure))
+    for connection in gates - {trunk}:
+        connect_to_route(plan, connection, main, impassable, relief, region)
+    if plan.d.floor_num == 1:
+        starter = [
+            p for p in main_road[10:24]
+            if p in plan.floor and p not in plan.water | plan.occupied | plan.structure
+            and distance(p, start) >= 10
+        ]
+        if not starter:
+            starter = [
+                p for p in sorted(main)
+                if 10 <= distance(p, start) <= 24
+                and p in plan.floor and p not in plan.water | plan.occupied | plan.structure
+            ]
+        if not starter:
+            raise LayoutError("No place for the first equipment cache")
+        point = plan.rng.choice(starter[:7])
+        plan.prop(point, "tribal_chest", on_route=True)
+        plan.lamp(point, 95)
+        plan.d.jungle_starter_cache = point
+
     for bank_side in zip(*plan.crossing_approaches):
         sorted_bank = sorted(bank_side, key=lambda point: point[1])
         dry_avoid = impassable | plan.water
@@ -787,7 +791,6 @@ def surface(plan, relief):
             impassable,
             natural=False,
         )
-    connect_to_route(plan, cave_gate, landmark_entries, impassable, relief, region)
 
     # Each landing has a dry starting tile; the shore and pier already exist.
     for bank in sorted(plan.landing_approaches):
@@ -803,25 +806,43 @@ def surface(plan, relief):
             plan, center, landmark_entries, impassable, relief, biome, natural=natural
         ):
             dress_glade(plan, center, footprint, biome)
-    meadow = oval(start, 8, 7, 0.35, 0.18)
-    dress_glade(plan, start, meadow, "grove")
-    clearing = (
-        plan.floor - plan.routes - plan.occupied - plan.water - plan.structure
-    ) & meadow
-    if clearing:
-        point = min(clearing, key=lambda point: distance(point, start))
-        plan.prop(point, "campfire")
+    meadow = oval(start, plan.rng.randint(6, 9), plan.rng.randint(5, 7),
+                  plan.rng.uniform(-pi, pi), 0.18)
+    if plan.d.floor_num == 1:
+        plan.clearing(meadow, 10)
+        clearing = (meadow & plan.floor) - plan.water - plan.structure - plan.occupied - {start}
+        if not clearing:
+            raise LayoutError("No hearth clearing at the start")
+        point = min(clearing, key=lambda p: (distance(p, start), p in plan.routes, p))
+        plan.prop(point, "campfire", on_route=True)
         plan.lamp(point, 112)
-    gateway(plan, "east", end[1], "forward")
-    if plan.d.floor_num > 1:
-        gateway(plan, "west", entry[1], "back")
+    else:
+        dress_glade(plan, start, meadow, region)
+        plan.paint({entry}, 24)
+        plan.feature(entry, "back", "stairs")
+        plan.lamp(entry, 108)
     ends = {point for crossing in plan.crossing_approaches for point in crossing}
-    targets = plan.d.passages.keys() | plan.d.fishing_edges.keys() | ends
+    targets = plan.d.passages.keys() | plan.d.fishing_edges.keys() | ends | plan.hut_entries | set(village_gates)
     join_access(plan, start, targets, region)
+    reachable = component(start, plan.floor - solid_fixtures(plan))
+    stashes = []
+    for habitat, cells in plan.d.jungle_habitats:
+        if habitat not in ("grove", "marsh", "bone", "ruins"):
+            continue
+        clear = [
+            p for p in sorted((cells & reachable) - plan.occupied - plan.water - plan.routes)
+            if distance(p, start) >= 22 and all(distance(p, q) >= 16 for q in stashes)
+        ]
+        if clear:
+            point = plan.rng.choice(clear)
+            sprite = {"bone": "ossuary_chest", "ruins": "marble_chest"}.get(habitat, "tribal_chest")
+            plan.prop(point, sprite)
+            stashes.append(point)
+        if len(stashes) == 3:
+            break
     optional_vault(plan, temple_gate, start)
     reserved = dilate(plan.structure | plan.water | plan.bridges | plan.occupied, 2)
-    for road in roads:
-        dress_verges(plan, road, region, reserved)
+    dress_verges(plan, main_road, region, reserved)
     return start
 
 
@@ -844,8 +865,9 @@ def bedrock(plan, relief, kind):
 def optional_vault(plan, focus, start):
     if plan.rng.random() >= plan.d.puzzle_chance:
         return
+    locked = {p for p, door in plan.d.doors.items() if door.locked}
     edges = (plan.floor - erode(plan.floor) - plan.water - plan.occupied) & component(
-        start, plan.floor - solid_fixtures(plan)
+        start, plan.floor - solid_fixtures(plan) - locked
     )
     choices = sorted(edges, key=lambda point: (distance(point, focus), point))
     blocked = plan.floor | plan.water
@@ -882,7 +904,8 @@ def temple(plan):
             else plan.rng.randint(HEIGHT - 15, HEIGHT - 12),
         )
     start, axis = build_temple(plan, origin, facing)
-    optional_vault(plan, axis(24), start)
+    add_through_route(plan, start, axis(32))
+    optional_vault(plan, axis(18), start)
     return start
 
 
@@ -956,14 +979,59 @@ def caves(plan):
     start = points[0]
     threshold = offset(start, (-1, 0), 5)
     trail(plan, path_curve(plan, start, threshold, set(), None), 8, underground=True)
-    plan.feature(threshold, "up", "door_open")
+    plan.feature(threshold, "up", "stairs")
     for center, cells, kind in rooms:
         dress_cave(plan, center, cells, kind)
         if kind != "mouth":
             plan.d.jungle_habitats.append(("cave_" + kind, cells))
     plan.light(threshold, 105, (0.63, 0.76, 0.79))
-    plan.prop(points[-1], "chest", on_route=True)
-    optional_vault(plan, points[-1], start)
+    plan.prop(points[-1], "ossuary_chest", on_route=True)
+    add_through_route(plan, start, points[-1])
+    optional_vault(plan, points[-2], start)
+    return start
+
+
+def side_pocket(plan):
+    """An optional interior with two small rooms around one bend."""
+    is_temple = plan.d.interior == "temple"
+    mid_y = plan.height // 2 + plan.rng.randint(-3, 3)
+    bend = plan.rng.choice((-1, 1)) * plan.rng.randint(6, 9)
+    start = (7, mid_y)
+    first = (12, mid_y)
+    turn = (22, mid_y)
+    far = (30, mid_y + bend)
+    if is_temple:
+        room = {(x, y) for x in range(6, 17) for y in range(mid_y - 4, mid_y + 5)}
+        chamber = oval(far, 7.4, 5.8, 0.15, 0.10)
+        for cells in (room, chamber):
+            wall_shell(plan, cells, 19)
+            plan.paint(cells, 14)
+            plan.room(cells)
+    else:
+        cave_chamber(plan, first, (10, mid_y - 2), "mouth")
+        chamber = cave_chamber(plan, far, (far[0] + 2, far[1] - 2), "geode")
+
+    link = [(x, mid_y) for x in range(start[0], turn[0] + 1)]
+    step_y = 1 if bend > 0 else -1
+    link.extend((turn[0], y) for y in range(mid_y + step_y, far[1] + step_y, step_y))
+    link.extend((x, far[1]) for x in range(turn[0] + 1, far[0] + 1))
+    plan.paint(link, 16 if is_temple else 8)
+    plan.routes.update(link)
+    plan.paint({start}, 16 if is_temple else 8)
+    plan.feature(start, "up", "stairs")
+    plan.lamp(start, 108)
+    plan.lamp(turn, 86)
+    plan.lamp(far, 105)
+    reward = (far[0] + 3, far[1])
+    plan.prop(reward, "marble_chest" if is_temple else "ossuary_chest", on_route=True)
+    if is_temple:
+        prop_group(plan, ("marble_urn", "marble_pillar_broken", "serpent_statue"),
+                   chamber - plan.routes, (far[0], far[1] + 2))
+    else:
+        dress_cave(plan, far, chamber, "geode")
+    habitat = "temple_inner" if is_temple else "cave_geode"
+    plan.d.jungle_habitats.append((habitat, chamber))
+    optional_vault(plan, far, start)
     return start
 
 
@@ -972,9 +1040,16 @@ def validate_floor(plan, start):
     solid = solid_fixtures(plan)
     locked = {position for position, door in d.doors.items() if door.locked}
     reachable = component(start, plan.floor - solid - locked)
-    if (d.passages.keys() | d.fishing_edges.keys()) - reachable:
+    onward = {p for p, action in d.passages.items() if action == "onward"}
+    if (d.passages.keys() | d.fishing_edges.keys()) - onward - reachable:
         raise LayoutError("A passage or fishing landing became inaccessible")
+    if onward:
+        with_gate_open = component(start, plan.floor - solid - (locked - {d.jungle_gate}))
+        if onward & reachable or not onward <= with_gate_open or d.jungle_controls.keys() - reachable:
+            raise LayoutError("The route control must be reachable before its gate")
     if not d.interior:
+        if d.floor_num == 1 and d.jungle_starter_cache not in reachable:
+            raise LayoutError("The first equipment cache needs a walkable approach")
         if any(
             point not in reachable
             for pair in plan.crossing_approaches
@@ -990,10 +1065,10 @@ def validate_floor(plan, start):
         reward_tiles = {
             (x, y)
             for x, y, kind in d.jungle_props
-            if kind == "chest"
+            if (kind == "chest" or kind in JUNGLE_CHESTS)
             and (not info or not info["sealed_rect"].collidepoint(x, y))
         }
-        if not reward_tiles or reward_tiles - reachable:
+        if not reward_tiles & reachable:
             raise LayoutError("The main underground reward needs a walkable approach")
     if info and (
         info["entry_door"] not in reachable
@@ -1004,17 +1079,35 @@ def validate_floor(plan, start):
 
 
 def generate_jungle_floor(dungeon):
-    """Keep the campaign's public transitions, state and fishing interfaces."""
+    """Construct and validate a progression route before committing the floor."""
     rng = random.Random(random.getrandbits(64))
-    dungeon.jungle_props = []
-    dungeon.jungle_habitats = []
-    dungeon.grid = [[21] * WIDTH for _ in range(HEIGHT)]
-    plan = Plan(dungeon, rng)
-    relief = Relief(rng, WIDTH, HEIGHT).raster(WIDTH, HEIGHT)
-    if dungeon.interior:
-        bedrock(plan, relief, dungeon.interior)
-        start = temple(plan) if dungeon.interior == "temple" else caves(plan)
-    else:
-        start = surface(plan, relief)
-    validate_floor(plan, start)
-    dungeon.start_pos = start
+    compact = dungeon.interior and dungeon.interior != route_kind(dungeon.floor_num, dungeon.jungle_route_variant)
+    width, height = (56, 42) if compact else (WIDTH, HEIGHT)
+    for attempt in range(6):
+        dungeon.jungle_props = []
+        dungeon.jungle_habitats = []
+        dungeon.jungle_gate = dungeon.jungle_starter_cache = None
+        for name in ("rooms", "braziers", "room_lights", "fog_zones", "atmo_zones",
+                     "overlays", "moss_tiles", "invisible_bounds", "passages", "map_landmarks",
+                     "fishing_edges", "doors", "levers", "jungle_controls"):
+            getattr(dungeon, name).clear()
+        dungeon.mirror_puzzle_info = None
+        dungeon.grid = [[21] * width for _ in range(height)]
+        plan = Plan(dungeon, rng)
+        relief = Relief(rng, width, height).raster(width, height)
+        try:
+            if dungeon.interior:
+                bedrock(plan, relief, dungeon.interior)
+                if compact:
+                    start = side_pocket(plan)
+                else:
+                    start = temple(plan) if dungeon.interior == "temple" else caves(plan)
+            else:
+                start = surface(plan, relief)
+            validate_floor(plan, start)
+        except LayoutError:
+            if attempt == 5:
+                raise
+        else:
+            dungeon.start_pos = start
+            return

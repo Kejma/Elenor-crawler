@@ -1250,6 +1250,8 @@ def create_placeholder_assets():
 
     from elenor.rendering.jungle_bestiary import register_jungle_bestiary_assets
     register_jungle_bestiary_assets(assets)
+    from elenor.rendering.jungle_fixtures import register_jungle_fixtures
+    register_jungle_fixtures(assets, make_pair)
 
     from elenor.data.textures import bootstrap_assets_if_needed, load_custom_dtex_animations
 

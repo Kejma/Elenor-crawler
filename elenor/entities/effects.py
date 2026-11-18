@@ -82,7 +82,7 @@ class Projectile:
                 ))
 
         tx, ty = int(self.wx), int(self.wy)
-        if dungeon.is_blocking_move(tx, ty):
+        if dungeon.is_blocking_projectile(tx, ty):
             spark_col = (200, 205, 215) if self.visual_kind in physical_kinds else self.color
             spark_cnt = 5 if self.visual_kind in physical_kinds else 10
             for _ in range(spark_cnt):

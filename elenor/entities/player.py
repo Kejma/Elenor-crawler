@@ -608,14 +608,18 @@ class Player:
             if self.ability_slots[a] is item:
                 self.ability_slots[a] = None
 
-    def roll_melee_damage(self):
+    def melee_damage_range(self):
         weap = self.equipment.get("right_hand")
         w_min = getattr(weap, "dmg_min", 1) if weap else 1
         w_max = getattr(weap, "dmg_max", 3) if weap else 3
         # Двуручники получают повышенную отдачу от вложенной Силы!
         stat_scale = 1.35 if (weap and weap.two_handed) else 1.0
         stat_add = int(round(self.phys_attack * stat_scale))
-        base = random.randint(w_min, w_max) + stat_add
+        return w_min + stat_add, w_max + stat_add
+
+    def roll_melee_damage(self):
+        weap = self.equipment.get("right_hand")
+        base = random.randint(*self.melee_damage_range())
         is_crit = random.random() < self.crit_chance
         crit_mult = 1.75 + (getattr(weap, "crit_bonus", 0.0) * 1.5)
         if is_crit:

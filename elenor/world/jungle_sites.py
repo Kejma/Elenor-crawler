@@ -935,9 +935,9 @@ def build_temple(plan, origin, forward):
         cloister(plan, cross_axis, (first, last + 1), reach, colors)
     elif plan_style == "crypt":
         branch_room(plan, cross_axis, 17, -16, options.pop(), colors)
-    plan.feature(first_axis(1), "up", "door_open")
+    plan.feature(first_axis(1), "up", "stairs")
     plan.light(first_axis(1), 123, (0.71, 0.86, 0.73))
-    plan.prop(cross_axis(32), "chest", on_route=True)
+    plan.prop(cross_axis(32), "marble_chest", on_route=True)
     plan.d.jungle_habitats.extend((
         ("temple_nave", nave | court),
         ("temple_inner", sanctuary),

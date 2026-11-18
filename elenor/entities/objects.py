@@ -1,6 +1,13 @@
 
 
 
+JUNGLE_CHESTS = frozenset(("tribal_chest", "marble_chest", "ossuary_chest"))
+JUNGLE_VASES = frozenset(("marble_urn", "tribal_pot"))
+JUNGLE_KEY_COLORS = {
+    "amber": (255, 185, 77),
+    "jade": (127, 220, 158),
+    "violet": (204, 155, 251),
+}
 
 SOLID_INTERACTABLE_KINDS = {
     "merchant_counter", "merchant_shelves", "merchant_goods",

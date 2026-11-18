@@ -2,6 +2,7 @@ import math
 import random
 
 from elenor.entities import Enemy, Interactable, Projectile, Particle
+from elenor.entities.objects import JUNGLE_CHESTS, JUNGLE_KEY_COLORS, JUNGLE_VASES
 from elenor.missions.rats import get_mission_texts, handle_mission_object_interaction
 from elenor.profile import save_profile
 
@@ -89,8 +90,36 @@ class CombatMixin:
                     return
             self._perform_melee_attack(target_wx, target_wy)
         else:
+            passage = self.nearby_passage()
+            if passage:
+                obj, action = passage
+                if action == "stairs":
+                    self._use_stairs()
+                else:
+                    self.travel_jungle(action)
+                return
             if not self._try_precise_interaction(px, py, max_cursor_dist=1.65):
                 self._perform_melee_attack(target_wx, target_wy)
+
+    def nearby_passage(self):
+        px, py = self.player.x, self.player.y
+        passages = [
+            (obj, self.dungeon.passages.get((obj.x, obj.y), "stairs"))
+            for obj in self.objects
+            if not obj.used and (obj.kind == "stairs" or (obj.x, obj.y) in self.dungeon.passages)
+            and math.hypot(px - obj.x - 0.5, py - obj.y - 0.5) <= 1.65
+            and self.dungeon.has_line_of_sight(px, py, obj.x + 0.5, obj.y + 0.5, 1.65)
+        ]
+        return min(passages, key=lambda pair: math.hypot(px - pair[0].x - 0.5, py - pair[0].y - 0.5), default=None)
+
+    def _use_stairs(self):
+        px, py = self.player.x, self.player.y
+        if any(m.state == "combat" and math.hypot(m.x - px, m.y - py) <= 3.2 for m in self.mobs):
+            self.sfx.play("hurt")
+            self.trigger_event_thought("stairs_combat")
+            self.add_popup(px, py, "В БОЮ!", (255, 95, 95))
+        else:
+            self.descend_to_next_floor()
 
 
     def _try_precise_interaction(self, ref_wx, ref_wy, max_cursor_dist):
@@ -115,11 +144,22 @@ class CombatMixin:
         if nearby_doors:
             nearby_doors.sort(key=lambda pair: math.hypot(ref_wx - (pair[0][0] + 0.5), ref_wy - (pair[0][1] + 0.5)))
             (dx, dy), door = nearby_doors[0]
+            if door.locked and door.key_color:
+                key = door.key_color
+                labels = self.loc["jungle_route"]
+                if key in self.dungeon.jungle_keys:
+                    door.locked = False
+                    self.add_popup(dx + 0.5, dy + 0.5, labels["opened"], JUNGLE_KEY_COLORS[key])
+                else:
+                    self.sfx.play("hurt")
+                    self.add_popup(dx + 0.5, dy + 0.5, f'{labels["needed"]} · {labels[key]}', JUNGLE_KEY_COLORS[key])
+                    return True
             if door.locked:
                 self.sfx.play("hurt")
                 self.emit_noise(dx + 0.5, dy + 0.5, 4.5)
                 self.trigger_event_thought("door_locked")
-                self.add_popup(dx + 0.5, dy + 0.5, "ЗАПЕРТО", (255, 120, 100))
+                label = self.loc["jungle_route"]["mechanism"] if (dx, dy) == self.dungeon.jungle_gate else "ЗАПЕРТО"
+                self.add_popup(dx + 0.5, dy + 0.5, label, (255, 120, 100))
             else:
                 if door.is_open:
                     if (int(px) == dx and int(py) == dy) or any(int(m.x) == dx and int(m.y) == dy for m in self.mobs):
@@ -156,7 +196,7 @@ class CombatMixin:
 
         cand_objs = [
             obj for obj in self.objects
-            if not obj.used and obj.kind != "trap"
+            if not obj.used and obj.kind not in ("trap", "ceramic_shards")
             and math.hypot(px - (obj.x + 0.5), py - (obj.y + 0.5)) <= (2.65 if obj.kind in ("npc_innkeeper", "npc_merchant") else 1.85)
             and math.hypot(ref_wx - (obj.x + 0.5), ref_wy - (obj.y + 0.5)) <= max_cursor_dist
         ]
@@ -186,13 +226,7 @@ class CombatMixin:
             return True
 
         if obj.kind == "stairs":
-            danger_nearby = any(m.state == "combat" and math.hypot(m.x - px, m.y - py) <= 3.2 for m in self.mobs)
-            if danger_nearby:
-                self.sfx.play("hurt")
-                self.trigger_event_thought("stairs_combat")
-                self.add_popup(obj.x + 0.5, obj.y + 0.5, "В БОЮ!", (255, 95, 95))
-                return True
-            self.descend_to_next_floor()
+            self._use_stairs()
             return True
 
         if obj.kind == "campfire":
@@ -213,7 +247,37 @@ class CombatMixin:
 
         ox_c, oy_c = obj.x + 0.5, obj.y + 0.5
 
-        if obj.kind == "barrel":
+        key_color = self.dungeon.jungle_controls.get((obj.x, obj.y))
+        if key_color in JUNGLE_KEY_COLORS and obj.kind.startswith("jungle_key_"):
+            self.dungeon.jungle_keys.add(key_color)
+            text = self.loc["jungle_route"][key_color]
+            self.sfx.play("ui")
+            self.add_log("event", text)
+            self.add_popup(ox_c, oy_c, text, JUNGLE_KEY_COLORS[key_color])
+        elif obj.kind in JUNGLE_VASES:
+            obj.kind = "ceramic_shards"
+            self.dungeon.solid_props.discard((obj.x, obj.y))
+            self.play_spatial("hit", ox_c, oy_c)
+            self.emit_noise(ox_c, oy_c, 5.5)
+            for _ in range(9):
+                ang = random.uniform(0, math.tau)
+                speed = random.uniform(1.2, 3.5)
+                self.particles.append(Particle(ox_c, oy_c, math.cos(ang) * speed,
+                                               math.sin(ang) * speed, (209, 178, 129), 2.5, 0.26))
+            if random.random() < 0.10:
+                drop = self.roll_currency_or_gem_drop(allow_gem=True, gem_mult=0.25)
+                self.objects.append(Interactable(obj.x, obj.y, "loot", drop))
+            return True
+        elif obj.kind in JUNGLE_CHESTS:
+            if (obj.x, obj.y) == self.dungeon.jungle_starter_cache:
+                drop = self.make_item("rusty_dagger", rarity="common")
+            else:
+                drop = self.roll_item_by_rarity(allowed_types=["equipment", "consumable"])
+            self.objects.append(Interactable(obj.x, obj.y, "loot", drop))
+            self.sfx.play("door")
+            self.trigger_event_thought("chest_pick_ok", item=drop.name)
+            self.add_popup(ox_c, oy_c, drop.name, drop.rarity_color)
+        elif obj.kind == "barrel":
             if hasattr(self, "fx") and self.fx:
                 self.fx.add_barrel_debris(obj.x, obj.y)
                 self.fx.trigger_shake(1.8, 0.14)
@@ -576,7 +640,9 @@ class CombatMixin:
             total_pwr = int(math.floor(item.power * 1.65 + self.player.mag_attack * 1.5))
             growth = ("mind", 0.30)
         elif is_combat:
-            total_pwr = int(math.floor(item.power + (self.player.cunning + self.player.perk_phys_atk if item.branch == "cunning" else self.player.phys_attack)))
+            _, weapon_high = self.player.melee_damage_range()
+            agility_bonus = self.player.cunning // 3 if item.branch == "cunning" else 0
+            total_pwr = weapon_high + max(1, int(item.power)) + agility_bonus
             growth = (item.branch, 0.30)
         else:
             total_pwr = int(math.floor(item.power + self.player.mag_attack))

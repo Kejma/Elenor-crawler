@@ -28,7 +28,7 @@ MARKER_STYLE = {
     "pier": ("circle", (102, 233, 222)),
     "temple": ("triangle", (228, 171, 249)),
     "cave": ("arch", (200, 207, 248)),
-    "forward": ("right", (230, 231, 185)),
+    "onward": ("right", (230, 231, 185)),
     "back": ("left", (230, 231, 185)),
     "up": ("up", (230, 231, 185)),
     "down": ("down", (230, 231, 185)),

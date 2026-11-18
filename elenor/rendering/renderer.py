@@ -3,6 +3,7 @@ import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
 from elenor.config import DEEP_WATER, FALLEN_LOG, PEBBLE_SHORE, PIER, SHALLOW_WATER
+from elenor.entities.objects import JUNGLE_KEY_COLORS
 
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
@@ -654,6 +655,8 @@ class Renderer(UIRendererMixin):
                     dd, dn = self.assets[d_key]
                     self.diff_canvas.blit(dd, (sx, sy))
                     self.norm_canvas.blit(dn, (sx, sy))
+                    if door.locked and door.key_color:
+                        pygame.draw.rect(self.diff_canvas, JUNGLE_KEY_COLORS[door.key_color], (sx + 10, sy + 8, 3, 4))
 
         fx_mgr = ui_texts.get("_fx_mgr")
         # 1. Наложение «Памяти поля боя» (вечная кровь, обломки бочек, вино и копоть на полу)
@@ -668,7 +671,8 @@ class Renderer(UIRendererMixin):
                 ry_s = int(rp["wy"] * TILE_H - cam_y)
                 rad_w = max(2, int(2 + prog_r * 7))
                 rad_h = max(1, int(1 + prog_r * 4))
-                col_r = (85, 165, 210) if prog_r < 0.5 else (50, 110, 150)
+                palette = ((128, 214, 102), (62, 137, 70)) if rp["green"] else ((85, 165, 210), (50, 110, 150))
+                col_r = palette[prog_r >= 0.5]
                 pygame.draw.ellipse(self.diff_canvas, col_r, (rx_s - rad_w, ry_s - rad_h, rad_w * 2, rad_h * 2), 1)
 
         render_list = [{
@@ -710,6 +714,15 @@ class Renderer(UIRendererMixin):
                 })
         for obj in objects:
             if not obj.used and (obj.x, obj.y) in visible_tiles:
+                passage = dungeon.passages.get((obj.x, obj.y))
+                ground_key = {"up": "jungle_passage_up", "onward": "jungle_passage_up",
+                              "back": "jungle_passage_down"}.get(passage, obj.kind)
+                if ground_key in ("jungle_passage_up", "jungle_passage_down", "ceramic_shards"):
+                    fd, fn = self.assets[ground_key]
+                    position = (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y))
+                    self.diff_canvas.blit(fd, position)
+                    self.norm_canvas.blit(fn, position)
+                    continue
                 if obj.kind in ("woven_rug", "stairs", "trap", "mirror_rail_h", "mirror_rail_v"):
                     fd, fn = self.assets[obj.kind]
                     self.diff_canvas.blit(fd, (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y - 4)))
@@ -753,6 +766,7 @@ class Renderer(UIRendererMixin):
         render_list.sort(key=lambda item: item["wy"])
 
         use_shadows = fx_mgr.flags.get("drop_shadows", True) if fx_mgr else True
+        scene_fov = fov_mask.copy() if tall_trees_to_draw and dungeon.thickets else fov_mask
         world_shadow_lights = [(br["x"] + 0.5, br["y"] + 0.5, br["radius"] / TILE_W) for br in dungeon.braziers]
         for obj in objects:
             if obj.kind in ("campfire", "fireplace"):
@@ -808,6 +822,18 @@ class Renderer(UIRendererMixin):
                 else:
                     self.diff_canvas.blit(d_surf, (draw_x, draw_y))
                     self.norm_canvas.blit(n_surf, (draw_x, draw_y))
+                    if scene_fov is not fov_mask:
+                        cx0, cx1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
+                        cy0, cy1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
+                        if cx0 < cx1 and cy0 < cy1:
+                            mask = self.alpha_mask_cache.get(id(d_surf))
+                            if mask is None:
+                                threshold = 220 if ent.get("is_tree", False) else 15
+                                mask = pygame.surfarray.array_alpha(d_surf) > threshold
+                                self.alpha_mask_cache[id(d_surf)] = mask
+                            alpha = mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
+                            source = 1.0 if ent.get("is_tree", False) else fov_mask[cx0:cx1, cy0:cy1]
+                            np.copyto(scene_fov[cx0:cx1, cy0:cy1], source, where=alpha)
                     em_role = ent.get("emissive_role")
                     if em_role:
                         em_s = self._get_entity_emissive_surf(d_surf, em_role)
@@ -850,10 +876,11 @@ class Renderer(UIRendererMixin):
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
-                fov_mask, cam_x, cam_y, lights, self.current_hud_lights,
+                scene_fov, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
-                enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec
+                enable_fog=en_fog, active_clouds=clouds, now_sec=now_sec,
+                temple_exposure=dungeon.interior == "temple",
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -939,17 +966,17 @@ class Renderer(UIRendererMixin):
                     rim_add_g[x0:x1, y0:y1] += rim_boost * cg
                     rim_add_b[x0:x1, y0:y1] += rim_boost * cb
 
-            r_mult *= fov_mask
-            g_mult *= fov_mask
-            b_mult *= fov_mask
+            r_mult *= scene_fov
+            g_mult *= scene_fov
+            b_mult *= scene_fov
 
             out = np.empty_like(diff)
             base_r = diff[:, :, 0] * r_mult
             base_g = diff[:, :, 1] * g_mult
             base_b = diff[:, :, 2] * b_mult
-            out[:, :, 0] = np.clip(np.where(rim_add_r > 0.5, np.minimum(228.0, base_r * 1.25 + rim_add_r * fov_mask), base_r), 0, 255)
-            out[:, :, 1] = np.clip(np.where(rim_add_g > 0.5, np.minimum(222.0, base_g * 1.25 + rim_add_g * fov_mask), base_g), 0, 255)
-            out[:, :, 2] = np.clip(np.where(rim_add_b > 0.5, np.minimum(220.0, base_b * 1.25 + rim_add_b * fov_mask), base_b), 0, 255)
+            out[:, :, 0] = np.where(rim_add_r > 0.5, np.minimum(228.0, base_r * 1.25 + rim_add_r * scene_fov), base_r)
+            out[:, :, 1] = np.where(rim_add_g > 0.5, np.minimum(222.0, base_g * 1.25 + rim_add_g * scene_fov), base_g)
+            out[:, :, 2] = np.where(rim_add_b > 0.5, np.minimum(220.0, base_b * 1.25 + rim_add_b * scene_fov), base_b)
             for cloud in clouds:
                 if cloud["kind"] != "mist":
                     continue
@@ -960,6 +987,12 @@ class Renderer(UIRendererMixin):
                 wisps = .6 + .4*np.sin(x*.13 + np.cos(y*.12) + now_sec)
                 glow = (falloff*wisps*cloud["density"]*(r_mult+g_mult+b_mult)[:, :VIEW_H]).clip(0,1)
                 out[:, :VIEW_H] += glow[:,:,None] * np.asarray(cloud["color"])*65
+            if dungeon.interior == "temple":
+                ground = out[:, :VIEW_H]
+                peak = ground.max(axis=-1)
+                excess = np.maximum(peak - 164.0, 0)
+                shoulder = (164.0 + 77.0 * excess / (77.0 + excess)) / np.maximum(peak, 1.0)
+                ground *= np.where((excess > 0) & ~is_ent[:, :VIEW_H], shoulder, 1.0)[:, :, None]
             lit_surf = pygame.surfarray.make_surface(out.clip(0,255).astype(np.uint8))
 
         if ui_texts.get("_survey_map"):
@@ -982,7 +1015,11 @@ class Renderer(UIRendererMixin):
             from elenor.rendering.visibility import overlay_visibility
             render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask,lights,cam_x,cam_y))
 
-        windups = [mob for mob in mobs if mob.jungle_windup or mob.jungle_impact_timer > 0]
+        windups = [
+            mob for mob in mobs
+            if mob.jungle_impact_timer > 0 or mob.jungle_windup
+            and mob.jungle_windup[0].form not in ("strike", "sweep", "lunge")
+        ]
         if windups:
             from elenor.rendering.jungle_attacks import render_jungle_attacks
             render_jungle_attacks(screen, windups, cam_x, cam_y, fov_mask, lights, self.jungle_attack_cache)
@@ -1649,6 +1686,9 @@ class Renderer(UIRendererMixin):
         screen.blit(cnt_surf, (self.bag_btn_rect.x + 42, self.bag_btn_rect.y + 29))
 
         world_hover_item = ui_texts.get("_world_hover_item")
+        if ui_texts.get("_show_map_hud"):
+            from elenor.ui.exploration_map import draw_map_hud
+            draw_map_hud(screen, ui_texts["_game_ref"])
         if levelup_choices:
             self._render_levelup_modal(screen, player, levelup_choices, ui_texts, hover_pos)
         elif inv_open:

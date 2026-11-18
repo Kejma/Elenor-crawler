@@ -131,7 +131,8 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         adj_data = self.loc["adjectives"][adj_key]
         noun_data = self.loc["nouns"][noun_key]
 
-        self.dungeon.generate(floor_num=1, campaign=self.campaign)
+        variant = random.randrange(6) if self.campaign == "jungle" else 0
+        self.dungeon.generate(floor_num=1, campaign=self.campaign, route_variant=variant)
         if self.campaign == "jungle":
             start_x, start_y = self.dungeon.start_pos
         else:
@@ -166,20 +167,27 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
 
 
     def travel_jungle(self, action):
+        from elenor.world.jungle_routes import route_kind
+
         current = self.dungeon
         depth, interior = current.floor_num, current.interior
         if action == "up":
             destination, arrival = (depth, None), interior
         elif action in ("cave", "temple"):
             destination, arrival = (depth, action), "up"
+        elif action == "onward" and current.jungle_gate is not None:
+            if current.doors[current.jungle_gate].locked:
+                return
+            destination, arrival = (depth + 1, None), "back"
+        elif action == "back" and depth > 1:
+            destination, arrival = (depth - 1, route_kind(depth - 1, current.jungle_route_variant)), "onward"
         else:
-            forward = action == "forward"
-            destination = (depth + (1 if forward else -1), None)
-            arrival = "back" if forward else "forward"
+            return
 
         self.jungle_locations[(depth, interior)] = (current, self.objects, self.mirror_puzzles, self.seen_entities, self.mobs)
         for mob in self.mobs:
             mob.jungle_windup = None
+            mob.jungle_dash = None
             mob.jungle_impact_timer = mob.cast_windup_timer = 0.0
         current._light_cache.clear()
         cached = self.jungle_locations.pop(destination, None)
@@ -187,7 +195,8 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             self.dungeon = cached[0]
         else:
             self.dungeon = Dungeon(puzzle_chance=current.puzzle_chance)
-            self.dungeon.generate(destination[0], campaign="jungle", interior=destination[1])
+            self.dungeon.generate(destination[0], campaign="jungle", interior=destination[1],
+                                  route_variant=current.jungle_route_variant)
         xy = next(pos for pos, passage in self.dungeon.passages.items() if passage == arrival)
         self.player.x, self.player.y = xy[0]+0.5, xy[1]+0.5
         self.player.pending_action = None
@@ -197,7 +206,10 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
 
     def descend_to_next_floor(self):
         if self.campaign == "jungle":
-            self.travel_jungle("up" if self.dungeon.interior else "forward")
+            from elenor.world.jungle_routes import route_kind
+            self.travel_jungle("up" if self.dungeon.interior else route_kind(
+                self.dungeon.floor_num, self.dungeon.jungle_route_variant
+            ))
             return
         if hasattr(self, "fx") and self.fx:
             self.fx.disco_active = False
