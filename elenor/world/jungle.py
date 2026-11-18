@@ -513,8 +513,8 @@ def waterfront(plan, relief):
 
 
 def region_for(d, rng):
-    if d.floor_num == 1:
-        return "grove"
+    if d.floor_num <= 4:
+        return ("grove", "marsh", "ruins", "bone")[d.floor_num - 1]
     return rng.choice(("marsh", "marsh", "bone", "ruins", "grove"))
 
 
@@ -768,6 +768,7 @@ def surface(plan, relief):
         main.update((first, last))
         mark_trail(plan, points, main)
     landmark_entries = main
+    plan.d.jungle_habitats.append(("grove", dilate(set(roads[0]), 3) - plan.structure))
     for bank_side in zip(*plan.crossing_approaches):
         sorted_bank = sorted(bank_side, key=lambda point: point[1])
         dry_avoid = impassable | plan.water
@@ -791,6 +792,9 @@ def surface(plan, relief):
     # Each landing has a dry starting tile; the shore and pier already exist.
     for bank in sorted(plan.landing_approaches):
         connect_to_route(plan, bank, landmark_entries, impassable, relief, region)
+    if plan.d.floor_num > 1:
+        banks = (dilate(plan.water, 3) - plan.water) & (plan.floor - plan.structure)
+        plan.d.jungle_habitats.append(("riverbank", banks))
     for index, (center, footprint, biome) in enumerate(
         glade_sites(plan, relief, region, ridge)
     ):
@@ -955,6 +959,8 @@ def caves(plan):
     plan.feature(threshold, "up", "door_open")
     for center, cells, kind in rooms:
         dress_cave(plan, center, cells, kind)
+        if kind != "mouth":
+            plan.d.jungle_habitats.append(("cave_" + kind, cells))
     plan.light(threshold, 105, (0.63, 0.76, 0.79))
     plan.prop(points[-1], "chest", on_route=True)
     optional_vault(plan, points[-1], start)
@@ -1001,6 +1007,7 @@ def generate_jungle_floor(dungeon):
     """Keep the campaign's public transitions, state and fishing interfaces."""
     rng = random.Random(random.getrandbits(64))
     dungeon.jungle_props = []
+    dungeon.jungle_habitats = []
     dungeon.grid = [[21] * WIDTH for _ in range(HEIGHT)]
     plan = Plan(dungeon, rng)
     relief = Relief(rng, WIDTH, HEIGHT).raster(WIDTH, HEIGHT)

@@ -3,6 +3,7 @@ import random
 
 
 from elenor.entities.effects import Projectile
+from elenor.entities.jungle_combat import ATTACKS, TRIBE, WARDEN_LEASH, update_jungle_combat
 
 
 MOB_PROFILES = {
@@ -202,6 +203,10 @@ class Enemy:
         self.cast_windup_timer = 0.0
         self.cast_windup_max = 0.65
         self.pending_pentagram = False
+        self.jungle_home = (self.x, self.y) if kind in ATTACKS else None
+        self.jungle_windup = None
+        self.jungle_impact = None
+        self.jungle_impact_timer = 0.0
         self.patrol_dir = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
         self.patrol_timer = random.uniform(1.2, 2.8)
 
@@ -308,6 +313,7 @@ class Enemy:
         self.attack_cd = max(0.0, self.attack_cd - dt)
         self.path_timer = max(0.0, self.path_timer - dt)
         self.alert_bang_timer = max(0.0, self.alert_bang_timer - dt)
+        self.jungle_impact_timer = max(0.0, self.jungle_impact_timer - dt)
 
         # 1. Process Smooth Knockback Displacement
         if math.hypot(self.kb_vx, self.kb_vy) > 0.15:
@@ -357,11 +363,35 @@ class Enemy:
         if self.stun_timer > 0.0:
             self.stun_timer = max(0.0, self.stun_timer - dt)
             self.cast_windup_timer = 0.0
+            self.jungle_windup = None
+            return
+
+        if self.hp <= 0:
             return
 
         dx = player.x - self.x
         dy = player.y - self.y
         dist = math.hypot(dx, dy)
+
+        if self.jungle_home is not None:
+            distance_home = math.dist((self.x, self.y), self.jungle_home)
+            if self.state == "combat" and distance_home > WARDEN_LEASH:
+                self.state = "returning"
+                self.jungle_windup = None
+                self.cast_windup_timer = 0.0
+                self.awareness = 0.0
+                self.path_timer = 0.0
+            if self.state == "returning":
+                if distance_home > 0.5:
+                    self._follow_astar_path(*self.jungle_home, dt, dungeon, all_mobs)
+                else:
+                    self.state = "guarding"
+                return
+            if self.kind == "tribal_shaman" and self.state != "combat":
+                if any(other is not self and other.kind in TRIBE and other.state == "combat"
+                       and dungeon.has_line_of_sight(self.x, self.y, other.x, other.y, 5)
+                       for other in all_mobs):
+                    self.alert_to_combat(sfx, add_popup, player=player, dungeon=dungeon)
 
         if self.state != "combat":
             state_mult = {
@@ -438,6 +468,10 @@ class Enemy:
                             sfx.play("mob_talk")
 
             if self.state == "patrolling":
+                if self.jungle_home is not None and distance_home > 3.0:
+                    self.state = "returning"
+                    self.path_timer = 0.0
+                    return
                 self.patrol_timer -= dt
                 if self.patrol_timer <= 0.0:
                     self.patrol_dir = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)])
@@ -467,6 +501,10 @@ class Enemy:
 
         if abs(dx) > 0.08:
             self.facing = 1 if dx > 0 else -1
+
+        if self.jungle_home is not None:
+            update_jungle_combat(self, dt, player, dungeon, all_mobs, projectiles, sfx, add_popup, on_player_hit)
+            return
 
         # 1. If currently channeling a dark spell (windup before pentagram appears!)
         if self.cast_windup_timer > 0.0:

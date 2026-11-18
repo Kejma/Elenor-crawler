@@ -142,7 +142,8 @@ class FishingTests(unittest.TestCase):
                     {"forward", "temple", "cave"} <= set(dungeon.passages.values())
                 )
                 self.assertTrue(dungeon.fishing_edges.keys() <= seen)
-                self.assertFalse(game.mobs)
+                self.assertTrue(game.mobs)
+                self.assertTrue(all((int(m.x), int(m.y)) in seen for m in game.mobs))
                 self.assertEqual(len(game.mirror_puzzles), seed % 2)
                 if game.mirror_puzzles:
                     info = dungeon.mirror_puzzle_info
@@ -175,6 +176,10 @@ class FishingTests(unittest.TestCase):
             self.assertEqual(set(inside.passages.values()), {"up"})
             treasure = next(obj for obj in game.objects if obj.kind == "chest")
             treasure.used = True
+            fallen, survivor, *_ = game.mobs
+            game.mobs.remove(fallen)
+            survivor.hp -= 1
+            remaining_hp = survivor.hp
             game.travel_jungle("up")
             self.assertIs(game.dungeon, dungeon)
             self.assertEqual(
@@ -185,6 +190,9 @@ class FishingTests(unittest.TestCase):
             self.assertEqual(inside.explored_tiles, {inside.start_pos: "floor"})
             self.assertIn(treasure, game.objects)
             self.assertTrue(treasure.used)
+            self.assertNotIn(fallen, game.mobs)
+            self.assertIn(survivor, game.mobs)
+            self.assertEqual(survivor.hp, remaining_hp)
             game.travel_jungle("up")
         game.travel_jungle("forward")
         self.assertEqual(game.dungeon.floor_num, 2)

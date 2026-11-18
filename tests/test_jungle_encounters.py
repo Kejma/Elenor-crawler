@@ -1,0 +1,84 @@
+import math
+import random
+import unittest
+from unittest.mock import Mock
+
+from elenor.entities import Enemy
+from elenor.entities.jungle_combat import ATTACKS, HEAL, STOMP
+from elenor.missions.jungle_encounters import EARLY_STATS, GUARDIANS, HABITATS, START_SUPPLIES
+from elenor.puzzles.mirrors import reachable_floor_tiles
+from elenor.world.dungeon import Dungeon
+from test_mirror_puzzles import HeadlessGame, empty_dungeon
+
+
+class JungleEncountersTests(unittest.TestCase):
+    def test_first_valley_has_local_enemies_and_reachable_starter_supplies(self):
+        random.seed(19)
+        dungeon = Dungeon(puzzle_chance=1)
+        dungeon.generate(campaign="jungle")
+        game = HeadlessGame(dungeon)
+        game.campaign = "jungle"
+        game._populate_floor(1)
+
+        self.assertTrue(game.mobs)
+        self.assertEqual(
+            set(ATTACKS), {kind for group in HABITATS.values() for _, kind in group}
+            | {kind for _, kind in GUARDIANS.values()},
+        )
+        self.assertTrue(all(m.kind in EARLY_STATS and m.phys_def == 0 for m in game.mobs))
+        self.assertTrue(all(math.dist((m.x, m.y), dungeon.start_pos) > 12 for m in game.mobs))
+        near_start = reachable_floor_tiles(dungeon, dungeon.start_pos, max_distance=5)
+        supplies = {o.item.id for o in game.objects if o.kind == "loot" and (o.x, o.y) in near_start}
+        self.assertTrue(set(START_SUPPLIES) <= supplies)
+
+    def arena(self):
+        dungeon = empty_dungeon()
+        for y in range(8, 17):
+            for x in range(8, 17):
+                dungeon.grid[y][x] = 0
+        return dungeon, HeadlessGame(dungeon)
+
+    def test_shaman_channels_a_bounded_heal_for_a_tribal_ally(self):
+        dungeon, game = self.arena()
+        shaman = Enemy(10, 10, "tribal_shaman", state="combat")
+        warrior = Enemy(11, 10, "tribal_warrior", state="combat")
+        unrelated = Enemy(10, 11, "croc_warrior", state="combat")
+        warrior.hp, unrelated.hp = 8, 1
+        mobs = [shaman, warrior, unrelated]
+        on_hit = Mock()
+        shaman.update_ai(0.05, game.player, dungeon, mobs, [], game.sfx, game.add_popup, on_hit)
+        self.assertEqual(shaman.jungle_windup, (HEAL, warrior))
+        shaman.update_ai(HEAL.windup, game.player, dungeon, mobs, [], game.sfx, game.add_popup, on_hit)
+        self.assertEqual(warrior.hp, 8 + round(warrior.max_hp * 0.25))
+        self.assertEqual(unrelated.hp, 1)
+        self.assertGreater(shaman.attack_cd, 0)
+        on_hit.assert_not_called()
+
+    def test_golem_commits_to_a_stomp_the_hero_can_leave(self):
+        dungeon, game = self.arena()
+        golem = Enemy(10, 10, "marble_golem", state="combat")
+        game.player.x, game.player.y = 12.0, 10.5
+        on_hit = Mock()
+        golem.update_ai(0.05, game.player, dungeon, [golem], [], game.sfx, game.add_popup, on_hit)
+        self.assertEqual(golem.jungle_windup, (STOMP, (10.5, 10.5)))
+        game.player.x = 13
+        golem.update_ai(STOMP.windup, game.player, dungeon, [golem], [], game.sfx, game.add_popup, on_hit)
+        self.assertIsNone(golem.jungle_windup)
+        on_hit.assert_not_called()
+
+    def test_guardian_kill_drops_gear_without_granting_rat_campaign_reward(self):
+        _, game = self.arena()
+        game.profile = {"rat_king_defeated": False}
+        game.visual_fx = []
+        guardian = Enemy(10, 10, "ossuary_behemoth")
+        guardian.hp = guardian.xp_value = 0
+        game.mobs.append(guardian)
+
+        game._check_mob_death(guardian)
+
+        self.assertFalse(game.mobs)
+        self.assertFalse(game.profile["rat_king_defeated"])
+        self.assertTrue(all(obj.kind == "loot" for obj in game.objects))
+        self.assertTrue(any(obj.item.type == "equipment" for obj in game.objects))
+        game.trigger_event_thought.assert_called_once()
+        self.assertEqual(game.trigger_event_thought.call_args.args[0], "jungle_guardian_defeated")

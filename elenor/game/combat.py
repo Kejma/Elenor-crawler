@@ -278,6 +278,7 @@ class CombatMixin:
             self.add_popup(ox_c, oy_c, f"Выпало: {gear.name}", gear.rarity_color)
 
         elif obj.kind == "chest":
+            opened = True
             if random.randint(1, 20) + self.player.cunning >= 11:
                 treasure = self.roll_currency_or_gem_drop(allow_gem=True, force_gem=(random.random() < 0.55))
                 self.objects.append(Interactable(obj.x, obj.y, "loot", treasure))
@@ -293,11 +294,15 @@ class CombatMixin:
                 self.trigger_event_thought("chest_smash", item=coin_drop.name)
                 self.add_popup(ox_c, oy_c, f"Выпало: {coin_drop.name}", coin_drop.rarity_color)
             else:
+                opened = False
                 self.player.hp = max(1.0, self.player.hp - 2)
                 self.play_spatial("hurt", ox_c, oy_c)
                 self.emit_noise(ox_c, oy_c, 6.0)
                 self.trigger_event_thought("chest_fail", force_important=True)
                 self.add_popup(ox_c, oy_c, "СЛОМАНО (-2 ХП)", (255, 95, 95))
+            if opened and self.campaign == "jungle" and self.dungeon.interior:
+                gear = self.roll_item_by_rarity(allowed_types=["equipment"])
+                self.objects.append(Interactable(obj.x, obj.y, "loot", gear))
 
         elif obj.kind == "idol":
             if self.player.mind >= 3:
@@ -944,7 +949,8 @@ class CombatMixin:
                     spd = random.uniform(0.8, 2.8)
                     self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, (190, 180, 170), 2.8, 0.40))
                 return
-            self.add_log("combat", f"Враг повержен: {m.kind} (+{m.xp_value} опыта).", (135, 245, 160))
+            name = self.loc.get("jungle_enemy_names", {}).get(m.kind, m.kind)
+            self.add_log("combat", f"Враг повержен: {name} (+{m.xp_value} опыта).", (135, 245, 160))
             drop_tx, drop_ty = int(m.x), int(m.y)
             if getattr(m, "is_boss", False):
                 # С Босса высыпается платина и редкий самоцвет!
@@ -960,6 +966,9 @@ class CombatMixin:
                     loot_drop = self.roll_currency_or_gem_drop(allow_gem=True, gem_mult=0.1)
                     self.objects.append(Interactable(drop_tx, drop_ty, "loot", loot_drop))
                     self.play_spatial("coin_drop", drop_tx + 0.5, drop_ty + 0.5)
+                if m.jungle_home is not None and self.dungeon.floor_num >= 2 and random.random() < 0.14:
+                    gear = self.roll_item_by_rarity(allowed_types=["equipment"])
+                    self.objects.append(Interactable(drop_tx, drop_ty, "loot", gear))
 
             is_magic_mob = (getattr(m, "is_boss", False) or m.is_ranged or m.kind in ("rat_cultist", "cultist", "necromancer"))
             should_drop_shard = is_magic_mob or (random.random() < 0.28)
@@ -982,7 +991,7 @@ class CombatMixin:
                         "timer": 4.2, "max_timer": 4.2
                     })
 
-            if getattr(m, "is_boss", False):
+            if m.kind == "rat_king":
                 if not self.profile.get("rat_king_defeated", False):
                     self.profile["rat_king_defeated"] = True
                     save_profile(self.profile)
@@ -991,7 +1000,12 @@ class CombatMixin:
                 # Победа над боссом — ВАЖНАЯ реплика!
                 self.set_thought(self.pick_text(defeat_pool, "boss_defeat"), important=True)
                 self.add_popup(m.x, m.y - 0.8, "БОСС ПОВЕРЖЕН!", (255, 215, 65))
-                self.objects.append(Interactable(int(m.x), int(m.y), "stairs"))
+                self.objects.append(Interactable(drop_tx, drop_ty, "stairs"))
+            elif m.is_boss and m.jungle_home is not None:
+                self.trigger_event_thought("jungle_guardian_defeated", force_important=True, enemy=name)
+                gear = self.roll_item_by_rarity(allowed_types=["equipment"])
+                self.objects.append(Interactable(drop_tx, drop_ty, "loot", gear))
+                self.add_popup(m.x, m.y - 0.8, "СТРАЖ ПОВЕРЖЕН!", (255, 215, 65))
             else:
                 # Реплика при убийстве обычного моба — ФОНОВАЯ (шанс 22%, не чаще раза в 6 сек)!
                 if self.can_trigger_background_thought(chance=0.22):

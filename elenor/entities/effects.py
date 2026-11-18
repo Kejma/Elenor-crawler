@@ -28,7 +28,7 @@ class Projectile:
         from_player=True, status=None, status_dur=0.0, knockback=0.0,
         visual_kind="orb", emits_light=True, is_weapon_proj=False,
         armor_pierce=0, shatter_armor=0, bounces=0, crit_chance=0.0,
-        status_chance=1.0, life_steal=0, max_dist=None
+        status_chance=1.0, life_steal=0, max_dist=None, source=None
     ):
         self.wx = wx
         self.wy = wy
@@ -38,6 +38,7 @@ class Projectile:
         self.mag_dmg = mag_dmg
         self.color = color
         self.from_player = from_player
+        self.source = source
         self.status = status
         self.status_dur = status_dur
         self.status_chance = status_chance
@@ -62,11 +63,11 @@ class Projectile:
         self.spawn_timer += dt
 
         spinning_kinds = ("spinning_dagger", "thrown_axe", "thrown_chakram", "thrown_bolas")
-        physical_kinds = spinning_kinds + ("thrown_javelin", "sling_stone")
+        physical_kinds = spinning_kinds + ("thrown_javelin", "sling_stone", "blowdart")
 
         if self.visual_kind in spinning_kinds:
             self.angle += 24.0 * dt
-        elif self.visual_kind in ("thrown_javelin", "sling_stone"):
+        elif self.visual_kind in ("thrown_javelin", "sling_stone", "blowdart"):
             self.angle = math.atan2(self.vy, self.vx)
         elif self.spawn_timer >= 0.025:
             self.spawn_timer = 0.0

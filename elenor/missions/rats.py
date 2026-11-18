@@ -283,7 +283,7 @@ def update_mission_audio(game, dt):
     На 4 ярусе (пещеры) транслирует пространственный ритуал от Крысиного Короля.
     В покое — спокойный шаманский бубен, в бою — тревожный боевой марш, после смерти — тишина.
     """
-    if getattr(game.dungeon, "floor_num", 1) == 4:
+    if game.campaign == "rats" and game.dungeon.floor_num == 4:
         living_boss = next((m for m in game.mobs if getattr(m, "is_boss", False) and m.hp > 0), None)
         if living_boss is not None:
             theme = "ritual_combat" if living_boss.state == "combat" else "ritual_idle"

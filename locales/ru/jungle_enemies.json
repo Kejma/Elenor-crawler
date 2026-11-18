@@ -1,0 +1,38 @@
+{
+  "jungle_enemy_names": {
+    "jungle_gremlin": "Джунглевый гремлин",
+    "jungle_viper": "Изумрудная кобра",
+    "giant_wasp": "Шершень-пчела",
+    "thorn_treant": "Древолюд-шиповик",
+    "swamp_lurker": "Трясинный болотник",
+    "myconid_shambler": "Гриболюд-миконид",
+    "croc_warrior": "Воин-полукрокодил",
+    "croc_juggernaut": "Крокодил-Джаггернаут",
+    "tribal_warrior": "Воин с макуауитлем",
+    "tribal_hunter": "Охотник с трубкой",
+    "tribal_shaman": "Шаман духов",
+    "giant_scorpion": "Гигантский скорпион",
+    "rust_monster": "Ржавник",
+    "jade_scarab": "Нефритовый скарабей",
+    "cave_piercer": "Пронзатель",
+    "cave_angler": "Глубинный удильщик",
+    "skull_spider": "Черепопаук",
+    "bone_constrictor": "Костяной удав",
+    "bone_jaguar": "Костяной ягуар",
+    "marble_golem": "Мраморный голем-страж",
+    "vedalken_mage": "Хрономаг",
+    "vedalken_four_armed": "Четырёхрукий архонт",
+    "vedalken_arbiter": "Верховный Демиург",
+    "ossuary_behemoth": "Исполин Оссуария"
+  },
+  "events": {
+    "jungle_spot_guardian": [
+      "{enemy}. Судя по тому, как на меня смотрит, пропуск спрашивать не станет.",
+      "Вот кто тут главный — {enemy}. Хорошо бы выяснить, где у него заканчиваются владения."
+    ],
+    "jungle_guardian_defeated": [
+      "{enemy} повержен. Вот теперь можно хоть минуту постоять спокойно.",
+      "{enemy} больше никого не караулит. Даже странно, что стало так тихо."
+    ]
+  }
+}

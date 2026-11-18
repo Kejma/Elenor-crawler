@@ -548,7 +548,7 @@ def main():
                             break
                 else:
                     if math.hypot(game.player.x - pr.wx, game.player.y - pr.wy) <= 0.55:
-                        game.on_player_hit(pr.mag_dmg, is_magic=True, source=getattr(pr, "source", None))
+                        game.on_player_hit(pr.mag_dmg, is_magic=not pr.is_weapon_proj, source=getattr(pr, "source", None))
                         if pr in game.projectiles:
                             game.projectiles.remove(pr)
 

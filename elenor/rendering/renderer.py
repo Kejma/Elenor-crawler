@@ -21,6 +21,7 @@ class Renderer(UIRendererMixin):
         self.chill_cache = {}
         self.emissive_cache = {}
         self.alpha_mask_cache = {}
+        self.jungle_attack_cache = {}
         self._shadow_small = pygame.Surface((10, 4), pygame.SRCALPHA)
         pygame.draw.ellipse(self._shadow_small, (8, 6, 12, 120), (0, 0, 10, 4))
         self._shadow_big = pygame.Surface((20, 6), pygame.SRCALPHA)
@@ -981,6 +982,11 @@ class Renderer(UIRendererMixin):
             from elenor.rendering.visibility import overlay_visibility
             render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask,lights,cam_x,cam_y))
 
+        windups = [mob for mob in mobs if mob.jungle_windup or mob.jungle_impact_timer > 0]
+        if windups:
+            from elenor.rendering.jungle_attacks import render_jungle_attacks
+            render_jungle_attacks(screen, windups, cam_x, cam_y, fov_mask, lights, self.jungle_attack_cache)
+
         # 5. Пылинки и споры, видимые ТОЛЬКО когда они пролетают сквозь лучи света!
         if fx_mgr and fx_mgr.flags.get("dust_motes", True):
             for dm in fx_mgr.dust_motes:
@@ -1044,13 +1050,14 @@ class Renderer(UIRendererMixin):
                     pygame.draw.line(screen, (215, 175, 70), g1, g2, 3)
                     pygame.draw.line(screen, (210, 220, 235), guard_c, tip, 4)
                     pygame.draw.line(screen, (250, 252, 255), guard_c, tip, 2)
-                elif vk == "thrown_javelin":
-                    tail = (int(sx - cos_a * 18), int(sy - sin_a * 18))
-                    neck = (int(sx + cos_a * 6), int(sy + sin_a * 6))
-                    tip = (int(sx + cos_a * 18), int(sy + sin_a * 18))
-                    pygame.draw.line(screen, (20, 18, 26), tail, tip, 5)
-                    pygame.draw.line(screen, (150, 98, 48), tail, neck, 3)
-                    pygame.draw.line(screen, (220, 230, 245), neck, tip, 3)
+                elif vk in ("thrown_javelin", "blowdart"):
+                    length, line_width = (9, 2) if vk == "blowdart" else (18, 3)
+                    tail = (int(sx - cos_a * length), int(sy - sin_a * length))
+                    neck = (int(sx + cos_a * length / 3), int(sy + sin_a * length / 3))
+                    tip = (int(sx + cos_a * length), int(sy + sin_a * length))
+                    pygame.draw.line(screen, (20, 18, 26), tail, tip, line_width + 2)
+                    pygame.draw.line(screen, (150, 98, 48), tail, neck, line_width)
+                    pygame.draw.line(screen, (220, 230, 245), neck, tip, line_width)
                 elif vk == "thrown_axe":
                     haft0 = (int(sx - cos_a * 12), int(sy - sin_a * 12))
                     haft1 = (int(sx + cos_a * 10), int(sy + sin_a * 10))
@@ -1128,7 +1135,7 @@ class Renderer(UIRendererMixin):
                 foot_y = int((m.y * TILE_H - cam_y) * SCALE)
 
                 # Clear visual indication on the enemy model when it begins channeling a pentagram!
-                if is_lit and getattr(m, "cast_windup_timer", 0.0) > 0.0 and 0 <= foot_y < VIEW_H * SCALE:
+                if is_lit and not m.jungle_windup and getattr(m, "cast_windup_timer", 0.0) > 0.0 and 0 <= foot_y < VIEW_H * SCALE:
                     w_ratio = m.cast_windup_timer / max(0.01, getattr(m, "cast_windup_max", 0.65))
                     body_cy = (sy + foot_y) // 2
                     ring_r = max(10, int((14 + 28 * w_ratio) * (1.4 if getattr(m, "size_tiles", 1) >= 2 else 1.0)))

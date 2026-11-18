@@ -144,6 +144,8 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             "outfit_idx": self.profile.get("outfit_idx", 0),
         }
         self.player = Player(start_x, start_y, adj_key, adj_data, noun_key, noun_data, self.loc["items"], appearance=appearance)
+        if self.campaign == "jungle":
+            self.player.equipment["left_hand"] = None
 
         self._populate_floor(floor_num=1)
         self.target_thought = ""
@@ -175,7 +177,10 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             destination = (depth + (1 if forward else -1), None)
             arrival = "back" if forward else "forward"
 
-        self.jungle_locations[(depth, interior)] = (current, self.objects, self.mirror_puzzles, self.seen_entities)
+        self.jungle_locations[(depth, interior)] = (current, self.objects, self.mirror_puzzles, self.seen_entities, self.mobs)
+        for mob in self.mobs:
+            mob.jungle_windup = None
+            mob.jungle_impact_timer = mob.cast_windup_timer = 0.0
         current._light_cache.clear()
         cached = self.jungle_locations.pop(destination, None)
         if cached:
@@ -232,7 +237,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.cam_y = self.player.y * TILE_H - VIEW_H * 0.5
 
         if cached:
-            _, self.objects, self.mirror_puzzles, self.seen_entities = cached
+            _, self.objects, self.mirror_puzzles, self.seen_entities, self.mobs = cached
         elif self.campaign == "jungle":
             from elenor.missions.jungle import populate_jungle_floor
             populate_jungle_floor(self, Interactable)

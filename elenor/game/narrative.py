@@ -178,7 +178,11 @@ class NarrativeMixin:
                 self.seen_entities.add(m_id)
                 if getattr(m, "is_boss", False):
                     # Первая встреча с Боссом — ВАЖНАЯ реплика (100% перебивает всё)!
-                    self.trigger_event_thought("spot_boss", force_important=True)
+                    if m.kind == "rat_king":
+                        self.trigger_event_thought("spot_boss", force_important=True)
+                    elif m.jungle_home is not None:
+                        name = self.loc.get("jungle_enemy_names", {}).get(m.kind, m.kind)
+                        self.trigger_event_thought("jungle_spot_guardian", force_important=True, enemy=name)
                     return
                 elif m.kind == "rat_cultist":
                     if self.trigger_event_thought("spot_cultist"):

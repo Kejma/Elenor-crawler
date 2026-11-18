@@ -297,6 +297,7 @@ def dress_glade(plan, center, cells, biome):
     dry = cells & plan.floor - plan.water - plan.routes - plan.structure
     if not dry:
         return
+    plan.d.jungle_habitats.append((biome, dry))
     dry_points = sorted(dry)
     accent_center = plan.rng.choice(dry_points)
     plan.clearing(oval(accent_center, 5, 3, plan.rng.random() * pi, 0.3) & dry, accents)
@@ -569,6 +570,8 @@ def village(plan, center, facing):
     )
     plan.structure.update(occupied_ground | fence)
     plan.room(court)
+    if plan.d.floor_num > 1:
+        plan.d.jungle_habitats.append(("village", court))
     return contacts
 
 
@@ -935,6 +938,10 @@ def build_temple(plan, origin, forward):
     plan.feature(first_axis(1), "up", "door_open")
     plan.light(first_axis(1), 123, (0.71, 0.86, 0.73))
     plan.prop(cross_axis(32), "chest", on_route=True)
+    plan.d.jungle_habitats.extend((
+        ("temple_nave", nave | court),
+        ("temple_inner", sanctuary),
+    ))
     return first_axis(4), cross_axis
 
 
