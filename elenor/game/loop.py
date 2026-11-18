@@ -3,7 +3,7 @@ import os
 import random
 import pygame
 
-from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, SHALLOW_WATER
+from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, SHALLOW_WATER
 from elenor.entities import Enemy, Interactable, Particle
 from elenor.missions.rats import update_mission_audio
 from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas
@@ -534,8 +534,8 @@ def main():
         sh_x, sh_y = game.fx.shake_offset
         px_world = round(game.player.x * TILE_W)
         py_world = round(game.player.y * TILE_H)
-        game.cam_x = max(0.0, min(float(MAP_COLS * TILE_W - VIEW_W), px_world - VIEW_W * 0.5)) + round(sh_x)
-        game.cam_y = max(0.0, min(float(MAP_ROWS * TILE_H - VIEW_H), py_world - VIEW_H * 0.5)) + round(sh_y)
+        game.cam_x = max(0.0, min(float(game.dungeon.width * TILE_W - VIEW_W), px_world - VIEW_W * 0.5)) + round(sh_x)
+        game.cam_y = max(0.0, min(float(game.dungeon.height * TILE_H - VIEW_H), py_world - VIEW_H * 0.5)) + round(sh_y)
 
         world_ox = game.player.x * TILE_W
         world_oy = game.player.y * TILE_H
@@ -708,13 +708,15 @@ def main():
 
         if getattr(game.dev_panel, "reveal_map", False):
             fov_mask[:, :] = 1.0
-            visible_tiles = {(c, r) for r in range(MAP_ROWS) for c in range(MAP_COLS)}
+            visible_tiles = {(c, r) for r in range(game.dungeon.height) for c in range(game.dungeon.width)}
             lights.append({"pos": (VIEW_W * 0.5, VIEW_H * 0.5, 180.0), "foot_y": 9999.0, "ignore_depth": True, "radius": 600.0, "color": (0.85, 0.85, 0.95)})
 
         for br in game.dungeon.braziers:
             lx_w, ly_w = br["x"] * TILE_W + 8, br["y"] * TILE_H + 6
             foot_w = (br["y"] + 0.5) * TILE_H
             rad = br["radius"] + flicker * 0.5
+            if (abs(lx_w - world_ox) > VIEW_W + rad or abs(ly_w - world_oy) > VIEW_H + rad):
+                continue
             l_open = game.dungeon.get_light_open_tiles(br["x"], br["y"], br["radius"])
             allowed = game.dungeon.build_shared_light_Allowed_tiles(player_open_tiles, l_open)
             if allowed is not None:
@@ -724,6 +726,8 @@ def main():
             lx_w, ly_w = rl["x"] * TILE_W + 8, rl["y"] * TILE_H + 8
             foot_w = (rl["y"] + 0.5) * TILE_H
             rad = rl["radius"]
+            if (abs(lx_w - world_ox) > VIEW_W + rad or abs(ly_w - world_oy) > VIEW_H + rad):
+                continue
             # Дискотечные прожекторы и стробоскоп: строго экранируются стенами танцпола!
             if rl.get("is_disco_strobe") or "disco_idx" in rl:
                 l_open = game.dungeon.get_light_open_tiles(37, 17, 125.0)
@@ -840,6 +844,13 @@ def main():
 
         if game.campaign == "jungle" and not game.inv_open:
             draw_fishing(screen, game, (world_mx, world_my), fov_mask)
+            for (x, y), action in game.dungeon.passages.items():
+                if math.hypot(x+.5-game.player.x, y+.5-game.player.y) <= 1.65:
+                    label = game.renderer.font_ui.render(game.loc["jungle_passages"][action], True, (246,225,178))
+                    rect = label.get_rect(midbottom=(VIEW_W*SCALE//2, VIEW_H*SCALE-16))
+                    pygame.draw.rect(screen, (23,32,27), rect.inflate(18,8), border_radius=4)
+                    screen.blit(label, rect)
+                    break
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)

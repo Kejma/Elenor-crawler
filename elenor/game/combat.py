@@ -166,6 +166,11 @@ class CombatMixin:
         cand_objs.sort(key=lambda o: math.hypot(ref_wx - (o.x + 0.5), ref_wy - (o.y + 0.5)))
         obj = cand_objs[0]
 
+        passage = self.dungeon.passages.get((obj.x, obj.y))
+        if passage:
+            self.travel_jungle(passage)
+            return True
+
         if obj.kind == "merchant_counter":
             self.interact_with_merchant(obj.merchant_owner)
             return True

@@ -5,7 +5,7 @@ import pygame
 import math
 import random
 
-from elenor.config import DEEP_WATER, MAP_COLS, MAP_ROWS, PIER, SHALLOW_WATER
+from elenor.config import DEEP_WATER, PIER, SHALLOW_WATER
 
 WATER_TILES = frozenset((SHALLOW_WATER, DEEP_WATER))
 
@@ -179,7 +179,7 @@ def cast_route(dungeon, origin, target):
     spot = dungeon.fishing_edges.get((math.floor(x), math.floor(y)))
     distance = math.dist(origin, target)
     if not spot or not (
-        0.15 <= distance <= 7 and 0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS
+        0.15 <= distance <= 7 and 0 <= tx < dungeon.width and 0 <= ty < dungeon.height
     ):
         return None
     if dungeon.grid[int(ty)][int(tx)] not in WATER_TILES:

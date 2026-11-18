@@ -124,9 +124,10 @@ class FishingTests(unittest.TestCase):
                 game.campaign = "jungle"
                 game._populate_floor(seed + 1)
                 seen = reachable_floor_tiles(dungeon, dungeon.start_pos)
-                (stairs,) = [o for o in game.objects if o.kind == "stairs"]
-                self.assertIn((stairs.x, stairs.y), seen)
-                self.assertNotEqual((stairs.x, stairs.y), dungeon.start_pos)
+                self.assertTrue(dungeon.passages.keys() <= seen)
+                self.assertTrue(
+                    {"forward", "temple", "cave"} <= set(dungeon.passages.values())
+                )
                 self.assertTrue(dungeon.fishing_edges.keys() <= seen)
                 self.assertFalse(game.mobs)
                 self.assertEqual(len(game.mirror_puzzles), seed % 2)
@@ -140,6 +141,76 @@ class FishingTests(unittest.TestCase):
                         info["sealed_rect"].center,
                         reachable_floor_tiles(dungeon, dungeon.start_pos),
                     )
+
+    def test_return_to_the_same_surface_and_interiors(self):
+        dungeon = Dungeon(puzzle_chance=0)
+        dungeon.generate(campaign="jungle")
+        game = HeadlessGame(dungeon)
+        game.campaign, game.jungle_locations = "jungle", {}
+        game._populate_floor(1)
+        self.assertEqual((dungeon.width, dungeon.height), (198, 126))
+        self.assertFalse(
+            any(tile in (45, 46, 47, 56, 57) for row in dungeon.grid for tile in row)
+        )
+        for action in ("temple", "cave"):
+            game.travel_jungle(action)
+            inside = game.dungeon
+            self.assertFalse(inside.fishing_edges)
+            self.assertEqual(set(inside.passages.values()), {"up"})
+            treasure = next(obj for obj in game.objects if obj.kind == "chest")
+            treasure.used = True
+            game.travel_jungle("up")
+            self.assertIs(game.dungeon, dungeon)
+            self.assertEqual(
+                dungeon.passages[int(game.player.x), int(game.player.y)], action
+            )
+            game.travel_jungle(action)
+            self.assertIs(game.dungeon, inside)
+            self.assertIn(treasure, game.objects)
+            self.assertTrue(treasure.used)
+            game.travel_jungle("up")
+        game.travel_jungle("forward")
+        self.assertEqual(game.dungeon.floor_num, 2)
+        game.travel_jungle("back")
+        self.assertIs(game.dungeon, dungeon)
+
+    def test_touching_jungle_trees_occlude_the_view(self):
+        random.seed(12)
+        d = Dungeon()
+        d.generate(campaign="jungle")
+        trees = {21, 22, 56, 57}
+        self.assertTrue(d.thickets)
+        for x, y in d.thickets:
+            self.assertTrue(d.is_blocking_sight(x, y))
+        # Four consecutive tiles: viewer, two trunks, destination.
+        for y in range(1, d.height - 1):
+            for x in range(1, d.width - 4):
+                if (
+                    (x + 1, y) in d.thickets
+                    and (x + 2, y) in d.thickets
+                    and not any(d.is_blocking_move(tx, y) for tx in (x, x + 3))
+                ):
+                    self.assertFalse(
+                        d.has_line_of_sight(x + 0.5, y + 0.5, x + 3.5, y + 0.5, 5)
+                    )
+                    _, _, visible = d.compute_nox_fov(
+                        (x + 0.5) * 16, (y + 0.5) * 16, x * 16 - 100, y * 16 - 80
+                    )
+                    self.assertNotIn((x + 3, y), visible)
+                    break
+            else:
+                continue
+            break
+        else:
+            self.fail("Missing stand of trees")
+        isolated = [
+            (x, y)
+            for y, row in enumerate(d.grid)
+            for x, t in enumerate(row)
+            if t in trees and (x, y) not in d.thickets
+        ]
+        self.assertTrue(isolated)
+        self.assertFalse(d.is_blocking_sight(*isolated[0]))
 
     def test_clicking_scenery_leaves_it_in_place(self):
         dungeon = Dungeon()

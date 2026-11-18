@@ -2,7 +2,7 @@ from collections import deque
 import math
 import random
 import pygame
-from elenor.config import TILE_W, TILE_H, MAP_COLS, MAP_ROWS
+from elenor.config import TILE_W, TILE_H
 from elenor.entities import Enemy, Particle
 
 from elenor.puzzles.optics import SINGLE_REFLECT_MAP, DOUBLE_REFLECT_MAP
@@ -111,7 +111,7 @@ def reachable_floor_tiles(dungeon, start_xy, extra_blocked=(), max_distance=None
             continue
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             pt = tx, ty = x + dx, y + dy
-            if not (0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS) or pt in seen or pt in blocked:
+            if not (0 <= tx < dungeon.width and 0 <= ty < dungeon.height) or pt in seen or pt in blocked:
                 continue
             door = dungeon.doors.get(pt)
             if door and door.locked and not door.is_open:
@@ -691,7 +691,7 @@ def recalculate_mirror_puzzle(game, ctrl: MirrorPuzzleController):
         seg_start = (cur_x + 0.5, cur_y + 0.5)
         visited_states = set()
 
-        for _ in range(MAP_COLS * MAP_ROWS * 4):
+        for _ in range(dungeon.width * dungeon.height * 4):
             nx, ny = cur_x + dx, cur_y + dy
             state_key = (nx, ny, dx, dy)
             if state_key in visited_states:
@@ -954,8 +954,8 @@ def _update_puzzle_ambush_spawner(game, ctrl, dt):
     occupied.update(dungeon.levers)
     # AI cannot open even unlocked doors: use actual movement blockers here.
     reachable = _bfs_reachable(
-        pygame.Rect(0, 0, MAP_COLS, MAP_ROWS),
-        {(x, y) for y in range(MAP_ROWS) for x in range(MAP_COLS)
+        pygame.Rect(0, 0, dungeon.width, dungeon.height),
+        {(x, y) for y in range(dungeon.height) for x in range(dungeon.width)
          if dungeon.is_blocking_move(x, y)},
         (int(px), int(py))
     )
@@ -975,7 +975,7 @@ def _update_puzzle_ambush_spawner(game, ctrl, dt):
         # Conservative direct LOS check also protects against gaps between FOV rays.
         if dungeon.has_line_of_sight(px, py, tx + 0.5, ty + 0.5, 18.0):
             continue
-        path = dungeon.find_path((tx, ty), (int(px), int(py)), max_expanded=MAP_COLS * MAP_ROWS)
+        path = dungeon.find_path((tx, ty), (int(px), int(py)), max_expanded=dungeon.width * dungeon.height)
         if path and len(path) <= 22 and tuple(map(int, path[-1])) == (int(px), int(py)):
             candidates.append((tx, ty))
     if not candidates:

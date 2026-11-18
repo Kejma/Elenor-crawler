@@ -4,7 +4,7 @@ import math
 import random
 import pygame
 import numpy as np
-from elenor.config import MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, RAY_COUNT, LOS_MAX_RADIUS, MERCHANT_ROOM_CHANCE, DEEP_WATER
+from elenor.config import MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, RAY_COUNT, LOS_MAX_RADIUS, MERCHANT_ROOM_CHANCE, DEEP_WATER, OPAQUE_WALL_TILES
 
 
 class Door:
@@ -68,14 +68,25 @@ class Dungeon:
         self._light_cache = {}
         self._base_block_grid = None
 
+    @property
+    def width(self):
+        return len(self.grid[0])
+
+    @property
+    def height(self):
+        return len(self.grid)
+
     def _carve_rect(self, rect, floor_id):
         for ry in range(rect.top, rect.bottom):
             for rx in range(rect.left, rect.right):
-                if 1 <= rx < MAP_COLS - 1 and 1 <= ry < MAP_ROWS - 1:
+                if 1 <= rx < self.width - 1 and 1 <= ry < self.height - 1:
                     self.grid[ry][rx] = floor_id
 
-    def generate(self, floor_num=1, *, campaign="rats"):
+    def generate(self, floor_num=1, *, campaign="rats", interior=None):
         self.floor_num = floor_num
+        self.thickets = set()
+        self.passages = {}
+        self.interior = interior
         self.fishing_edges = {}
         self.rooms = []
         self.braziers = []
@@ -101,6 +112,14 @@ class Dungeon:
         if campaign == "jungle":
             from elenor.world.jungle import generate_jungle_floor
             generate_jungle_floor(self)
+            trees = {21, 22, 56, 57}
+            trunks = {(x, y) for y, row in enumerate(self.grid)
+                      for x, tile in enumerate(row) if tile in trees}
+            self.thickets = {
+                (x, y) for x, y in trunks
+                if any(neighbour in trunks for neighbour in
+                       ((x+1, y), (x-1, y), (x, y+1), (x, y-1)))
+            }
             return
 
         # =====================================================================
@@ -545,7 +564,7 @@ class Dungeon:
                         self.overlays[(rx, ry)] = "ov_moss"
 
     def is_blocking_move(self, tx, ty):
-        if not (0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS):
+        if not (0 <= tx < self.width and 0 <= ty < self.height):
             return True
         if self.grid[ty][tx] in (1, 5, 6, 7, 17, 18, 19, 20, 21, 22, 33, 34, 35, 36, DEEP_WATER, 51, 52, 53, 54, 55, 56, 57):
             return True
@@ -557,10 +576,10 @@ class Dungeon:
         return False
 
     def is_blocking_sight(self, tx, ty):
-        if not (0 <= tx < MAP_COLS and 0 <= ty < MAP_ROWS):
+        if not (0 <= tx < self.width and 0 <= ty < self.height):
             return True
-        # Деревья (5, 21, 22, 56, 57) блокируют движение, но НЕ являются квадратными стенами для света!
-        if self.grid[ty][tx] in (1, 6, 7, 17, 18, 19, 20, 33, 34, 35, 36, 51, 52, 53, 54, 55):
+        # Isolated jungle trees admit light. Interlocking crowns occlude both light and vision.
+        if (tx, ty) in self.thickets or self.grid[ty][tx] in OPAQUE_WALL_TILES:
             return True
         door = self.doors.get((tx, ty))
         if door and not door.is_open:
@@ -652,8 +671,8 @@ class Dungeon:
         r_tiles = int(math.ceil(radius_px / TILE_W)) + 1
         ox, oy = itx + 0.5, ity + 0.5
 
-        for ty in range(max(0, ity - r_tiles), min(MAP_ROWS, ity + r_tiles + 1)):
-            for tx in range(max(0, itx - r_tiles), min(MAP_COLS, itx + r_tiles + 1)):
+        for ty in range(max(0, ity - r_tiles), min(self.height, ity + r_tiles + 1)):
+            for tx in range(max(0, itx - r_tiles), min(self.width, itx + r_tiles + 1)):
                 if not self.is_blocking_sight(tx, ty):
                     dist = math.hypot((tx + 0.5) - ox, (ty + 0.5) - oy)
                     if dist <= r_tiles:
@@ -674,7 +693,7 @@ class Dungeon:
             return None
 
         vx, vy = self._last_viewer_pos
-        allowed_grid = np.zeros((MAP_COLS, MAP_ROWS), dtype=np.float32)
+        allowed_grid = np.zeros((self.width, self.height), dtype=np.float32)
 
         for (ox, oy) in shared_open:
             allowed_grid[ox, oy] = 1.0
@@ -682,7 +701,7 @@ class Dungeon:
             # Это убирает паразитный просвет стен из соседнего зала через дверной проём.
             for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                 wx, wy = ox + dx, oy + dy
-                if 0 <= wx < MAP_COLS and 0 <= wy < MAP_ROWS and self.is_blocking_sight(wx, wy):
+                if 0 <= wx < self.width and 0 <= wy < self.height and self.is_blocking_sight(wx, wy):
                     face_nx, face_ny = ox - wx, oy - wy
                     if (vx - (wx + 0.5)) * face_nx + (vy - (wy + 0.5)) * face_ny > -0.15:
                         allowed_grid[wx, wy] = 1.0
@@ -695,16 +714,18 @@ class Dungeon:
         fov_surf = self._fov_surf
         fov_surf.fill((0, 0, 0))
 
-        start_tx = max(0, min(MAP_COLS - 1, int(world_ox) // TILE_W))
-        start_ty = max(0, min(MAP_ROWS - 1, int(world_oy) // TILE_H))
+        start_tx = max(0, min(self.width - 1, int(world_ox) // TILE_W))
+        start_ty = max(0, min(self.height - 1, int(world_oy) // TILE_H))
 
         if self._base_block_grid is None:
-            base_bg = np.zeros((MAP_COLS, MAP_ROWS), dtype=bool)
-            for ry in range(MAP_ROWS):
+            base_bg = np.zeros((self.width, self.height), dtype=bool)
+            for ry in range(self.height):
                 row = self.grid[ry]
-                for rx in range(MAP_COLS):
-                    if row[rx] in (1, 6, 7, 17, 18, 19, 20, 33, 34, 35, 36, 51, 52, 53, 54, 55):
+                for rx in range(self.width):
+                    if row[rx] in OPAQUE_WALL_TILES:
                         base_bg[rx, ry] = True
+            for x, y in self.thickets:
+                base_bg[x, y] = True
             self._base_block_grid = base_bg
 
         block_grid = self._base_block_grid.copy()
@@ -716,8 +737,8 @@ class Dungeon:
         # Векторный расчёт всех 280 лучей одновременно через NumPy!
         wx = world_ox + self._ray_cos * self._ray_r
         wy = world_oy + self._ray_sin * self._ray_r
-        tx = np.clip((wx // TILE_W).astype(np.int32), 0, MAP_COLS - 1)
-        ty = np.clip((wy // TILE_H).astype(np.int32), 0, MAP_ROWS - 1)
+        tx = np.clip((wx // TILE_W).astype(np.int32), 0, self.width - 1)
+        ty = np.clip((wy // TILE_H).astype(np.int32), 0, self.height - 1)
 
         blocked = block_grid[tx, ty]
         # Защита от прострела диагональных стыков стен
@@ -752,7 +773,7 @@ class Dungeon:
         for (ox, oy) in open_visible_tiles:
             for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
                 nx, ny = ox + dx, oy + dy
-                if 0 <= nx < MAP_COLS and 0 <= ny < MAP_ROWS and block_grid[nx, ny]:
+                if 0 <= nx < self.width and 0 <= ny < self.height and block_grid[nx, ny]:
                     visible_tiles.add((nx, ny))
 
         for (vtx, vty) in visible_tiles:

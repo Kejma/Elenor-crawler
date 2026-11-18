@@ -1,7 +1,7 @@
 import math
 import pygame
 import numpy as np
-from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, HUD_HEIGHT, MAP_COLS, MAP_ROWS, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
+from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
 from elenor.config import DEEP_WATER, PEBBLE_SHORE, PIER, SHALLOW_WATER
 
 
@@ -525,9 +525,9 @@ class Renderer(UIRendererMixin):
         self.entity_y_canvas.fill(-9999.0)
 
         c0 = max(0, int(cam_x) // TILE_W)
-        c1 = min(MAP_COLS, (int(cam_x) + VIEW_W) // TILE_W + 2)
+        c1 = min(dungeon.width, (int(cam_x) + VIEW_W) // TILE_W + 2)
         r0 = max(0, int(cam_y) // TILE_H)
-        r1 = min(MAP_ROWS, (int(cam_y) + VIEW_H) // TILE_H + 2)
+        r1 = min(dungeon.height, (int(cam_y) + VIEW_H) // TILE_H + 2)
 
         tall_trees_to_draw = []
         TILE_ROLE_MAP = {
@@ -603,6 +603,8 @@ class Renderer(UIRendererMixin):
                 if t_val in TALL_TREE_MAP:
                     key, tree_asset_key = TALL_TREE_MAP[t_val]
                     if (c, r) in visible_tiles:
+                        if t_val != 5 and (c*17 + r*23) % 9 == 0:
+                            tree_asset_key = {21:"tree_jungle",22:"tree_palm",56:"tree_bone",57:"tree_dead_mangrove"}[t_val]
                         tall_trees_to_draw.append((c, r, tree_asset_key))
                 else:
                     key = TILE_ROLE_MAP.get(t_val, f"floor_{t_val}")
@@ -822,12 +824,18 @@ class Renderer(UIRendererMixin):
         self.diff_canvas.blit(tz_diff, (0, VIEW_H))
         self.norm_canvas.blit(tz_norm, (0, VIEW_H))
 
+        clouds = []
+        if fx_mgr and fx_mgr.flags.get("volumetric_fog", True):
+            for cloud in fx_mgr.active_clouds:
+                sx, sy = cloud["wx"]*TILE_W-cam_x, cloud["wy"]*TILE_H-cam_y
+                radius = cloud["radius"]*TILE_W
+                if -radius <= sx <= VIEW_W+radius and -radius <= sy <= VIEW_H+radius:
+                    clouds.append(cloud)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
             en_fog = fx_mgr.flags.get("volumetric_fog", True) if fx_mgr else True
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
-            clouds = fx_mgr.active_clouds if fx_mgr else None
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
                 fov_mask, cam_x, cam_y, lights, self.current_hud_lights,
@@ -854,8 +862,8 @@ class Renderer(UIRendererMixin):
                 (~is_ent[1:-1, :VIEW_H - 2]) | (~is_ent[1:-1, 2:VIEW_H])
             )
 
-            tx_screen = np.clip(((self.px[:, 0] + cam_x) // TILE_W).astype(np.int32), 0, MAP_COLS - 1)
-            ty_screen = np.clip(((self.py[0, :VIEW_H] + cam_y) // TILE_H).astype(np.int32), 0, MAP_ROWS - 1)
+            tx_screen = np.clip(((self.px[:, 0] + cam_x) // TILE_W).astype(np.int32), 0, dungeon.width - 1)
+            ty_screen = np.clip(((self.py[0, :VIEW_H] + cam_y) // TILE_H).astype(np.int32), 0, dungeon.height - 1)
 
 
             r_mult[:, VIEW_H:] = 0.74
@@ -930,7 +938,17 @@ class Renderer(UIRendererMixin):
             out[:, :, 0] = np.clip(np.where(rim_add_r > 0.5, np.minimum(228.0, base_r * 1.25 + rim_add_r * fov_mask), base_r), 0, 255)
             out[:, :, 1] = np.clip(np.where(rim_add_g > 0.5, np.minimum(222.0, base_g * 1.25 + rim_add_g * fov_mask), base_g), 0, 255)
             out[:, :, 2] = np.clip(np.where(rim_add_b > 0.5, np.minimum(220.0, base_b * 1.25 + rim_add_b * fov_mask), base_b), 0, 255)
-            lit_surf = pygame.surfarray.make_surface(out.astype(np.uint8))
+            for cloud in clouds:
+                if cloud["kind"] != "mist":
+                    continue
+                x = self.px - (cloud["wx"]*TILE_W-cam_x)
+                y = self.py[:, :VIEW_H] - (cloud["wy"]*TILE_H-cam_y)
+                radius = cloud["radius"] * TILE_W
+                falloff = np.maximum(0, 1-(x*x+y*y)/(radius*radius))
+                wisps = .6 + .4*np.sin(x*.13 + np.cos(y*.12) + now_sec)
+                glow = (falloff*wisps*cloud["density"]*(r_mult+g_mult+b_mult)[:, :VIEW_H]).clip(0,1)
+                out[:, :VIEW_H] += glow[:,:,None] * np.asarray(cloud["color"])*65
+            lit_surf = pygame.surfarray.make_surface(out.clip(0,255).astype(np.uint8))
 
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))
@@ -1069,8 +1087,8 @@ class Renderer(UIRendererMixin):
                 tile_lum = 0.0
             else:
                 tile_lum = 0.0
-                mtx = max(0, min(MAP_COLS - 1, int(m.x)))
-                mty = max(0, min(MAP_ROWS - 1, int(m.y)))
+                mtx = max(0, min(dungeon.width - 1, int(m.x)))
+                mty = max(0, min(dungeon.height - 1, int(m.y)))
                 for lgt in lights:
                     lx, ly, lz = lgt["pos"]
                     rad = lgt["radius"]

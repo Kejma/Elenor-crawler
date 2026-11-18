@@ -2,7 +2,6 @@
 
 import math
 import random
-from collections import deque
 
 import pygame
 
@@ -16,15 +15,7 @@ from elenor.config import (
 )
 from elenor.world.dungeon import Door
 
-# Interior ground, surrounding terrain, furnishings and ground cover.
-BIOMES = {
-    "grove": (10, 21, ("giant_fern", "banana_plant"), "ov_fern"),
-    "marsh": (23, 22, ("hollow_log", "bamboo_clump"), "ov_mangrove_roots"),
-    "bone": (45, 56, ("bone_totem_altar", "blood_thorn_bush"), "ov_ribcage_remains"),
-    "hut": (13, 33, ("tribal_bed", "tribal_table"), "ov_bamboo_leaves"),
-    "temple": (14, 20, ("marble_pillar", "marble_pillar"), "ov_marble_cracks"),
-    "cave": (49, 34, ("amethyst_geode", "giant_cave_mushroom"), "ov_glow_shrooms"),
-}
+from elenor.world.jungle_sites import PALETTES, dress_site, lamp, mist
 
 
 def _trail(dungeon, start, end, horizontal):
@@ -44,57 +35,14 @@ def _trail(dungeon, start, end, horizontal):
         x, y = bx, by
 
 
-def _clearing(dungeon, room, biome):
-    floor, wall, props, overlay = BIOMES[biome]
-    if biome == "hut" and random.choice((True, False)):
-        props = ("tribal_hammock", "tribal_bow_stand")
-    elif biome == "cave" and random.choice((True, False)):
-        floor, props = 50, ("crystal_cluster", "minecart_wreck")
-    elif biome == "temple" and random.choice((True, False)):
-        floor, props = 30, ("marble_pillar_broken", "serpent_statue")
-    elif biome == "bone" and random.choice((True, False)):
-        floor, props = 46, ("bone_wind_chimes", "spine_pillar")
-    building = biome in ("hut", "temple")
-    cx, cy = room.center
-    for y in range(room.top, room.bottom):
-        for x in range(room.left, room.right):
-            rim = x in (room.left, room.right - 1) or y in (room.top, room.bottom - 1)
-            distance = ((x - cx) / (room.w / 2)) ** 2 + ((y - cy) / (room.h / 2)) ** 2
-            if (building and rim) or (not building and distance > 1):
-                if dungeon.grid[y][x] != 12:
-                    dungeon.grid[y][x] = wall
-            elif biome == "hut" and abs(x - cx) <= 2 and abs(y - cy) <= 1:
-                dungeon.grid[y][x] = 27
-            elif biome == "temple" and (x == cx or y == cy):
-                dungeon.grid[y][x] = 16
-            else:
-                dungeon.grid[y][x] = floor
-                if random.random() < 0.12:
-                    dungeon.overlays[x, y] = overlay
-    for xy, kind in zip([(cx - 2, cy - 2), (cx + 2, cy + 2)], props):
-        dungeon.jungle_props.append((*xy, kind))
-    if biome == "cave":
-        dungeon.room_lights.append(
-            dict(x=cx - 2, y=cy - 2, color=(0.51, 0.52, 1.1), radius=92)
-        )
-    else:
-        _brazier(dungeon, cx + 2, cy - 2)
-    if biome in ("grove", "marsh"):
-        dungeon.atmo_zones.append(dict(rect=room, kind="forest"))
-
-
-def _brazier(dungeon, x, y, radius=98):
-    dungeon.braziers.append(dict(x=x, y=y, radius=radius, color=(1.15, 0.78, 0.44)))
-
-
 def _waterfront(dungeon, near_rooms, direction):
     river = random.choice((True, False))
     docks = random.sample(near_rooms, 2 if river else 1)
     center = docks[0].centerx
-    radius = min(random.randint(11, 17), center - 1, MAP_COLS - 2 - center)
+    radius = min(random.randint(19, 29), center - 1, dungeon.width - 2 - center)
     phase = random.uniform(0, math.tau)
     banks = {}
-    for x in range(1, MAP_COLS - 1):
+    for x in range(1, dungeon.width - 1):
         if river:
             inset = 10 + round(1.4 * math.sin(x / 8 + phase))
             width = 7 + round(math.sin(x / 6 + phase))
@@ -104,24 +52,37 @@ def _waterfront(dungeon, near_rooms, direction):
                 continue
             half = max(1, round(4 * math.sqrt(shape)))
             inset, width = 5 + half, half * 2 - 1
-        bank = MAP_ROWS - 1 - inset if direction == 1 else inset
+        bank = dungeon.height - 1 - inset if direction == 1 else inset
         banks[x] = bank
         for depth in range(-1, width):
             y = bank + depth * direction
-            if not 0 < y < MAP_ROWS - 1:
+            if not 0 < y < dungeon.height - 1:
                 continue
             tile = PEBBLE_SHORE if depth == -1 else SHALLOW_WATER
             if 2 <= depth < width - 1:
                 tile = DEEP_WATER
             dungeon.grid[y][x] = tile
+            if depth == -1:
+                dungeon.grid[y][x] = random.choice((25, 41, PEBBLE_SHORE))
+                if random.random() < 0.12:
+                    dungeon.overlays[x, y] = random.choice(
+                        ("ov_shells_starfish", "ov_shore_foam")
+                    )
             if depth == 0 and random.random() < 0.24:
-                dungeon.overlays[x, y] = random.choice(("ov_water_lily", "ov_duckweed"))
+                dungeon.overlays[x, y] = random.choice(
+                    (
+                        "ov_water_lily",
+                        "ov_duckweed",
+                        "ov_fish_shadows",
+                        "ov_bobber_ripples",
+                    )
+                )
     if river:
         # A separate crossing leads to a small fishing camp on the other bank.
         bridge_room = next(room for room in near_rooms if room not in docks)
         x, cy = bridge_room.center
         bank = banks[x]
-        landing = MAP_ROWS - 3 if direction == 1 else 2
+        landing = dungeon.height - 3 if direction == 1 else 2
         _trail(dungeon, (x, cy), (x, bank - direction), False)
         for y in range(bank, landing, direction):
             dungeon.grid[y][x : x + 2] = [PIER, PIER]
@@ -135,7 +96,7 @@ def _waterfront(dungeon, near_rooms, direction):
                 (x + 3, landing, "chest"),
             ]
         )
-        _brazier(dungeon, x - 1, landing)
+        lamp(dungeon, x - 1, landing)
     spots = random.sample(["snag", "eddy", "current"], len(docks))
     for room, spot in zip(docks, spots):
         x, cy = room.center
@@ -157,7 +118,15 @@ def _waterfront(dungeon, near_rooms, direction):
                 (x - 2, bank + direction, "prop_wooden_rowboat"),
             ]
         )
-        _brazier(dungeon, x + 1, bank - direction, 142)
+        dungeon.jungle_props.extend(
+            [
+                (x + 2, bank, "prop_fish_trap_net"),
+                (x + 2, bank - direction, "prop_fisherman_stool"),
+                (x - 1, bank - direction, "prop_tackle_box"),
+            ]
+        )
+        mist(dungeon, x + 2, bank + direction * 3, 4)
+        lamp(dungeon, x + 1, bank - direction, 142)
 
 
 def _mirror_shrine(dungeon, room, approach):
@@ -185,104 +154,175 @@ def _mirror_shrine(dungeon, room, approach):
     dungeon.rooms.extend([hall, vault])
 
 
+def _network(cols, rows, omitted):
+    """Random spanning tree with a few additional paths back to earlier clearings."""
+    links = [
+        (i, j)
+        for i in range(cols * rows)
+        if i != omitted
+        for j in (i + 1, i + cols)
+        if j < cols * rows
+        and j != omitted
+        and (j // cols == i // cols or j == i + cols)
+    ]
+    random.shuffle(links)
+    components = list(range(cols * rows))
+    paths = []
+    for a, b in links:
+        left, right = components[a], components[b]
+        if left != right:
+            components = [left if group == right else group for group in components]
+        elif random.random() > 0.22:
+            continue
+        paths.append((a, b))
+    return paths
+
+
+def _passage(d, xy, action, sprite):
+    d.passages[xy] = action
+    d.jungle_props.append((*xy, sprite))
+
+
+def _entrance(d, room, kind):
+    # The door sits in a stone facade, with a walkable threshold towards the clearing.
+    cx, cy = room.center
+    x, y = cx + 6, cy - 4
+    wall, floor, prop = (
+        (19, 31, "serpent_statue") if kind == "temple" else (34, 26, "cave_stalagmite")
+    )
+    d._carve_rect(pygame.Rect(x - 2, y - 2, 5, 4), wall)
+    d._carve_rect(pygame.Rect(x - 1, y, 3, 5), floor)
+    d._carve_rect(pygame.Rect(cx, cy, x - cx + 1, 2), floor)
+    d.jungle_props.append((x - 2, y + 2, prop))
+    _passage(d, (x, y), kind, "stairs")
+    lamp(d, x + 2, y + 2, 95)
+
+
 def generate_jungle_floor(dungeon):
-    dungeon.jungle_props = []
-    # The waterfront can lie on either side. Regions vary independently of the trails.
+    d = dungeon
+    cols, rows = 6, 4
+    width, height = MAP_COLS * 3, MAP_ROWS * 3
+    interior = d.interior
     direction = random.choice((-1, 1))
     rooms = []
-    for band in (8, 22):
-        for column in (11, 32, 53):
-            room = pygame.Rect(
-                0, 0, random.randrange(9, 16, 2), random.choice((7, 9, 11))
-            )
-            y = band + random.randint(-1, 1)
-            room.center = (
-                column + random.randint(-2, 2),
-                y if direction == 1 else MAP_ROWS - 1 - y,
-            )
+    for row in range(rows):
+        for col in range(cols):
+            cx = 17 + 32 * col + random.randint(-2, 2)
+            cy = 14 + 28 * row + random.randint(-2, 2)
+            if direction < 0:
+                cy = height - 1 - cy
+            rw, rh = random.randrange(19, 29, 2), random.randrange(13, 21, 2)
+            if interior and random.random() < 0.4:
+                rw, rh = random.choice((13, 15)), random.choice((9, 11))
+            room = pygame.Rect(0, 0, rw, rh)
+            room.center = cx, cy
             rooms.append(room)
-
-    shrine = random.randrange(3) if random.random() < dungeon.puzzle_chance else None
-    ordinary = [i for i in range(6) if i != shrine]
-    themes = ["hut", "cave", "bone", "marsh", "grove"]
-    if shrine is None:
-        themes.append("temple")
-    random.shuffle(themes)
-    region = dict(zip(ordinary, themes))
-    # Extend each landmark's vegetation beyond its clearing. Warping the
-    # nearest-centre boundaries avoids straight biome borders along trails.
+    start = cols * random.randrange(rows)
+    shrine = None
+    if random.random() < d.puzzle_chance:
+        shrine = random.randrange(3, cols)
+    ordinary = [i for i in range(len(rooms)) if i != shrine]
+    paths = _network(cols, rows, shrine)
+    if interior:
+        themes = dict.fromkeys(ordinary, interior)
+    else:
+        # Begin on the green, western side. Each valley has one dominant landscape.
+        far = "grove" if d.floor_num == 1 else random.choice(("bone", "marsh", "ruins"))
+        themes = {i: ("grove" if i % cols < 2 else far) for i in ordinary}
+        for row in range(rows):
+            themes[row * cols + 1] = random.choice(("grove", "marsh"))
+        candidates = [i for i in ordinary if i % cols in (2, 3)]
+        if d.floor_num == 1:
+            # The dirt road from the opening grove leads east to the settlement.
+            village = min(i for i in candidates if i // cols == start // cols)
+            for i in range(start, village):
+                if i + 1 == shrine or i == shrine:
+                    continue
+                if (i, i + 1) not in paths:
+                    paths.append((i, i + 1))
+        else:
+            village = random.choice(candidates)
+        themes[village] = "village"
+        village_y = rooms[village].centery
+        rooms[village].size = (29, 21)
+        rooms[village].center = (17 + 32 * (village % cols), village_y)
+        if d.floor_num > 1:
+            themes[start] = random.choice(("grove", far))
+    d.jungle_props = []
     phase = random.uniform(0, math.tau)
-    dungeon.grid = []
-    for y in range(MAP_ROWS):
-        row = []
-        for x in range(MAP_COLS):
-            wx = x + 2.4 * math.sin(y / 4 + phase)
-            wy = y + 2.0 * math.cos(x / 5 - phase)
-            nearest = min(
-                range(len(rooms)),
-                key=lambda i: (
-                    (rooms[i].centerx - wx) ** 2 + (rooms[i].centery - wy) ** 2
-                ),
+    grid = []
+    for y in range(height):
+        line = []
+        for x in range(width):
+            band_y = y if direction > 0 else height - 1 - y
+            col = max(0, min(cols - 1, int((x + 2 * math.sin(y / 5 + phase)) // 32)))
+            row = max(
+                0, min(rows - 1, int((band_y + 2 * math.cos(x / 6 + phase)) // 28))
             )
-            growth = math.sin(x / 4 + phase) + math.cos(y / 3 - phase)
-            biome = region.get(nearest, "temple")
-            if biome == "bone":
-                tile = 57 if growth > 0.5 else 56
-            elif biome == "cave":
-                tile = 54 if growth > 0.8 else 34
-            else:
-                tile = 17 if growth < -0.7 else (22 if biome == "marsh" else 21)
-            # Gaps between stands of trees give the player small explorable
-            # pockets beside trails. Keep the outer map boundary closed.
-            if 0 < x < MAP_COLS - 1 and 0 < y < MAP_ROWS - 1:
-                clearing = growth + 0.65 * math.sin(x * 1.7 + y * 2.3 + phase)
-                if clearing > 0.65:
-                    tile = (
-                        BIOMES[biome][0] if biome in ("bone", "marsh", "cave") else 10
-                    )
-            row.append(tile)
-        dungeon.grid.append(row)
-    start = random.choice(ordinary)
-    # Grow a spanning tree, then add a shortcut when the grid admits one.
-    links = [
-        (a, b)
-        for a, b in ((0, 1), (1, 2), (3, 4), (4, 5), (0, 3), (1, 4), (2, 5))
-        if shrine not in (a, b)
-    ]
-    visited = {start}
-    selected = []
-    while len(visited) < len(ordinary):
-        edge = random.choice(
-            [e for e in links if (e[0] in visited) != (e[1] in visited)]
-        )
-        selected.append(edge)
-        visited.update(edge)
-    extras = [e for e in links if e not in selected]
-    if extras and random.random() < 0.7:
-        selected.append(random.choice(extras))
-    for a, b in selected:
-        _trail(dungeon, rooms[a].center, rooms[b].center, a // 3 == b // 3)
-
-    for idx, biome in zip(ordinary, themes):
-        _clearing(dungeon, rooms[idx], biome)
-    dungeon.rooms = [rooms[i] for i in ordinary]
-    _waterfront(dungeon, rooms[3:], direction)
+            theme = themes.get(row * cols + col) or interior or "grove"
+            base, _, walls, _ = PALETTES[theme]
+            pattern = math.sin(x * 0.23 + phase) + math.cos(y * 0.19 - phase)
+            tile = walls[min(len(walls) - 1, int((pattern + 2) * 0.249 * len(walls)))]
+            if not interior and 0 < x < width - 1 and 0 < y < height - 1:
+                if pattern + 0.65 * math.sin(x * 1.7 + y * 2.3) > 0.35:
+                    tile = base
+                elif theme == "bone" and pattern < -1.6:
+                    tile = random.choice((51, 52, 53))
+            line.append(tile)
+        grid.append(line)
+    d.grid = grid
+    for a, b in paths:
+        _trail(d, rooms[a].center, rooms[b].center, a // cols == b // cols)
+    d.rooms = [rooms[i] for i in ordinary]
+    for i in ordinary:
+        dress_site(d, rooms[i], themes[i])
+    if not interior:
+        _waterfront(d, random.sample(rooms[-cols:], 3), direction)
     if shrine is not None:
-        _mirror_shrine(dungeon, rooms[shrine], rooms[shrine + 3].center)
-
-    dungeon.start_pos = rooms[start].center
-    sx, sy = dungeon.start_pos
-    dungeon.jungle_props.append((sx - 2, sy + 1, "campfire"))
-    # Put the stairs in a distant landmark along the actual trail network.
-    distances = {start: 0}
-    queue = deque([start])
-    while queue:
-        node = queue.popleft()
-        for a, b in selected:
-            if node in (a, b):
-                other = b if a == node else a
-                if other not in distances:
-                    distances[other] = distances[node] + 1
-                    queue.append(other)
-    exit_room = rooms[max(distances, key=distances.__getitem__)]
-    dungeon.jungle_props.append((*exit_room.center, "stairs"))
+        _mirror_shrine(d, rooms[shrine], rooms[shrine + cols].center)
+    d.start_pos = rooms[start].center
+    sx, sy = d.start_pos
+    if interior:
+        corridor = 24 if interior == "temple" else 26
+        for line in d.grid:
+            for x, tile in enumerate(line):
+                if tile == 12:
+                    line[x] = corridor
+        # The return stair rises to a lit opening in the chamber wall.
+        opening = rooms[start].top + 1
+        for y in range(opening, sy):
+            for x in range(sx - 1, sx + 2):
+                d.grid[y][x] = (
+                    corridor if y % 2 else (31 if interior == "temple" else 50)
+                )
+                d.overlays.pop((x, y), None)
+        _passage(d, (sx, opening), "up", "door_open")
+        d.room_lights.append(dict(x=sx, y=opening, color=(0.80, 0.88, 0.71), radius=90))
+        far_room = max(
+            (rooms[i] for i in ordinary), key=lambda r: math.dist(r.center, d.start_pos)
+        )
+        d.jungle_props.append((*far_room.center, "chest"))
+        return
+    d.jungle_props.append((sx - 2, sy + 1, "campfire"))
+    # Trails actually reach the boundary. Returning travellers arrive by the sign.
+    exits = [
+        (
+            "forward",
+            random.choice([i for i in ordinary if i % cols == cols - 1]),
+            width - 2,
+        )
+    ]
+    if d.floor_num > 1:
+        exits.append(("back", start, 1))
+    for action, idx, x in exits:
+        cx, cy = rooms[idx].center
+        _trail(d, (cx, cy), (x, cy), True)
+        boundary = 0 if action == "back" else width - 1
+        for y in (cy, cy + 1):
+            d.grid[y][boundary] = 12
+            d.invisible_bounds.add((boundary, y))
+        _passage(d, (x, cy), action, "notice_board")
+        lamp(d, x, cy + 1)
+    sites = [i for i in ordinary if i % cols >= 2 and themes[i] != "village"]
+    for i, kind in zip(random.sample(sites, 2), ("temple", "cave")):
+        _entrance(d, rooms[i], kind)

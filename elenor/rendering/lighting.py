@@ -67,13 +67,13 @@ class GPULightShader:
             float sample_light_mask_smooth(int light_idx, float wx_px, float wy_px) {{
                 float gx = wx_px / {float(TILE_W)} - 0.5;
                 float gy = wy_px / {float(TILE_H)} - 0.5;
-                int x0 = clamp(int(floor(gx)), 0, {MAP_COLS - 1});
-                int y0 = clamp(int(floor(gy)), 0, {MAP_ROWS - 1});
-                int x1 = clamp(x0 + 1, 0, {MAP_COLS - 1});
-                int y1 = clamp(y0 + 1, 0, {MAP_ROWS - 1});
+                int x0 = clamp(int(floor(gx)), 0, textureSize(u_walls, 0).x - 1);
+                int y0 = clamp(int(floor(gy)), 0, textureSize(u_walls, 0).y - 1);
+                int x1 = clamp(x0 + 1, 0, textureSize(u_walls, 0).x - 1);
+                int y1 = clamp(y0 + 1, 0, textureSize(u_walls, 0).y - 1);
                 float fx = fract(gx);
                 float fy = fract(gy);
-                int base_y = light_idx * {MAP_ROWS};
+                int base_y = light_idx * textureSize(u_walls, 0).y;
                 float m00 = texelFetch(u_light_masks, ivec2(x0, base_y + y0), 0).r;
                 float m10 = texelFetch(u_light_masks, ivec2(x1, base_y + y0), 0).r;
                 float m01 = texelFetch(u_light_masks, ivec2(x0, base_y + y1), 0).r;
@@ -109,8 +109,8 @@ class GPULightShader:
 
                     float wx_px = float(p.x) + u_cam.x;
                     float wy_px = float(p.y) + u_cam.y;
-                    int tx = clamp(int(floor(wx_px / {float(TILE_W)})), 0, {MAP_COLS - 1});
-                    int ty = clamp(int(floor(wy_px / {float(TILE_H)})), 0, {MAP_ROWS - 1});
+                    int tx = clamp(int(floor(wx_px / {float(TILE_W)})), 0, textureSize(u_walls, 0).x - 1);
+                    int ty = clamp(int(floor(wy_px / {float(TILE_H)})), 0, textureSize(u_walls, 0).y - 1);
 
                     float is_wall_tile = texelFetch(u_walls, ivec2(tx, ty), 0).r;
 
@@ -123,13 +123,13 @@ class GPULightShader:
                         if (ty > 0 && texelFetch(u_walls, ivec2(tx, ty - 1), 0).r > 0.5 && ly_t < 4.5) {{
                             occ = max(occ, (4.5 - ly_t) / 4.5 * 0.42);
                         }}
-                        if (ty < {MAP_ROWS - 1} && texelFetch(u_walls, ivec2(tx, ty + 1), 0).r > 0.5 && ly_t > 12.5) {{
+                        if (ty < textureSize(u_walls, 0).y - 1 && texelFetch(u_walls, ivec2(tx, ty + 1), 0).r > 0.5 && ly_t > 12.5) {{
                             occ = max(occ, (ly_t - 12.5) / 3.5 * 0.28);
                         }}
                         if (tx > 0 && texelFetch(u_walls, ivec2(tx - 1, ty), 0).r > 0.5 && lx_t < 3.5) {{
                             occ = max(occ, (3.5 - lx_t) / 3.5 * 0.32);
                         }}
-                        if (tx < {MAP_COLS - 1} && texelFetch(u_walls, ivec2(tx + 1, ty), 0).r > 0.5 && lx_t > 12.5) {{
+                        if (tx < textureSize(u_walls, 0).x - 1 && texelFetch(u_walls, ivec2(tx + 1, ty), 0).r > 0.5 && lx_t > 12.5) {{
                             occ = max(occ, (lx_t - 12.5) / 3.5 * 0.32);
                         }}
                         if (p.x > 1 && p.x < {VIEW_W - 2} && p.y > 2 && p.y < {VIEW_H - 2}) {{
@@ -325,6 +325,13 @@ class GPULightShader:
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
         self.tex_fov.write(np.ascontiguousarray(fov_mask.T, dtype=np.float32).tobytes())
         if wall_grid_np is not None:
+            if wall_grid_np.shape != self.tex_walls.size:
+                width, height = wall_grid_np.shape
+                self.tex_walls.release()
+                self.tex_masks.release()
+                self.tex_walls = self.ctx.texture((width, height), 1, dtype="f4")
+                self.tex_masks = self.ctx.texture((width, height*self.MAX_LIGHTS), 1, dtype="f4")
+                self.masks_buf = np.zeros((self.MAX_LIGHTS, height, width), dtype=np.float32)
             self.tex_walls.write(np.ascontiguousarray(wall_grid_np.T, dtype=np.float32).tobytes())
         if emissive_canvas is not None:
             self.tex_emissive.write(pygame.image.tobytes(emissive_canvas, "RGB"))
@@ -351,7 +358,7 @@ class GPULightShader:
                 self.flags_buf[i] = (ign_d, 0.0)
 
         if any_masks:
-            self.tex_masks.write(self.masks_buf.tobytes())
+            self.tex_masks.write(self.masks_buf[:n_lgt].tobytes(), viewport=(0, 0, self.tex_walls.width, n_lgt*self.tex_walls.height))
 
         clouds = active_clouds or []
         n_fog = min(len(clouds), self.MAX_FOGS)

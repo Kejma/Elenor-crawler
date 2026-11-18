@@ -2,7 +2,7 @@ import math
 import random
 import pygame
 import numpy as np
-from elenor.config import MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
+from elenor.config import OPAQUE_WALL_TILES, MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
 
 
 class FXManager:
@@ -69,11 +69,15 @@ class FXManager:
 
     def rebuild_wall_grid(self, dungeon):
         """Строит карту стен для Ambient Occlusion (БЕЗ деревьев 5!) и заселяет зоны тумана и спор."""
+        size = (dungeon.width, dungeon.height)
+        if self.wall_grid_np.shape != size:
+            self.wall_grid_np = np.zeros(size, dtype=np.float32)
+            self.decal_surf = pygame.Surface((size[0]*TILE_W, size[1]*TILE_H), pygame.SRCALPHA)
         self.wall_grid_np.fill(0.0)
-        for ry in range(MAP_ROWS):
-            for rx in range(MAP_COLS):
+        for ry in range(dungeon.height):
+            for rx in range(dungeon.width):
                 # Деревья (5) не включены, чтобы вокруг них не было квадратных рамок AO!
-                if dungeon.grid[ry][rx] in (1, 6, 7):
+                if dungeon.grid[ry][rx] in OPAQUE_WALL_TILES:
                     self.wall_grid_np[rx, ry] = 1.0
 
         self.active_clouds = []
@@ -272,6 +276,8 @@ class FXManager:
     def enter_test_polygon(self, EnemyCls, InteractableCls):
         g = self.game
         d = g.dungeon
+        d.thickets = set()
+        d.passages = {}
         d.floor_num = 99
         d.rooms = []
         d.braziers = []

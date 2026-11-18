@@ -1,7 +1,7 @@
 """Pixel visibility for emissive overlays, shared by CPU and GPU rendering."""
 import numpy as np
 import pygame
-from elenor.config import VIEW_W, VIEW_H, TILE_W, TILE_H, MAP_COLS, MAP_ROWS
+from elenor.config import VIEW_W, VIEW_H, TILE_W, TILE_H
 
 _X = np.arange(VIEW_W, dtype=np.float32)[:, None]
 _Y = np.arange(VIEW_H, dtype=np.float32)[None, :]
@@ -14,8 +14,8 @@ def overlay_visibility(fov_mask, lights, cam_x, cam_y):
     This preserves soft dark edges even for a self-emissive overlay.
     """
     illumination = np.zeros((VIEW_W, VIEW_H), dtype=np.float32)
-    tx = np.clip(((np.arange(VIEW_W) + cam_x) // TILE_W).astype(int), 0, MAP_COLS - 1)
-    ty = np.clip(((np.arange(VIEW_H) + cam_y) // TILE_H).astype(int), 0, MAP_ROWS - 1)
+    tx = ((np.arange(VIEW_W) + cam_x) // TILE_W).astype(int)
+    ty = ((np.arange(VIEW_H) + cam_y) // TILE_H).astype(int)
     for light in lights:
         lx, ly, lz = light['pos']
         radius = light['radius']
@@ -29,7 +29,7 @@ def overlay_visibility(fov_mask, lights, cam_x, cam_y):
         strength = np.clip(1.0 - (distance / radius) ** 1.65, 0, 1)
         allowed = light.get('allowed_tiles')
         if isinstance(allowed, np.ndarray):
-            strength *= allowed[tx[x0:x1, None], ty[None, y0:y1]]
+            strength *= allowed[tx[x0:x1, None].clip(0, allowed.shape[0]-1), ty[None, y0:y1].clip(0, allowed.shape[1]-1)]
         illumination[x0:x1, y0:y1] += strength * max(light['color'])
     return np.clip(illumination, 0, 1) * np.clip(fov_mask[:, :VIEW_H], 0, 1)
 

@@ -112,6 +112,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
 
     def reset_run(self, campaign=None):
         self.campaign = campaign or getattr(self, "campaign", "rats")
+        self.jungle_locations = {}
         self.fishing_catches = {}
         if hasattr(self, "fx") and self.fx:
             self.fx.disco_active = False
@@ -162,7 +163,37 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.sfx.play("ui")
 
 
+    def travel_jungle(self, action):
+        current = self.dungeon
+        depth, interior = current.floor_num, current.interior
+        if action == "up":
+            destination, arrival = (depth, None), interior
+        elif action in ("cave", "temple"):
+            destination, arrival = (depth, action), "up"
+        else:
+            forward = action == "forward"
+            destination = (depth + (1 if forward else -1), None)
+            arrival = "back" if forward else "forward"
+
+        self.jungle_locations[(depth, interior)] = (current, self.objects, self.mirror_puzzles, self.seen_entities)
+        current._light_cache.clear()
+        cached = self.jungle_locations.pop(destination, None)
+        if cached:
+            self.dungeon = cached[0]
+        else:
+            self.dungeon = Dungeon(puzzle_chance=current.puzzle_chance)
+            self.dungeon.generate(destination[0], campaign="jungle", interior=destination[1])
+        xy = next(pos for pos, passage in self.dungeon.passages.items() if passage == arrival)
+        self.player.x, self.player.y = xy[0]+0.5, xy[1]+0.5
+        self.player.pending_action = None
+        self.player.lunge_vx = self.player.lunge_vy = 0.0
+        self._populate_floor(destination[0], cached)
+        self.sfx.play("door" if interior or destination[1] else "step_dirt")
+
     def descend_to_next_floor(self):
+        if self.campaign == "jungle":
+            self.travel_jungle("up" if self.dungeon.interior else "forward")
+            return
         if hasattr(self, "fx") and self.fx:
             self.fx.disco_active = False
         self.sfx.stop_disco_track()
@@ -174,7 +205,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.sfx.play("door")
 
 
-    def _populate_floor(self, floor_num):
+    def _populate_floor(self, floor_num, cached=None):
         self.world_active = False
         self.popups = []
         self.fishing_cast = None
@@ -199,7 +230,9 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.cam_x = self.player.x * TILE_W - VIEW_W * 0.5
         self.cam_y = self.player.y * TILE_H - VIEW_H * 0.5
 
-        if self.campaign == "jungle":
+        if cached:
+            _, self.objects, self.mirror_puzzles, self.seen_entities = cached
+        elif self.campaign == "jungle":
             from elenor.missions.jungle import populate_jungle_floor
             populate_jungle_floor(self, Interactable)
         else:
