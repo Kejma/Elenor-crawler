@@ -7,6 +7,8 @@ from elenor.rendering.normals import LiveLightPreview
 from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, apply_display_mode, get_available_resolutions, WINDOW_MODES_LIST
 from elenor.data.economy import format_copper_Trigger
 from elenor.rendering.appearance import HERO_TYPES_ORDER, HERO_CUSTOMIZATION_DB, build_custom_hero_sprite
+from elenor.ui.clipboard import paste_text
+from elenor.world.run_seed import parse_run_seed
 
 class MainMenuController:
     def __init__(self, game):
@@ -24,6 +26,10 @@ class MainMenuController:
         self.open_dropdown = None
         self.dropdown_item_rects = []
         self.can_resume = False
+        self.seed_text = ""
+        self.seed_focused = False
+        self.seed_selected = False
+        self.seed_error = False
 
         # Левый сайдбар и резиновая правая область, адаптивная под любой SCREEN_W / SCREEN_H
         self.sidebar_w = 300
@@ -42,6 +48,29 @@ class MainMenuController:
     def handle_event(self, event, mouse_pos):
         prof = self.game.profile
 
+        if self.seed_focused:
+            if event.type == pygame.TEXTINPUT:
+                self._edit_seed(event.text)
+                return True
+            if event.type == pygame.KEYDOWN:
+                mods = getattr(event, "mod", 0)
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB):
+                    self._focus_seed(False)
+                elif mods & (pygame.KMOD_CTRL | pygame.KMOD_GUI):
+                    if event.key == pygame.K_a:
+                        self.seed_selected = True
+                    elif event.key == pygame.K_v:
+                        text = paste_text()
+                        if text:
+                            self._edit_seed(text.strip())
+                elif event.key in (pygame.K_BACKSPACE, pygame.K_DELETE):
+                    if self.seed_selected or event.key == pygame.K_DELETE:
+                        self.seed_text = ""
+                    else:
+                        self.seed_text = self.seed_text[:-1]
+                    self.seed_selected = self.seed_error = False
+                return True
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 if self.open_dropdown is not None:
@@ -56,6 +85,7 @@ class MainMenuController:
                     return True
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self._focus_seed(False)
             if self.open_dropdown is not None:
                 for opt_val, opt_rect in self.dropdown_item_rects:
                     if opt_rect.collidepoint(mouse_pos):
@@ -94,6 +124,21 @@ class MainMenuController:
                     return True
 
         return False
+
+    def _focus_seed(self, focused):
+        if self.seed_focused == focused:
+            return
+        self.seed_focused = focused
+        self.seed_selected = False
+        if focused:
+            pygame.key.start_text_input()
+        else:
+            pygame.key.stop_text_input()
+
+    def _edit_seed(self, text):
+        previous = "" if self.seed_selected else self.seed_text
+        self.seed_text = (previous + text)[:32]
+        self.seed_selected = self.seed_error = False
 
     def _trigger_button(self, b_key, prof):
         self.game.sfx.play("ui")
@@ -153,10 +198,23 @@ class MainMenuController:
             if adjs:
                 self.preview_cloak_color = list(random.choice(adjs).get("color", [200, 70, 75]))
 
+        elif b_key == "run_seed":
+            self._focus_seed(True)
+
         elif b_key in ("start_run", "start_jungle"):
+            try:
+                seed = parse_run_seed(self.seed_text)
+            except ValueError:
+                self.seed_error = True
+                self._focus_seed(True)
+                self.seed_selected = True
+                self.game.sfx.play("hurt")
+                return
+            self._focus_seed(False)
             self.can_resume = False
             self.game.in_main_menu = False
-            self.game.reset_run(campaign="jungle" if b_key == "start_jungle" else "rats")
+            self.game.reset_run(campaign="jungle" if b_key == "start_jungle" else "rats", seed=seed)
+            self.seed_text = ""
 
         elif b_key == "resume_run":
             self.can_resume = False
@@ -451,9 +509,28 @@ class MainMenuController:
         screen.blit(r.font_small.render("СЛОЖНОСТЬ ПОХОДА:", True, UI_TEXT_DIM), (diff_box.x + 22, diff_box.y + 16))
         screen.blit(r.font_title.render("Обычная (Стандартный баланс)", True, UI_TEXT_MAIN), (diff_box.x + 22, diff_box.y + 42))
 
-        note_lines = r.wrap_text("При старте похода судьба случайно определит ваш Характер и выкрасит плащ в его цвета!", r.font_ui, camp_rect.width - 56)
+        labels = self.game.loc["run_seed"]
+        seed_rect = pygame.Rect(diff_box.x, diff_box.bottom + 46, diff_box.width, 46)
+        screen.blit(r.font_small.render(labels["label"], True, UI_TEXT_DIM), (seed_rect.x, seed_rect.y - 21))
+        self.btn_rects["run_seed"] = seed_rect
+        hover = self.seed_focused or seed_rect.collidepoint(mouse_pos)
+        seed_border = (210, 105, 90) if self.seed_error else UI_BORDER_GOLD if hover else UI_BORDER_WOOD
+        r.draw_pixel_frame(screen, seed_rect, UI_PANEL_BG, seed_border, hover, 1.0)
+        seed_text = self.seed_text or labels["random"]
+        value = r.font_ui.render(seed_text, True, UI_TEXT_MAIN if self.seed_text else UI_TEXT_DIM)
+        value_rect = value.get_rect(midleft=(seed_rect.x + 16, seed_rect.centery))
+        if self.seed_selected and self.seed_text:
+            pygame.draw.rect(screen, (66, 55, 72), value_rect.inflate(8, 6))
+        screen.blit(value, value_rect)
+        if self.seed_focused and not self.seed_selected and pygame.time.get_ticks() % 1000 < 500:
+            caret_x = value_rect.right + 2 if self.seed_text else value_rect.left
+            pygame.draw.line(screen, UI_BORDER_HIGHLIGHT, (caret_x, seed_rect.y + 9), (caret_x, seed_rect.bottom - 9), 2)
+        if self.seed_error:
+            screen.blit(r.font_small.render(labels["invalid"], True, (245, 145, 125)), (seed_rect.x, seed_rect.bottom + 7))
+
+        note_lines = r.wrap_text("Сид определяет Характер героя и цвет его плаща.", r.font_ui, camp_rect.width - 56)
         for i, ln in enumerate(note_lines):
-            screen.blit(r.font_ui.render(ln, True, UI_TEXT_DIM), (camp_rect.x + 28, diff_box.bottom + 32 + i * 24))
+            screen.blit(r.font_ui.render(ln, True, UI_TEXT_DIM), (camp_rect.x + 28, seed_rect.bottom + 37 + i * 24))
 
         start_btn = pygame.Rect(camp_rect.x + 28, camp_rect.bottom - 104, camp_rect.width - 56, 76)
         self.btn_rects["start_run"] = start_btn

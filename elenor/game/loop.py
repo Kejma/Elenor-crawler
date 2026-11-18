@@ -15,6 +15,14 @@ from elenor.game.targeting import is_cursor_on_mob
 from elenor.minigames.fishing import press_fishing, start_fishing, update_fishing
 from elenor.ui.fishing import draw_fishing
 from elenor.ui.exploration_map import chart_surface, draw_map
+from elenor.ui.clipboard import copy_text
+
+
+def _copy_journal_seed(game):
+    copied = copy_text(str(game.run_seed))
+    game.seed_copy_message = "copied" if copied else "copy_failed"
+    game.seed_copy_until = pygame.time.get_ticks() + 2200
+    game.sfx.play("ui" if copied else "hurt")
 
 
 def main():
@@ -110,6 +118,14 @@ def main():
 
             if hasattr(game, "dev_panel") and game.dev_panel:
                 if game.dev_panel.handle_event(event, game, world_mx, world_my):
+                    continue
+
+            if game.inv_open and game.journal_open and not game.levelup_choices:
+                copy_click = click_world and game.renderer.journal_seed_rect.collidepoint(event.pos)
+                copy_key = (key_down and event.key == pygame.K_c
+                            and getattr(event, "mod", 0) & (pygame.KMOD_CTRL | pygame.KMOD_GUI))
+                if copy_click or copy_key:
+                    _copy_journal_seed(game)
                     continue
 
             if game.campaign == "jungle" and (click_world or press_space):

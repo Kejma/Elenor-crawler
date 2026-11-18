@@ -52,11 +52,12 @@ class InventoryMixin:
         return self.make_item(random.choices(coin_ids, weights=c_weights, k=1)[0])
 
 
-    def roll_item_by_rarity(self, allowed_types=None):
+    def roll_item_by_rarity(self, allowed_types=None, *, luck=None):
         """Rolls an item using Luck-scaled weights; any weapon can roll at any rarity!"""
         tiers = ["common", "uncommon", "rare", "epic", "legendary"]
-        luck_val = getattr(getattr(self, "player", None), "luck", 1)
-        weights = get_rarity_weights(luck_val)
+        if luck is None:
+            luck = getattr(getattr(self, "player", None), "luck", 1)
+        weights = get_rarity_weights(luck)
         chosen_rarity = random.choices(tiers, weights=weights, k=1)[0]
 
         can_drop_weapon = (allowed_types is None or "equipment" in allowed_types)

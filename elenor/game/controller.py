@@ -8,6 +8,7 @@ import pygame
 from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H
 from elenor.audio.synth import SoundSynth
 from elenor.world.dungeon import Dungeon
+from elenor.world.run_seed import derived_seed, generation_random
 from elenor.entities import Player, Enemy, Interactable, FloatingPopup
 from elenor.rendering.renderer import Renderer
 from elenor.tools.dev_panel import DevPanel
@@ -110,8 +111,9 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
                         m.alert_to_combat(self.sfx, self.add_popup)
 
 
-    def reset_run(self, campaign=None):
+    def reset_run(self, campaign=None, *, seed=None):
         self.campaign = campaign or getattr(self, "campaign", "rats")
+        self.run_seed = random.SystemRandom().getrandbits(64) if seed is None else seed
         self.jungle_locations = {}
         self.fishing_catches = {}
         if hasattr(self, "fx") and self.fx:
@@ -121,18 +123,21 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.journal_open = False
         self.journal_scroll = 0
         self.journal_logs = []
+        self.seed_copy_message = ""
+        self.seed_copy_until = 0
         self.important_thought_queue = []
         self.drag_item = None
         self.drag_source = None
         self.levelup_choices = None
 
-        adj_key = random.choice(list(self.loc["adjectives"].keys()))
-        noun_key = random.choice(list(self.loc["nouns"].keys()))
+        hero_rng = random.Random(self._run_generation_seed("hero"))
+        adj_key = hero_rng.choice(sorted(self.loc["adjectives"]))
+        noun_key = hero_rng.choice(sorted(self.loc["nouns"]))
         adj_data = self.loc["adjectives"][adj_key]
         noun_data = self.loc["nouns"][noun_key]
 
-        variant = random.randrange(6) if self.campaign == "jungle" else 0
-        self.dungeon.generate(floor_num=1, campaign=self.campaign, route_variant=variant)
+        variant = self._run_generation_seed("routes") % 6 if self.campaign == "jungle" else 0
+        self._generate_run_floor(1, variant=variant)
         if self.campaign == "jungle":
             start_x, start_y = self.dungeon.start_pos
         else:
@@ -165,6 +170,13 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.set_thought(intro_text, important=True)
         self.sfx.play("ui")
 
+    def _run_generation_seed(self, phase, depth=0, interior=None):
+        seed = getattr(self, "run_seed", None)
+        return derived_seed(seed, self.campaign, phase, depth, interior) if seed is not None else None
+
+    def _generate_run_floor(self, depth, interior=None, *, variant=0):
+        with generation_random(self._run_generation_seed("layout", depth, interior)):
+            self.dungeon.generate(depth, campaign=self.campaign, interior=interior, route_variant=variant)
 
     def travel_jungle(self, action):
         from elenor.world.jungle_routes import route_kind
@@ -195,8 +207,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             self.dungeon = cached[0]
         else:
             self.dungeon = Dungeon(puzzle_chance=current.puzzle_chance)
-            self.dungeon.generate(destination[0], campaign="jungle", interior=destination[1],
-                                  route_variant=current.jungle_route_variant)
+            self._generate_run_floor(*destination, variant=current.jungle_route_variant)
         xy = next(pos for pos, passage in self.dungeon.passages.items() if passage == arrival)
         self.player.x, self.player.y = xy[0]+0.5, xy[1]+0.5
         self.player.pending_action = None
@@ -215,7 +226,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             self.fx.disco_active = False
         self.sfx.stop_disco_track()
         next_fl = self.dungeon.floor_num + 1
-        self.dungeon.generate(floor_num=next_fl, campaign=self.campaign)
+        self._generate_run_floor(next_fl)
         sx, sy = getattr(self.dungeon, "start_pos", self.dungeon.rooms[0].center)
         self.player.x, self.player.y = float(sx) + 0.5, float(sy) + 0.5
         self._populate_floor(floor_num=next_fl)
@@ -250,11 +261,14 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
 
         if cached:
             _, self.objects, self.mirror_puzzles, self.seen_entities, self.mobs = cached
-        elif self.campaign == "jungle":
-            from elenor.missions.jungle import populate_jungle_floor
-            populate_jungle_floor(self, Interactable)
         else:
-            populate_mission_floor(self, floor_num, Enemy, Interactable)
+            seed = self._run_generation_seed("population", floor_num, self.dungeon.interior)
+            with generation_random(seed):
+                if self.campaign == "jungle":
+                    from elenor.missions.jungle import populate_jungle_floor
+                    populate_jungle_floor(self, Interactable)
+                else:
+                    populate_mission_floor(self, floor_num, Enemy, Interactable)
 
         from elenor.puzzles.optics import MIRROR_SOLID_KINDS
         from elenor.entities import SOLID_INTERACTABLE_KINDS

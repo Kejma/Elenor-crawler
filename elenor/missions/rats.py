@@ -143,7 +143,7 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
                 elif idx % 6 == 3:
                     game.objects.append(InteractableCls(rx, ry, "chest"))
                 elif random.random() < 0.16:
-                    game.objects.append(InteractableCls(rx, ry, "loot", game.roll_item_by_rarity()))
+                    game.objects.append(InteractableCls(rx, ry, "loot", game.roll_item_by_rarity(luck=1)))
             elif floor_num == 3:
                 if idx % 5 == 0:
                     game.objects.append(InteractableCls(rx, ry, "chest"))
@@ -156,7 +156,7 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
                 elif idx % 3 == 1:
                     game.objects.append(InteractableCls(rx, ry, "barrel"))
                 elif random.random() < 0.16:
-                    game.objects.append(InteractableCls(rx, ry, "loot", game.roll_item_by_rarity()))
+                    game.objects.append(InteractableCls(rx, ry, "loot", game.roll_item_by_rarity(luck=1)))
             else:
                 if idx % 5 == 0:
                     game.objects.append(InteractableCls(rx, ry, "idol"))
@@ -167,7 +167,7 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
                 elif idx % 4 == 1:
                     game.objects.append(InteractableCls(rx, ry, "barrel"))
                 elif random.random() < 0.18:
-                    game.objects.append(InteractableCls(rx, ry, "loot", game.roll_item_by_rarity()))
+                    game.objects.append(InteractableCls(rx, ry, "loot", game.roll_item_by_rarity(luck=1)))
 
         if idx % 3 == 1 and floor_num in (2, 3, 4):
             tx, ty = room.left + 1, room.bottom - 2

@@ -427,8 +427,23 @@ class UIRendererMixin:
         cnt_s = self.font_small.render(f"Записей: {len(filtered_logs)} / {len(logs)}", True, UI_TEXT_DIM)
         screen.blit(cnt_s, (wx + win_w - cnt_s.get_width() - 28, fy_cur + 8))
 
+        game = ui_texts.get("_game_ref")
+        list_top = wy + 90
+        if game is not None:
+            labels = game.loc["run_seed"]
+            rect = pygame.Rect(wx + win_w - 216, list_top, 190, 32)
+            self.journal_seed_rect = rect
+            hover = rect.collidepoint(hover_pos)
+            self.draw_pixel_frame(screen, rect, UI_SLOT_BG, UI_BORDER_GOLD, hover, 1.0)
+            message = game.seed_copy_message if pygame.time.get_ticks() < game.seed_copy_until else "copy"
+            text = self.font_small.render(labels[message], True, UI_TEXT_MAIN)
+            screen.blit(text, text.get_rect(center=rect.center))
+            seed = self.font_ui.render(f'{labels["label"]}  {game.run_seed}', True, UI_TEXT_DIM)
+            screen.blit(seed, seed.get_rect(midleft=(wx + 24, rect.centery)))
+            list_top = rect.bottom + 8
+
         # Основное поле списка записей
-        box_rect = pygame.Rect(wx + 20, wy + 90, win_w - 40, win_h - 130)
+        box_rect = pygame.Rect(wx + 20, list_top, win_w - 40, wy + win_h - 40 - list_top)
         self.draw_pixel_frame(screen, box_rect, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
 
         tag_map = {

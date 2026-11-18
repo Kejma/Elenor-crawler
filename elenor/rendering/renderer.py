@@ -68,6 +68,7 @@ class Renderer(UIRendererMixin):
         self.perk_card_rects = []
         self.modal_rect = pygame.Rect(0, 0, 0, 0)
         self.journal_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self.journal_seed_rect = pygame.Rect(0, 0, 0, 0)
         self.journal_filter_rects = {}
 
     def get_hero_pair(self, player):
