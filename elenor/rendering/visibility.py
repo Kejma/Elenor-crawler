@@ -48,3 +48,21 @@ def mask_overlay(surface, visibility, cache):
     del alpha
     pygame.transform.scale(native, surface.get_size(), scaled)
     surface.blit(scaled, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+
+def visible_lit_tiles(lit_surface, fov_mask, visible_tiles, cam_x, cam_y):
+    """Use the lit scene before overlays, with a few samples inside each tile."""
+    if not visible_tiles:
+        return []
+    tiles = np.array(list(visible_tiles), dtype=np.int32)
+    offsets = np.array((-4, 0, 4))
+    xs = tiles[:, 0, None, None] * TILE_W + TILE_W // 2 - round(cam_x) + offsets[None, :, None]
+    ys = tiles[:, 1, None, None] * TILE_H + TILE_H // 2 - round(cam_y) + offsets[None, None, :]
+    on_screen = (0 <= xs) & (xs < VIEW_W) & (0 <= ys) & (ys < VIEW_H)
+    xs = xs.clip(0, VIEW_W - 1)
+    ys = ys.clip(0, VIEW_H - 1)
+    pixels = pygame.surfarray.pixels3d(lit_surface)
+    light = pixels[xs, ys].sum(axis=-1)
+    del pixels
+    readable = on_screen & (fov_mask[xs, ys] > 0.5) & (light >= 39)
+    return [tuple(tile) for tile in tiles[readable.sum(axis=(1, 2)) >= 2].tolist()]

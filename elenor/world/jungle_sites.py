@@ -558,6 +558,7 @@ def village(plan, center, facing):
         build_house(plan, *lot)
     fire = yards[0]
     plan.prop(fire, "campfire", on_route=True)
+    plan.d.map_landmarks[fire] = "village"
     plan.lamp(fire, 138)
     for index, kind in enumerate(("tribal_totem", "tribal_drum", "fish_drying_rack")):
         yard = yards[index % len(yards)]
