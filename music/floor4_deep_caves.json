@@ -1,0 +1,6865 @@
+{
+  "bpm": 64.0,
+  "synth_params": {
+    "rock_kick": {
+      "drive": 0.45,
+      "cutoff": 0.6,
+      "punch": 0.8,
+      "detune": 0.1,
+      "decay": 0.45,
+      "fifth": 0.0
+    },
+    "rock_snare": {
+      "drive": 0.4,
+      "cutoff": 0.75,
+      "punch": 0.75,
+      "detune": 0.2,
+      "decay": 0.45,
+      "fifth": 0.0
+    },
+    "hihat": {
+      "drive": 0.25,
+      "cutoff": 0.9,
+      "punch": 0.7,
+      "detune": 0.4,
+      "decay": 0.22,
+      "fifth": 0.0
+    },
+    "crash": {
+      "drive": 0.12,
+      "cutoff": 0.25,
+      "punch": 0.35,
+      "detune": 0.2,
+      "decay": 0.65,
+      "fifth": 0.0
+    },
+    "war_drum": {
+      "drive": 0.35,
+      "cutoff": 0.48,
+      "punch": 0.82,
+      "detune": 0.25,
+      "decay": 0.65,
+      "fifth": 0.0
+    },
+    "tambourine": {
+      "drive": 0.05,
+      "cutoff": 0.45,
+      "punch": 0.2,
+      "detune": 0.6,
+      "decay": 0.22,
+      "fifth": 0.0
+    },
+    "acoustic_steel": {
+      "drive": 0.18,
+      "cutoff": 0.82,
+      "punch": 0.8,
+      "detune": 0.28,
+      "decay": 0.72,
+      "fifth": 0.2
+    },
+    "acoustic_nylon": {
+      "drive": 0.05,
+      "cutoff": 0.42,
+      "punch": 0.4,
+      "detune": 0.18,
+      "decay": 0.7,
+      "fifth": 0.0
+    },
+    "bard_lute": {
+      "drive": 0.22,
+      "cutoff": 0.76,
+      "punch": 0.85,
+      "detune": 0.38,
+      "decay": 0.58,
+      "fifth": 0.45
+    },
+    "celtic_harp": {
+      "drive": 0.02,
+      "cutoff": 0.92,
+      "punch": 0.65,
+      "detune": 0.12,
+      "decay": 0.72,
+      "fifth": 0.0
+    },
+    "hurdy_gurdy": {
+      "drive": 0.52,
+      "cutoff": 0.68,
+      "punch": 0.8,
+      "detune": 0.48,
+      "decay": 0.85,
+      "fifth": 0.75
+    },
+    "bagpipes": {
+      "drive": 0.58,
+      "cutoff": 0.74,
+      "punch": 0.7,
+      "detune": 0.42,
+      "decay": 0.92,
+      "fifth": 0.8
+    },
+    "wood_flute": {
+      "drive": 0.04,
+      "cutoff": 0.28,
+      "punch": 0.88,
+      "detune": 0.45,
+      "decay": 0.6,
+      "fifth": 0.0
+    },
+    "war_horn": {
+      "drive": 0.1,
+      "cutoff": 0.16,
+      "punch": 0.05,
+      "detune": 0.25,
+      "decay": 0.96,
+      "fifth": 0.2
+    },
+    "chapel_bell": {
+      "drive": 0.05,
+      "cutoff": 0.88,
+      "punch": 0.5,
+      "detune": 0.35,
+      "decay": 0.86,
+      "fifth": 0.1
+    },
+    "slap_bass": {
+      "drive": 0.55,
+      "cutoff": 0.65,
+      "punch": 0.85,
+      "detune": 0.2,
+      "decay": 0.6,
+      "fifth": 0.0
+    },
+    "dist_guitar": {
+      "drive": 0.82,
+      "cutoff": 0.62,
+      "punch": 0.75,
+      "detune": 0.45,
+      "decay": 0.85,
+      "fifth": 0.75
+    },
+    "screamer_lead": {
+      "drive": 0.75,
+      "cutoff": 0.78,
+      "punch": 0.65,
+      "detune": 0.55,
+      "decay": 0.9,
+      "fifth": 0.25
+    },
+    "grunge_organ": {
+      "drive": 0.06,
+      "cutoff": 0.24,
+      "punch": 0.05,
+      "detune": 0.4,
+      "decay": 0.92,
+      "fifth": 0.15
+    }
+  },
+  "patterns": [
+    {
+      "name": "П1: Гул Сводов",
+      "steps": 16,
+      "channels": [
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.34,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A4",
+              "v": 0.6,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D5",
+              "v": 0.35,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "chapel_bell",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.28,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "war_horn",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.55,
+              "l": 16,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "grunge_organ",
+          "mute": false,
+          "solo": false,
+          "volume": 0.2,
+          "steps": [
+            {
+              "a": true,
+              "n": "D3",
+              "v": 0.45,
+              "l": 16,
+              "s": false,
+              "ex": {
+                "A3": 16
+              }
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "acoustic_nylon",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.14,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "П2: Капли Воды А",
+      "steps": 16,
+      "channels": [
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.34,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D5",
+              "v": 0.68,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D5",
+              "v": 0.28,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A4",
+              "v": 0.58,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "chapel_bell",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "F5",
+              "v": 0.42,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.28,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "war_horn",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "grunge_organ",
+          "mute": false,
+          "solo": false,
+          "volume": 0.2,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "acoustic_nylon",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.14,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "П3: Капли Воды Б",
+      "steps": 16,
+      "channels": [
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.34,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "E5",
+              "v": 0.52,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A4",
+              "v": 0.62,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A4",
+              "v": 0.25,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "chapel_bell",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D5",
+              "v": 0.45,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.28,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "war_horn",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "grunge_organ",
+          "mute": false,
+          "solo": false,
+          "volume": 0.2,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "acoustic_nylon",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D4",
+              "v": 0.48,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.14,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "П4: Сквозняк Пещер",
+      "steps": 16,
+      "channels": [
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.34,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "chapel_bell",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.28,
+          "steps": [
+            {
+              "a": true,
+              "n": "D3",
+              "v": 0.58,
+              "l": 6,
+              "s": true,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "C3",
+              "v": 0.42,
+              "l": 4,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "war_horn",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "grunge_organ",
+          "mute": false,
+          "solo": false,
+          "volume": 0.2,
+          "steps": [
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.42,
+              "l": 12,
+              "s": false,
+              "ex": {
+                "E3": 12
+              }
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "acoustic_nylon",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.14,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "П5: Осыпь Камней",
+      "steps": 16,
+      "channels": [
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.34,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "chapel_bell",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.28,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "war_horn",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "grunge_organ",
+          "mute": false,
+          "solo": false,
+          "volume": 0.2,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "C2",
+              "v": 0.6,
+              "l": 2,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "D2",
+              "v": 0.32,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "acoustic_nylon",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A3",
+              "v": 0.45,
+              "l": 3,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.14,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A4",
+              "v": 0.45,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "П6: Пустота",
+      "steps": 16,
+      "channels": [
+        {
+          "inst_id": "celtic_harp",
+          "mute": false,
+          "solo": false,
+          "volume": 0.34,
+          "steps": [
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "chapel_bell",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": true,
+              "n": "A4",
+              "v": 0.38,
+              "l": 4,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "wood_flute",
+          "mute": false,
+          "solo": false,
+          "volume": 0.28,
+          "steps": [
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "war_horn",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": true,
+              "n": "A2",
+              "v": 0.42,
+              "l": 12,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D2",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "grunge_organ",
+          "mute": false,
+          "solo": false,
+          "volume": 0.2,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "crash",
+          "mute": false,
+          "solo": false,
+          "volume": 0.22,
+          "steps": [
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "C4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "acoustic_nylon",
+          "mute": false,
+          "solo": false,
+          "volume": 0.26,
+          "steps": [
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "D3",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        },
+        {
+          "inst_id": "tambourine",
+          "mute": false,
+          "solo": false,
+          "volume": 0.14,
+          "steps": [
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            },
+            {
+              "a": false,
+              "n": "A4",
+              "v": 0.85,
+              "l": 1,
+              "s": false,
+              "ex": {}
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "playlist_tracks": [
+    [
+      0,
+      5,
+      0,
+      5,
+      0,
+      5,
+      0,
+      5,
+      0,
+      5,
+      0,
+      5,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      1,
+      null,
+      2,
+      1,
+      null,
+      2,
+      1,
+      null,
+      2,
+      null,
+      1,
+      2,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      3,
+      null,
+      null,
+      4,
+      null,
+      null,
+      3,
+      null,
+      4,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ]
+}
