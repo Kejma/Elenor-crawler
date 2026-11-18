@@ -11,10 +11,11 @@ from elenor.minigames.fishing import (
     update_fishing,
 )
 from test_mirror_puzzles import HeadlessGame, Interactable
-from elenor.config import DEEP_WATER, PIER, SHALLOW_WATER
+from elenor.config import DEEP_WATER, SHALLOW_WATER
 from elenor.missions.jungle import populate_jungle_floor
 from elenor.rendering.fishing import FISH_CATALOG_SPECS
 from elenor.world.dungeon import Dungeon
+from elenor.world.jungle_sites import CARDINAL, offset
 from elenor.puzzles.mirrors import reachable_floor_tiles
 
 
@@ -71,6 +72,17 @@ class FishingTests(unittest.TestCase):
         ]
         self.assertCountEqual(ids, FISH_CATALOG_SPECS.keys())
 
+    def _cast_direction(self, dungeon, point):
+        for direction in CARDINAL:
+            x, y = offset(point, direction)
+            dx, dy = offset(point, direction, 3)
+            if (
+                dungeon.grid[y][x] == SHALLOW_WATER
+                and dungeon.grid[dy][dx] == DEEP_WATER
+            ):
+                return direction
+        self.fail(f"No shallow-to-deep approach at {point}")
+
     def test_shallow_and_deep_casts_stay_in_water_until_landed(self):
         for seed in range(12):
             random.seed(seed)
@@ -79,13 +91,13 @@ class FishingTests(unittest.TestCase):
             reachable = reachable_floor_tiles(dungeon, dungeon.start_pos)
             for (x, y), spot in dungeon.fishing_edges.items():
                 self.assertIn((x, y), reachable)
-                direct = 1 if dungeon.grid[y - 1][x] == PIER else -1
+                dx, dy = self._cast_direction(dungeon, (x, y))
                 origin = (x + 0.5, y + 0.5)
                 for distance, tile in ((1, SHALLOW_WATER), (3, DEEP_WATER)):
-                    aim = (origin[0], origin[1] + distance * direct)
-                    self.assertEqual(dungeon.grid[int(aim[1])][x], tile)
+                    aim = (origin[0] + distance * dx, origin[1] + distance * dy)
+                    self.assertEqual(dungeon.grid[int(aim[1])][int(aim[0])], tile)
                     self.assertIsNone(
-                        cast_route(dungeon, (origin[0], origin[1] - direct), aim)
+                        cast_route(dungeon, (origin[0] + dx, origin[1] + dy), aim)
                     )
                     selected, end = cast_route(dungeon, origin, aim)
                     self.assertEqual(selected, spot)
@@ -104,15 +116,16 @@ class FishingTests(unittest.TestCase):
         dungeon.generate(campaign="jungle")
         game = HeadlessGame(dungeon)
         x, y = next(iter(dungeon.fishing_edges))
-        dy = 1 if dungeon.grid[y - 1][x] == PIER else -1
+        dx, dy = self._cast_direction(dungeon, (x, y))
         game.player.x, game.player.y = x + 0.5, y + 0.5
         for _ in range(80):
-            game.player.move_realtime(0, dy, 0.05, dungeon)
-        self.assertNotEqual(int(game.player.y), y)
-        self.assertEqual(dungeon.grid[int(game.player.y)][x], SHALLOW_WATER)
-        deep_y = int(game.player.y) + dy
-        self.assertTrue(dungeon.is_blocking_move(x, deep_y))
-        self.assertFalse(dungeon.is_blocking_sight(x, deep_y))
+            game.player.move_realtime(dx, dy, 0.05, dungeon)
+        wx, wy = int(game.player.x), int(game.player.y)
+        self.assertNotEqual((wx, wy), (x, y))
+        self.assertEqual(dungeon.grid[wy][wx], SHALLOW_WATER)
+        deep_x, deep_y = wx + dx, wy + dy
+        self.assertTrue(dungeon.is_blocking_move(deep_x, deep_y))
+        self.assertFalse(dungeon.is_blocking_sight(deep_x, deep_y))
 
     def test_jungle_landmarks_and_optional_vault(self):
         for seed in range(24):
@@ -173,6 +186,34 @@ class FishingTests(unittest.TestCase):
         self.assertEqual(game.dungeon.floor_num, 2)
         game.travel_jungle("back")
         self.assertIs(game.dungeon, dungeon)
+
+    def test_underground_vault_does_not_gate_the_return_or_main_treasure(self):
+        for interior in ("temple", "cave"):
+            with self.subTest(interior=interior):
+                random.seed(35)
+                dungeon = Dungeon(puzzle_chance=1)
+                dungeon.generate(2, campaign="jungle", interior=interior)
+                game = HeadlessGame(dungeon)
+                game.campaign = "jungle"
+                game._populate_floor(2)
+                seen = reachable_floor_tiles(dungeon, dungeon.start_pos)
+                self.assertTrue(dungeon.passages.keys() <= seen)
+                self.assertTrue(
+                    any(
+                        (obj.x, obj.y) in seen
+                        for obj in game.objects
+                        if obj.kind == "chest"
+                    )
+                )
+                info = dungeon.mirror_puzzle_info
+                self.assertIsNotNone(info)
+                self.assertIn(info["entry_door"], seen)
+                self.assertNotIn(info["sealed_rect"].center, seen)
+                dungeon.doors[info["gate_door"]].is_open = True
+                self.assertIn(
+                    info["sealed_rect"].center,
+                    reachable_floor_tiles(dungeon, dungeon.start_pos),
+                )
 
     def test_touching_jungle_trees_occlude_the_view(self):
         random.seed(12)
