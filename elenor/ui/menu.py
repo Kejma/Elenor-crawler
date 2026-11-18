@@ -1,6 +1,6 @@
 import random
 import pygame
-from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
+from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, COIN_TEXT_COLOR
 from elenor.rendering.normals import LiveLightPreview
 
 
@@ -321,9 +321,9 @@ class MainMenuController:
         screen.blit(b_lbl, (bank_rect.centerx - b_lbl.get_width() // 2, bank_rect.y + 16))
         cp_val = prof.get("bank_copper", 0)
         cp_str = format_copper_Trigger(cp_val)
-        cp_s = r.font_ui.render(cp_str, True, (255, 215, 80))
+        cp_s = r.font_ui.render(cp_str, True, COIN_TEXT_COLOR)
         screen.blit(cp_s, (bank_rect.centerx - cp_s.get_width() // 2, bank_rect.y + 44))
-        raw_s = r.font_small.render(f"(Всего: {cp_val} медяков)", True, UI_TEXT_DIM)
+        raw_s = r.font_small.render(f"(Всего: {cp_val} медяков)", True, COIN_TEXT_COLOR)
         screen.blit(raw_s, (bank_rect.centerx - raw_s.get_width() // 2, bank_rect.y + 72))
 
         # 2. ПРАВАЯ РЕЗИНОВАЯ ОБЛАСТЬ С ЛИСТАЮЩИМИСЯ ОКНАМИ

@@ -114,10 +114,7 @@ def execute_physical(game, item, power, tx, ty, credit):
             mob.state = "patrolling"
             mob.awareness = 0
             mob.path = []
-        state.update(timer=item.duration, max_timer=item.duration)
-        _spawn_particles(
-            game, p.x, p.y - 0.2, 14, [(75, 95, 155), (110, 165, 215), (45, 50, 85)], (0.6, 2.0), 2.8, 0.38, 0.0, -0.6
-        )
+        return
     elif shape in ("evade", "charge"):
         state.update(
             timer=0.22,
@@ -196,7 +193,6 @@ def execute_physical(game, item, power, tx, ty, credit):
             multiplier = 1.5 if shape == "execute" and mob.hp / mob.max_hp < 0.35 else 1
             hit(game, mob, item, power * multiplier, credit, nx, ny)
     effects(game).append(state)
-    game.sfx.play("step" if shape in ("stealth", "trap", "evade") else "skill_windup")
 
 
 def burst(game, state):
@@ -225,7 +221,7 @@ def burst(game, state):
         size=2.7,
         life=0.34,
     )
-    game.sfx.play("hit")
+    game.play_spatial("ability_flask_break", state["x"], state["y"])
 
 
 def update_physical(game, dt):
@@ -316,7 +312,7 @@ def update_physical(game, dt):
                         game, state["x"], state["y"], 12, [(220, 230, 245), (95, 240, 135), (235, 70, 70)], (1.2, 3.0), 2.6, 0.28
                     )
                     hit(game, target, item, state["power"], state["credit"], 0, 0)
-                    game.play_spatial("hit", state["x"], state["y"])
+                    game.play_spatial("ability_trap_snap", state["x"], state["y"])
                     state.update(kind="trap_snap", timer=.24, max_timer=.24)
         if state["timer"] <= 0:
             effects(game).remove(state)

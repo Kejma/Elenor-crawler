@@ -4,7 +4,7 @@ import pygame
 from elenor.data.abilities import (
     PASSIVES, PASSIVE_SLOT_LIMIT, VECTOR_COLORS, acquisition_bonuses, passive_power_at, perk_branch,
 )
-from elenor.config import VIEW_H, SCALE, SCREEN_W, SCREEN_H, TILE_W, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, RARITY_COLORS
+from elenor.config import VIEW_H, SCALE, SCREEN_W, SCREEN_H, TILE_W, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, RARITY_COLORS, COIN_TEXT_COLOR
 from elenor.entities.objects import JUNGLE_KEY_COLORS
 
 
@@ -577,9 +577,11 @@ class UIRendererMixin:
         raw_lines = []
         max_w = 276  # Гарантированный отступ внутри карточки шириной 308 px
 
+        is_coin = item.type == "currency_coin"
+
         def add_wrapped(text, color):
             for ln in self.wrap_text(str(text), self.font_small, max_w):
-                raw_lines.append((ln, color))
+                raw_lines.append((ln, COIN_TEXT_COLOR if is_coin else color))
 
         if item.type not in ("permanent_spell", "combat_skill", "spell"):
             rarity_title = ui_texts["rarities"].get(item.rarity, item.rarity)
@@ -697,10 +699,13 @@ class UIRendererMixin:
 
         card_w = 308
         card_h = 48 + len(main_lines) * 19
-
+        comp_lines = self._build_item_stat_lines(player, comp_item, ui_texts) if comp_item else []
+        comp_height = 48 + len(comp_lines) * 19 if comp_item else 0
         if world_item:
-            tx, ty = 16, 16
+            tx = 16
+            ty = max(16, VIEW_H * SCALE - 16 - card_h)
             cx = tx + card_w + 8
+            comp_y = max(16, VIEW_H * SCALE - 16 - comp_height)
         else:
             ty = max(16, min(SCREEN_H - card_h - 16, mouse_pos[1] - card_h // 2))
             total_w = card_w * 2 + 8 if comp_item else card_w
@@ -710,18 +715,23 @@ class UIRendererMixin:
             else:
                 tx = mouse_pos[0] + 18
                 cx = tx + card_w + 8
+            comp_y = ty
 
+        if world_item:
+            old_clip = screen.get_clip()
+            screen.set_clip(old_clip.clip((0, 0, SCREEN_W, VIEW_H * SCALE)))
         color = (VECTOR_COLORS.get(item.branch, UI_BORDER_WOOD)
                  if item.type in ("permanent_spell", "combat_skill", "spell") else item.rarity_color)
         self.draw_pixel_frame(screen, (tx, ty, card_w, card_h), (20, 17, 26), color, False, 1.0)
-        screen.blit(self.font_ui.render(item.name, True, color), (tx + 14, ty + 12))
+        title_color = COIN_TEXT_COLOR if item.type == "currency_coin" else color
+        screen.blit(self.font_ui.render(item.name, True, title_color), (tx + 14, ty + 12))
         for i, (txt, col) in enumerate(main_lines):
             screen.blit(self.font_small.render(txt, True, col), (tx + 14, ty + 36 + i * 19))
 
         if comp_item:
-            comp_lines = self._build_item_stat_lines(player, comp_item, ui_texts, None)
-            ch = 48 + len(comp_lines) * 19
-            self.draw_pixel_frame(screen, (cx, ty, card_w, ch), (18, 15, 22), comp_item.rarity_color, False, 1.0)
-            screen.blit(self.font_ui.render(f"[Надето] {comp_item.name}", True, comp_item.rarity_color), (cx + 14, ty + 12))
+            self.draw_pixel_frame(screen, (cx, comp_y, card_w, comp_height), (18, 15, 22), comp_item.rarity_color, False, 1.0)
+            screen.blit(self.font_ui.render(f"[Надето] {comp_item.name}", True, comp_item.rarity_color), (cx + 14, comp_y + 12))
             for i, (txt, col) in enumerate(comp_lines):
-                screen.blit(self.font_small.render(txt, True, col), (cx + 14, ty + 36 + i * 19))
+                screen.blit(self.font_small.render(txt, True, col), (cx + 14, comp_y + 36 + i * 19))
+        if world_item:
+            screen.set_clip(old_clip)

@@ -3,7 +3,8 @@ import random
 
 from elenor.entities import Enemy, Interactable, Projectile, Particle
 from elenor.entities.objects import JUNGLE_CHESTS, JUNGLE_KEY_COLORS, JUNGLE_VASES
-from elenor.config import COMBAT_INPUT_WINDOW
+from elenor.config import COIN_TEXT_COLOR, COMBAT_INPUT_WINDOW
+from elenor.audio.abilities import ability_sound
 from elenor.data.abilities import PASSIVES, spell_school
 from elenor.missions.rats import get_mission_texts, handle_mission_object_interaction
 from elenor.profile import save_profile
@@ -371,7 +372,7 @@ class CombatMixin:
                 self.play_spatial("crit", ox_c, oy_c)
                 self.emit_noise(ox_c, oy_c, 8.5)
                 self.trigger_event_thought("chest_smash", item=coin_drop.name)
-                self.add_popup(ox_c, oy_c, f"Выпало: {coin_drop.name}", coin_drop.rarity_color)
+                self.add_popup(ox_c, oy_c, f"Выпало: {coin_drop.name}", COIN_TEXT_COLOR)
             else:
                 opened = False
                 self.player.hp = max(1.0, self.player.hp - 2)
@@ -787,8 +788,10 @@ class CombatMixin:
             growth = ("mind", 0.35)
         growth_credit = {"action": growth, "awarded": False, **action}
         c_type = getattr(item, "cast_type", "projectile")
+        release_sound = ability_sound(getattr(item, "id", ""))
         if c_type not in ("targeted", "chain_lightning"):
             self._trigger_spell_passives(item, mana_paid)
+            self.sfx.play(release_sound)
 
         if c_type == "physical":
             self._execute_physical_ability(item, total_pwr, target_wx, target_wy, growth_credit)
@@ -802,7 +805,6 @@ class CombatMixin:
 
         # 1. БОГ ПИРО: Воспламенение (бафф на себя + огненный след + поджог атакующих)
         if c_type == "self_ignite":
-            self.sfx.play("torch")
             if hasattr(self, "fx") and self.fx:
                 self.fx.trigger_shake(1.5, 0.14)
             dur = max(1.5, float(getattr(item, "duration", 5.0)))
@@ -832,7 +834,6 @@ class CombatMixin:
 
         # 2. БОГ СТРАТОС: Кольцо холода (мгновенная ледяная волна вокруг героя, игнорирует мебель, но не стены; root -> slow)
         if c_type == "frost_nova":
-            self.sfx.play("magic")
             if hasattr(self, "fx") and self.fx:
                 self.fx.trigger_shake(1.6, 0.14)
             rad = float(getattr(item, "aoe_radius", 2.4))
@@ -883,7 +884,7 @@ class CombatMixin:
                 return
 
             self._trigger_spell_passives(item, mana_paid)
-            self.sfx.play("crit")
+            self.sfx.play(release_sound)
             if hasattr(self, "fx") and self.fx:
                 self.fx.trigger_shake(1.7, 0.14)
             max_bounces = int(getattr(item, "bounces", 1))
@@ -942,7 +943,6 @@ class CombatMixin:
 
         # 4. БОГ ПЕРСЕФОНА: Омоложение (мгновенный хил + ускоряющаяся регенерация со светлячками)
         if c_type == "self_rejuvenation":
-            self.sfx.play("heal")
             dur = max(1.0, float(getattr(item, "duration", 5.0)))
             instant_heal = max(2, int(math.floor(total_pwr * 0.38)))
             rem_heal = max(2.0, float(total_pwr - instant_heal))
@@ -963,7 +963,6 @@ class CombatMixin:
 
         # 5. БОГ ПЕРСЕФОНА: Опутывание (корни в области курсора, враги стоят, но могут бить/стрелять)
         if c_type == "entangle_cursor":
-            self.sfx.play("magic")
             rad = float(getattr(item, "aoe_radius", 2.1))
             root_d = float(getattr(item, "status_dur", 2.2))
             self.visual_fx.append({
@@ -991,7 +990,6 @@ class CombatMixin:
             return
 
         if c_type == "aoe_self":
-            self.sfx.play("crit")
             self.visual_fx.append({
                 "kind": "whirlwind_slash",
                 "x": px, "y": py, "radius": 2.15,
@@ -1012,7 +1010,6 @@ class CombatMixin:
             return
 
         if c_type == "slam_cone":
-            self.sfx.play("crit")
             dx, dy = target_wx - px, target_wy - (py - 0.2)
             base_a = math.atan2(dy, dx)
             self.visual_fx.append({
@@ -1037,7 +1034,6 @@ class CombatMixin:
             return
 
         if c_type == "beam":
-            self.sfx.play("magic")
             origin_y = py - 0.22
             dx, dy = target_wx - px, target_wy - origin_y
             d = max(0.001, math.hypot(dx, dy))
@@ -1083,7 +1079,7 @@ class CombatMixin:
                 self.add_popup(target_wx, target_wy, "Нет цели!", (195, 195, 210))
                 return
             self._trigger_spell_passives(item, mana_paid)
-            self.sfx.play("magic")
+            self.sfx.play(release_sound)
             target_mob.alert_to_combat(self.sfx, self.add_popup)
             dmg = max(1, int(math.floor(total_pwr - target_mob.mag_def)))
             target_mob.hp -= dmg
@@ -1093,7 +1089,6 @@ class CombatMixin:
             return
 
         if c_type == "aoe_cursor":
-            self.sfx.play("magic")
             rad = item.aoe_radius
             if item.status == "poison" and hasattr(self, "fx") and self.fx:
                 self.fx.add_gas_cloud(target_wx, target_wy, radius=rad + 0.35, duration=max(4.5, item.status_dur + 1.5), kind="poison", dmg=max(2, total_pwr // 3))
@@ -1118,18 +1113,19 @@ class CombatMixin:
             total_pwr, item.color, target_wx, target_wy,
             speed=item.proj_speed, status=item.status, status_dur=item.status_dur, knockback=item.knockback,
             visual_kind="spinning_dagger" if is_dagger else "orb",
-            emits_light=not is_dagger
+            emits_light=not is_dagger, play_sound=False
         )
         projectile.growth_credit = growth_credit
 
 
-    def _fire_spell_bolt(self, mag_dmg, color, target_wx, target_wy, speed=9.2, status=None, status_dur=0.0, knockback=0.0, visual_kind="orb", emits_light=True):
+    def _fire_spell_bolt(self, mag_dmg, color, target_wx, target_wy, speed=9.2, status=None, status_dur=0.0, knockback=0.0, visual_kind="orb", emits_light=True, *, play_sound=True):
         if target_wx is None or target_wy is None:
             target_wx, target_wy = self.player.x + 1.0, self.player.y
         dx = target_wx - self.player.x
         dy = target_wy - (self.player.y - 0.2)
         d = max(0.001, math.hypot(dx, dy))
-        self.sfx.play("hit" if visual_kind == "spinning_dagger" else "magic")
+        if play_sound:
+            self.sfx.play("hit" if visual_kind == "spinning_dagger" else "magic")
         self.projectiles.append(Projectile(
             self.player.x, self.player.y - 0.2, dx / d, dy / d,
             speed=speed, mag_dmg=mag_dmg, color=color, from_player=True,

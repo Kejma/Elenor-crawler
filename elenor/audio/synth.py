@@ -4,6 +4,7 @@ import pygame
 import math
 
 
+from elenor.audio.abilities import ability_waves
 from elenor.audio.voices import enemy_voice_waves
 
 
@@ -27,6 +28,8 @@ class SoundSynth:
             self.disco_cur_muff = [0.0, 0.0]
             self._build_bank()
             self._build_fishing_bank()
+            for name, wave in ability_waves(self.freq):
+                self._register(name, wave, make_muff=name in ("ability_trap_snap", "ability_flask_break"))
             for name, wave, cutoff in enemy_voice_waves(self.freq):
                 self._register(name, wave, make_muff=True, cutoff=cutoff)
         except Exception:

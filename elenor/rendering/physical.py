@@ -53,6 +53,28 @@ def trap_sprite(armed, sprung=False):
     return sprite
 
 
+@lru_cache(maxsize=3)
+def trap_pair(armed, sprung):
+    diffuse = trap_sprite(armed, sprung)
+    normal = diffuse.copy()
+    rgb = pygame.surfarray.pixels3d(normal)
+    rgb[:] = (128, 128, 255)
+    del rgb
+    return diffuse, normal
+
+
+def render_ground_traps(diffuse_canvas, normal_canvas, states, cam_x, cam_y):
+    for state in states:
+        kind = state["kind"]
+        if kind not in ("trap", "trap_snap"):
+            continue
+        diffuse, normal = trap_pair(state["armed"] <= 0, kind == "trap_snap")
+        center = (round(state["x"] * TILE_W - cam_x), round(state["y"] * TILE_H - cam_y))
+        rect = diffuse.get_rect(center=center)
+        diffuse_canvas.blit(diffuse, rect)
+        normal_canvas.blit(normal, rect)
+
+
 def render_physical(screen, game, cam_x, cam_y, visibility):
     states = getattr(game, "physical_effects", [])
     if not states:
@@ -68,6 +90,8 @@ def render_physical(screen, game, cam_x, cam_y, visibility):
 
     for state in states:
         kind = state["kind"]
+        if kind in ("trap", "trap_snap"):
+            continue
         item = state["item"]
         progress = max(0.0, min(1.0, 1.0 - state["timer"] / max(0.001, state["max_timer"])))
         fade = max(0.15, 1.0 - progress * 0.75)
@@ -76,7 +100,7 @@ def render_physical(screen, game, cam_x, cam_y, visibility):
         angle = math.atan2(ny, nx)
         px_perp, py_perp = -ny, nx
 
-        if kind in ("guard", "stealth", "evade", "charge"):
+        if kind in ("guard", "evade", "charge"):
             x, y = game.player.x, game.player.y
         cx, cy = point(x, y - 0.2)
         foot_cx, foot_cy = point(x, y + 0.05)
@@ -123,9 +147,6 @@ def render_physical(screen, game, cam_x, cam_y, visibility):
             layer.circle((210, 240, 230, 255), (cx, fy), 9, 2)
             layer.rect((165, 115, 65, 255), (cx - 3, fy - 13, 6, 5))
 
-        elif kind in ("trap", "trap_snap"):
-            layer.stamp(trap_sprite(state.get("armed", 0.0) <= 0.0, kind == "trap_snap"), point(x, y))
-
         elif kind == "guard":
             # Железная стойка: руническое кольцо у ног + 3 парящих щита вокруг героя
             pulse = int(math.sin(now_sec * 6.0) * 3)
@@ -146,23 +167,6 @@ def render_physical(screen, game, cam_x, cam_y, visibility):
                 layer.polygon((245, 195, 85, 235), sh_poly, 2)
                 layer.line((255, 245, 200, 210), (sx_sh, sy_sh - 6), (sx_sh, sy_sh + 6), 2)
                 layer.line((255, 245, 200, 210), (sx_sh - 4, sy_sh - 2), (sx_sh + 4, sy_sh - 2), 2)
-
-        elif kind == "stealth":
-            # Уход в тень: кольцо мрака у ног + вращающиеся серпы теневого дыма
-            layer.ellipse((45, 55, 95, 155), (foot_cx - 26, foot_cy - 9, 52, 18), 4)
-            for w_i in range(4):
-                a_w = now_sec * 3.2 + w_i * (math.pi * 0.5)
-                wx_s = cx + int(math.cos(a_w) * 18)
-                wy_s = cy + int(math.sin(a_w * 1.5) * 14) - 4
-                layer.arc(
-                    (95, 135, 195, 165),
-                    (wx_s - 14, wy_s - 14, 28, 28),
-                    a_w,
-                    a_w + 2.1,
-                    4,
-                )
-            # Призрачный контур капюшона над головой
-            layer.arc((140, 210, 235, 145), (cx - 20, cy - 36, 40, 52), 0.35, math.pi - 0.35, 3)
 
         elif kind == "charge":
             # Таран: мощный лобовой клин ударной волны + реактивные шлейфы сзади

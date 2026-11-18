@@ -2,7 +2,7 @@
 
 import pygame
 
-from elenor.config import SCREEN_H, SCREEN_W
+from elenor.config import SCREEN_H, SCREEN_W, THOUGHT_BOX_BG
 
 PAPER = (20, 29, 26)
 INK = (11, 17, 17)
@@ -35,10 +35,10 @@ MARKER_STYLE = {
 }
 
 
-def chart_surface(dungeon, region=None):
+def chart_surface(dungeon, region=None, *, background=INK):
     """One pixel per known tile. The world grid is deliberately absent here."""
     surface = pygame.Surface((dungeon.width, dungeon.height) if region is None else region.size)
-    surface.fill(INK)
+    surface.fill(background)
     if region is None:
         for point, kind in dungeon.explored_tiles.items():
             surface.set_at(point, TERRAIN[kind])
@@ -113,13 +113,13 @@ def draw_marker(screen, kind, point, radius=8):
         pygame.draw.polygon(screen, color, [tip, upper, lower])
 
 
-def draw_map_hud(screen, game):
+def draw_map_hud(screen, game, background=THOUGHT_BOX_BG):
     labels = game.loc["exploration_map"]
     font = game.renderer.font_small
     hint = font.render(labels["hint"], True, TEXT)
     if not game.profile["show_minimap"]:
         rect = hint.get_rect(topleft=(31, 24))
-        pygame.draw.rect(screen, PAPER, rect.inflate(22, 12), border_radius=4)
+        pygame.draw.rect(screen, background, rect.inflate(22, 12), border_radius=4)
         screen.blit(hint, rect)
         return
 
@@ -128,12 +128,12 @@ def draw_map_hud(screen, game):
     region.center = (int(game.player.x), int(game.player.y))
     viewport = pygame.Rect(30, 47, region.width * tile_size, region.height * tile_size)
     panel = pygame.Rect(20, 16, viewport.width + 20, viewport.height + 41)
-    pygame.draw.rect(screen, PAPER, panel, border_radius=5)
+    pygame.draw.rect(screen, background, panel, border_radius=5)
     pygame.draw.rect(screen, BORDER, panel, width=1, border_radius=5)
     screen.blit(hint, hint.get_rect(midleft=(viewport.left, 32)))
     north = font.render(labels["north"], True, DIM)
     screen.blit(north, north.get_rect(midright=(viewport.right, 32)))
-    chart = chart_surface(game.dungeon, region)
+    chart = chart_surface(game.dungeon, region, background=background)
     screen.blit(pygame.transform.scale(chart, viewport.size), viewport)
 
     def pixel(x, y):

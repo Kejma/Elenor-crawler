@@ -1,7 +1,7 @@
 import math
 import random
 
-from elenor.config import get_rarity_weights
+from elenor.config import COIN_TEXT_COLOR, get_rarity_weights
 from elenor.entities import Item, Interactable
 from elenor.profile import save_profile
 from elenor.data.economy import format_copper_Trigger
@@ -194,12 +194,12 @@ class InventoryMixin:
         save_profile(self.profile)
         val_str = format_copper_Trigger(total_cp_earned)
         self.sfx.play("coin_pickup")
-        self.add_log("event", f"Продано самоцветов: {gems_sold} шт. Выручка +{val_str} отправлена в казну!")
+        self.add_log("event", f"Продано самоцветов: {gems_sold} шт. Выручка +{val_str} отправлена в казну!", COIN_TEXT_COLOR)
         line = self.get_event_text("npc_sell_gems", speaker=speaker_name, count=gems_sold, val=val_str)
         obj.speech_text = line
         obj.speech_timer = 5.5
         self.set_thought(line, important=True)
-        self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str} В БАНК!", (255, 225, 80), big=True)
+        self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str} В БАНК!", COIN_TEXT_COLOR, big=True)
         return True
 
 
@@ -234,7 +234,7 @@ class InventoryMixin:
     def _pickup_loot_object(self, obj):
         if obj.item.type == "currency_coin":
             obj.used = True
-            self.add_log("event", f"Подобрано: {obj.item.name}.")
+            self.add_log("event", f"Подобрано: {obj.item.name}.", COIN_TEXT_COLOR)
             cp_gain = obj.item.copper_value
             self.player.gold += cp_gain
             self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + cp_gain
@@ -242,7 +242,7 @@ class InventoryMixin:
             val_str = format_copper_Trigger(cp_gain)
             self.sfx.play("coin_pickup")
             self.trigger_event_thought("pickup_coin", item=obj.item.name.lower(), val=val_str)
-            self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str}", (255, 215, 75))
+            self.add_popup(obj.x + 0.5, obj.y + 0.5, f"+{val_str}", COIN_TEXT_COLOR)
             return True
         if obj.item.type == "quest_key":
             obj.used = self.player.add_item_to_inventory(obj.item)
@@ -356,12 +356,8 @@ class InventoryMixin:
             self.world_active = True
             self.player.cooldowns[item.id] = item.cooldown
 
-            if item.type == "combat_skill":
-                self.sfx.play("skill_windup")
-            else:
-                self.sfx.play("spell_windup")
-
             if item.windup > 0.0:
+                self.sfx.play("ability_prepare")
                 self.player.cast_glow_color = item.color
                 self.player.pending_action = {
                     "kind": "spell",

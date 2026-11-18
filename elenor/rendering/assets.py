@@ -1,7 +1,7 @@
 import math
 import pygame
 import numpy as np
-from elenor.config import VIEW_W, THOUGHT_ZONE_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X
+from elenor.config import VIEW_W, THOUGHT_ZONE_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_BG
 
 
 def make_pair(w, h, opaque=False):
@@ -535,7 +535,7 @@ def create_placeholder_assets():
                 tz_diff.set_at((px, py), col)
                 tz_norm.set_at((px, py), (nx, ny, nz))
             else:
-                tz_diff.set_at((px, py), (18, 16, 24))
+                tz_diff.set_at((px, py), THOUGHT_BOX_BG)
                 tz_norm.set_at((px, py), (128, 128, 250))
     assets["thought_zone"] = (tz_diff, tz_norm)
 

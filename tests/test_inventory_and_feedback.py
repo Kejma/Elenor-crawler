@@ -1,14 +1,16 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pygame
 
 from elenor.audio.voices import VOICES, enemy_voice_waves
+from elenor.config import COIN_TEXT_COLOR, SCREEN_H, SCREEN_W, SCALE, VIEW_H
 from elenor.data.items import BAG_CAPACITIES
 from elenor.entities import Enemy, Interactable
 from elenor.entities.enemies import MOB_PROFILES
 from elenor.rendering.visibility import CanopyVisibility, canopy_opacity
+from elenor.ui.renderer import UIRendererMixin
 from test_mirror_puzzles import HeadlessGame, empty_dungeon
 
 
@@ -18,6 +20,27 @@ class InventoryFeedbackTests(unittest.TestCase):
         dungeon._carve_rect(pygame.Rect(5, 5, 20, 20), 0)
         self.game = HeadlessGame(dungeon)
         self.player = self.game.player
+
+    def test_all_world_coin_cards_are_gold_and_above_the_thought_strip(self):
+        font_was_ready = pygame.font.get_init()
+        pygame.font.init()
+        try:
+            ui = UIRendererMixin()
+            ui.font_ui = ui.font_small = pygame.font.Font(None, 14)
+            ui.draw_pixel_frame = Mock()
+            ui.wrap_text = lambda text, font, width: [text]
+            screen = pygame.Surface((SCREEN_W, SCREEN_H))
+            for denom in ("copper", "silver", "gold", "platinum"):
+                coin = self.game.make_item(f"coin_{denom}")
+                lines = ui._build_item_stat_lines(self.player, coin, self.game.loc["ui"])
+                self.assertEqual({color for _, color in lines}, {COIN_TEXT_COLOR})
+                ui._render_item_tooltip(screen, self.player, coin, self.game.loc["ui"], (800, 200), world_item=True)
+                x, y, _, height = ui.draw_pixel_frame.call_args.args[1]
+                self.assertEqual(x, 16)
+                self.assertEqual(y + height, VIEW_H * SCALE - 16)
+        finally:
+            if not font_was_ready:
+                pygame.font.quit()
 
     def test_bag_slots_stack_and_two_best_bags_maximize_capacity(self):
         capacities = sorted(BAG_CAPACITIES.values())

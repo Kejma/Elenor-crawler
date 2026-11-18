@@ -1,7 +1,7 @@
 import math
 import pygame
 import numpy as np
-from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
+from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, COIN_TEXT_COLOR, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
 from elenor.config import DEEP_WATER, FALLEN_LOG, PEBBLE_SHORE, PIER, SHALLOW_WATER
 from elenor.entities.objects import JUNGLE_KEY_COLORS
 from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
@@ -10,7 +10,8 @@ from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
 from elenor.rendering.lighting import GPULightShader
 from elenor.rendering.pixel_fx import PixelLayer
-from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, canopy_visibility
+from elenor.rendering.physical import render_ground_traps, render_physical
+from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, canopy_visibility, misted_actor
 from elenor.ui.renderer import UIRendererMixin
 
 class Renderer(UIRendererMixin):
@@ -690,6 +691,15 @@ class Renderer(UIRendererMixin):
                 col_r = palette[prog_r >= 0.5]
                 pygame.draw.ellipse(self.diff_canvas, col_r, (rx_s - rad_w, ry_s - rad_h, rad_w * 2, rad_h * 2), 1)
 
+        game_ref = ui_texts.get("_game_ref")
+        physical_states = getattr(game_ref, "physical_effects", ())
+        if physical_states:
+            render_ground_traps(self.diff_canvas, self.norm_canvas, physical_states, cam_x, cam_y)
+
+        hero_pair = self.get_hero_pair(player)
+        misted = player.stealth_timer > 0
+        if misted:
+            hero_pair = (misted_actor(hero_pair[0], now_sec, min(1.0, player.stealth_timer / .24)), hero_pair[1])
         render_list = [{
             "wx": player.x - 0.5 + player.bump_x,
             "wy": player.y - 0.5 + player.bump_y,
@@ -697,8 +707,9 @@ class Renderer(UIRendererMixin):
             "actor_wy": player.y,
             "is_player": True,
             "is_actor": True,
-            "emissive_role": "hero" if player.has_lit_torch else None,
-            "pair": self.get_hero_pair(player),
+            "emissive_role": "hero" if player.has_lit_torch and not misted else None,
+            "pair": hero_pair,
+            "misted": misted,
             "alpha": 255
         }]
 
@@ -794,7 +805,7 @@ class Renderer(UIRendererMixin):
             draw_y = int(round(ent["wy"] * TILE_H - cam_y - (eh - TILE_H)))
             sole_sy = float(draw_y + eh - 2)
             if draw_y + eh > 0 and draw_y < VIEW_H:
-                if use_shadows and ent.get("is_actor", False):
+                if use_shadows and ent.get("is_actor", False) and not ent.get("misted", False):
                     awx = ent.get("actor_wx", ent["wx"] + 0.5)
                     awy = ent.get("actor_wy", ent["wy"] + 0.5)
                     vec_x, vec_y, w_sum = 0.0, 0.0, 0.0
@@ -853,6 +864,9 @@ class Renderer(UIRendererMixin):
                         np.copyto(view, view * (1.0 - strength) + coverage * strength, where=alpha)
                     continue
 
+                if ent.get("misted", False):
+                    self.diff_canvas.blit(d_surf, (draw_x, draw_y))
+                    continue
                 if ent["alpha"] < 255:
                     d_tmp = d_surf.copy()
                     d_tmp.set_alpha(ent["alpha"])
@@ -888,7 +902,6 @@ class Renderer(UIRendererMixin):
                             mask_slice = a_mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
                             np.copyto(self.entity_y_canvas[cx0:cx1, cy0:cy1], sole_sy, where=mask_slice)
 
-        game_ref = ui_texts.get("_game_ref")
         cast = getattr(game_ref, "fishing_cast", None)
         if cast is not None:
             from elenor.rendering.fishing_cast import draw_fishing_cast
@@ -1046,10 +1059,9 @@ class Renderer(UIRendererMixin):
             visibility = overlay_visibility(fov_mask, lights, cam_x, cam_y)
             render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, visibility)
 
-        if game_ref is not None and getattr(game_ref, "physical_effects", None):
-            from elenor.rendering.physical import render_physical
+        if any(state["kind"] not in ("trap", "trap_snap") for state in physical_states):
             from elenor.rendering.visibility import overlay_visibility
-            render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask,lights,cam_x,cam_y))
+            render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask, lights, cam_x, cam_y))
 
         windups = [
             mob for mob in mobs
@@ -1647,7 +1659,7 @@ class Renderer(UIRendererMixin):
         t_str = "[T] ВКЛ" if (torch and player.torch_on) else "[T] ТЕНЬ"
         t_col = (255, 200, 75) if (torch and player.torch_on) else (130, 175, 235)
         screen.blit(self.font_small.render(t_str, True, t_col), (270, hud_y + 29))
-        coin_s = self.font_small.render(format_copper_Trigger(player.gold, compact=True), True, (255, 215, 80))
+        coin_s = self.font_small.render(format_copper_Trigger(player.gold, compact=True), True, COIN_TEXT_COLOR)
         screen.blit(coin_s, (262 + (88 - coin_s.get_width()) // 2, hud_y + 51))
 
         # Active slots Q/E/R/F.
@@ -1753,7 +1765,8 @@ class Renderer(UIRendererMixin):
         world_hover_item = ui_texts.get("_world_hover_item")
         if ui_texts.get("_show_map_hud"):
             from elenor.ui.exploration_map import draw_map_hud
-            draw_map_hud(screen, ui_texts["_game_ref"])
+            thought_bg = lit_surf.get_at((THOUGHT_BOX_X + 8, THOUGHT_BOX_Y + 8))[:3]
+            draw_map_hud(screen, ui_texts["_game_ref"], thought_bg)
         if levelup_choices:
             self._render_levelup_modal(screen, player, levelup_choices, ui_texts, hover_pos)
         elif inv_open:

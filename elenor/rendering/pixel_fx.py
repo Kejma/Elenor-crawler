@@ -66,9 +66,6 @@ class PixelLayer:
     def rect(self, color, box):
         self.mark(pygame.draw.rect(self.surface, color, _bounds(box)))
 
-    def stamp(self, sprite, center):
-        self.mark(self.surface.blit(sprite, sprite.get_rect(center=_pixel(center))))
-
     def flush(self, screen, visibility=None):
         rect = self.dirty
         if not rect.width:

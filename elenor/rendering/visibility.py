@@ -75,6 +75,26 @@ def canopy_opacity(tree_x, tree_y, player_x, player_y):
     return round(255 - 150 * blend * blend * (3.0 - 2.0 * blend))
 
 
+def misted_actor(sprite, time, strength):
+    """Tint and thin the pixels of the silhouette while preserving its animation."""
+    result = sprite.copy()
+    width, height = sprite.get_size()
+    x = _X[:width]
+    y = _Y[:, :height]
+    swirl = .5 + .5 * np.sin(x * .64 + y * .37 + np.sin(y * .48 - time * 3.0) * 1.25 + time * 4.0)
+    opacity = .34 + swirl * .31 + y * (.08 / height)
+    rgb = pygame.surfarray.pixels3d(result)
+    gray = rgb.mean(axis=2)
+    mist = gray[:, :, None] * .48 + np.array((49, 65, 82))
+    tint = strength * .80
+    rgb[:] = rgb * (1 - tint) + mist * tint
+    del rgb
+    alpha = pygame.surfarray.pixels_alpha(result)
+    alpha[:] = alpha * (1 - strength + opacity * strength)
+    del alpha
+    return result
+
+
 def overlay_visibility(fov_mask, lights, cam_x, cam_y):
     """Combine wall occlusion with the falloff of the current frame's lights.
 
