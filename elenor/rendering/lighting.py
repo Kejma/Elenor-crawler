@@ -1,6 +1,7 @@
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS
+from elenor.rendering.occlusion import SHADOW_RAYS
 
 
 class GPULightShader:
@@ -46,12 +47,14 @@ class GPULightShader:
             uniform sampler2D u_emissive;
 
             uniform vec2 u_cam;
+            uniform vec2 u_viewer;
+            uniform sampler2D u_shadows;
             uniform bool u_temple_exposure;
             uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
             uniform int u_num_lights;
             uniform vec4 u_light_pos_rad[{self.MAX_LIGHTS}];
             uniform vec4 u_light_col_foot[{self.MAX_LIGHTS}];
-            uniform vec2 u_light_flags[{self.MAX_LIGHTS}];
+            uniform vec3 u_light_flags[{self.MAX_LIGHTS}];
 
             uniform int u_num_hud_lights;
             uniform vec4 u_hud_pos_rad[{self.MAX_HUD_LIGHTS}];
@@ -76,6 +79,37 @@ class GPULightShader:
                 return mix(mix(m00, m10, fx), mix(m01, m11, fx), fy);
             }}
 
+            float shadow_coverage(int index, float ray, float distance) {{
+                float whole = floor(ray);
+                int bin = int(mod(whole, {float(SHADOW_RAYS)}));
+                float first = texelFetch(u_shadows, ivec2(bin, index), 0).r;
+                float next = texelFetch(u_shadows, ivec2((bin + 1) % {SHADOW_RAYS}, index), 0).r;
+                return mix(smoothstep(-1.8, 1.8, first - distance),
+                           smoothstep(-1.8, 1.8, next - distance), fract(ray));
+            }}
+
+            float surface_shadow(int index, vec2 pixel, vec2 world, vec2 to_light, bool wall) {{
+                float distance = length(to_light);
+                if (distance < 0.5) return 1.0;
+                float angle = atan(-to_light.y, -to_light.x) * {SHADOW_RAYS / (2 * np.pi)};
+                float receiver = distance - 1.0;
+                if (wall) {{
+                    // Light the side of a wall facing the source and the viewer.
+                    vec2 tile_size = vec2({float(TILE_W)}, {float(TILE_H)});
+                    vec2 local = mod(world, tile_size);
+                    vec2 exits = mix(local, tile_size - local, greaterThan(to_light, vec2(0.0)));
+                    exits *= distance / max(abs(to_light), vec2(.001));
+                    vec2 normal = exits.x < exits.y ? vec2(sign(to_light.x), 0.0) : vec2(0.0, sign(to_light.y));
+                    vec2 center = pixel - local + tile_size * .5;
+                    if (dot(u_viewer - center, normal) > 0.0)
+                        receiver -= min(exits.x, exits.y);
+                }}
+                float spread = (.60 + min(distance * .013, 1.50)) * {SHADOW_RAYS / (2 * np.pi)} / max(distance, 7.0);
+                return .58 * shadow_coverage(index, angle, receiver)
+                     + .21 * (shadow_coverage(index, angle - spread, receiver)
+                            + shadow_coverage(index, angle + spread, receiver));
+            }}
+
             void main() {{
                 ivec2 p = ivec2(gl_FragCoord.xy);
                 vec3 diff = texelFetch(u_diff, p, 0).rgb;
@@ -85,6 +119,10 @@ class GPULightShader:
                 if (p.y < {VIEW_H}) {{
                     float ent_y = texelFetch(u_ent_y, p, 0).r;
                     float fov = texelFetch(u_fov, p, 0).r;
+                    if (fov <= .001) {{
+                        fragColor = vec3(0.0);
+                        return;
+                    }}
 
                     float sub_rim = 0.0;
                     if (ent_y > -9000.0 && p.x > 0 && p.x < {VIEW_W - 1} && p.y > 0 && p.y < {VIEW_H - 1}) {{
@@ -139,7 +177,7 @@ class GPULightShader:
                         float dy = -(pos_rad.y - float(p.y));
                         if (abs(dx) > rad + 2.0 || abs(dy) > rad + 2.0) continue;
 
-                        vec2 flags = u_light_flags[i];
+                        vec3 flags = u_light_flags[i];
                         float mask_w = 1.0;
                         if (flags.y > 0.5) {{
                             mask_w = sample_light_mask_smooth(i, wx_px, wy_px);
@@ -149,6 +187,10 @@ class GPULightShader:
                         float lz = pos_rad.z;
                         float dist = sqrt(dx * dx + dy * dy + lz * lz);
                         if (dist >= rad) continue;
+                        if (flags.z > .5) {{
+                            mask_w *= surface_shadow(i, vec2(p), vec2(wx_px, wy_px), vec2(dx, -dy), is_wall_tile > .5);
+                            if (mask_w < .008) continue;
+                        }}
 
                         vec4 col_foot = u_light_col_foot[i];
                         float behind_ratio = 0.0;
@@ -246,21 +288,89 @@ class GPULightShader:
         self.prog["u_light_masks"].value = 4
         self.prog["u_walls"].value = 5
         self.prog["u_emissive"].value = 6
+        self.prog["u_shadows"].value = 7
 
         quad = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self.vbo = self.ctx.buffer(quad.tobytes())
         self.vao = self.ctx.simple_vertex_array(self.prog, self.vbo, "in_vert")
 
+        self.tex_shadows = self.ctx.texture((SHADOW_RAYS, self.MAX_LIGHTS), 1, dtype="f4")
+        self.shadow_fbo = self.ctx.framebuffer(color_attachments=[self.tex_shadows])
+        self.shadow_program = self.ctx.program(
+            vertex_shader="""
+                #version 330 core
+                in vec2 in_vert;
+                void main() { gl_Position = vec4(in_vert, 0.0, 1.0); }
+            """,
+            fragment_shader=f"""
+                #version 330 core
+                uniform sampler2D u_blockers;
+                uniform vec3 u_source;
+                out float stop;
+
+                bool blocked(ivec2 point) {{
+                    return texelFetch(u_blockers, point, 0).r > .5;
+                }}
+                bool inside(ivec2 point, ivec2 size) {{
+                    return all(greaterThanEqual(point, ivec2(0))) && all(lessThan(point, size));
+                }}
+                void main() {{
+                    float angle = floor(gl_FragCoord.x) * {2 * np.pi / SHADOW_RAYS};
+                    vec2 heading = vec2(cos(angle), sin(angle));
+                    ivec2 size = textureSize(u_blockers, 0);
+                    ivec2 origin = ivec2(u_source.xy);
+                    bool left_source = !inside(origin, size) || !blocked(origin);
+                    stop = u_source.z + 2.0;
+                    for (float distance = 1.0; distance <= u_source.z; distance += 1.0) {{
+                        ivec2 point = ivec2(floor(u_source.xy + heading * distance));
+                        if (!inside(point, size)) {{ stop = distance; break; }}
+                        if (!blocked(point)) left_source = true;
+                        else if (left_source) {{ stop = distance; break; }}
+                    }}
+                }}
+            """,
+        )
+        self.shadow_program["u_blockers"].value = 0
+        self.shadow_vao = self.ctx.simple_vertex_array(self.shadow_program, self.vbo, "in_vert")
+        self.shadow_positions = [None] * self.MAX_LIGHTS
+        self.shadow_geometry = None
+        self.tex_blockers = None
+
         self.pos_rad_buf = np.zeros((self.MAX_LIGHTS, 4), dtype=np.float32)
         self.col_foot_buf = np.zeros((self.MAX_LIGHTS, 4), dtype=np.float32)
-        self.flags_buf = np.zeros((self.MAX_LIGHTS, 2), dtype=np.float32)
+        self.flags_buf = np.zeros((self.MAX_LIGHTS, 3), dtype=np.float32)
         self.masks_buf = np.zeros((self.MAX_LIGHTS, MAP_ROWS, MAP_COLS), dtype=np.float32)
 
 
         self.hud_pos_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
         self.hud_col_buf = np.zeros((self.MAX_HUD_LIGHTS, 4), dtype=np.float32)
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False):
+    def _render_shadows(self, occlusion, lights, cam_x, cam_y):
+        geometry = occlusion, occlusion.version
+        if self.shadow_geometry != geometry:
+            self.shadow_geometry = geometry
+            self.shadow_positions[:] = [None] * self.MAX_LIGHTS
+            size = occlusion.blockers.shape
+            if self.tex_blockers is None or self.tex_blockers.size != size:
+                if self.tex_blockers is not None:
+                    self.tex_blockers.release()
+                self.tex_blockers = self.ctx.texture(size, 1, dtype="f1")
+            self.tex_blockers.write(np.ascontiguousarray(occlusion.blockers.T, dtype=np.uint8) * 255)
+        self.shadow_fbo.use()
+        self.tex_blockers.use(0)
+        for row, light in enumerate(lights[:self.MAX_LIGHTS]):
+            if light.get("ambient", False) or light["radius"] <= 0:
+                continue
+            x, y, _ = light["pos"]
+            key = occlusion.light_key(x + cam_x, y + cam_y, light["radius"])
+            if self.shadow_positions[row] == key:
+                continue
+            self.shadow_positions[row] = key
+            self.shadow_program["u_source"].value = key
+            self.ctx.viewport = (0, row, SHADOW_RAYS, 1)
+            self.shadow_vao.render(self.moderngl.TRIANGLE_STRIP)
+
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0)):
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
@@ -282,6 +392,8 @@ class GPULightShader:
         self.col_foot_buf.fill(0.0)
         self.flags_buf.fill(0.0)
 
+        if occlusion is not None:
+            self._render_shadows(occlusion, lights, cam_x, cam_y)
         any_masks = False
         for i in range(n_lgt):
             lgt = lights[i]
@@ -291,12 +403,11 @@ class GPULightShader:
             self.col_foot_buf[i] = (cr, cg, cb, lgt.get("foot_y", ly + 4.0))
             ign_d = 1.0 if lgt.get("ignore_depth", False) else 0.0
             allowed = lgt.get("allowed_tiles")
+            shadows = occlusion is not None and not lgt.get("ambient", False)
+            self.flags_buf[i] = (ign_d, isinstance(allowed, np.ndarray), shadows)
             if isinstance(allowed, np.ndarray):
-                self.flags_buf[i] = (ign_d, 1.0)
                 self.masks_buf[i] = allowed.T
                 any_masks = True
-            else:
-                self.flags_buf[i] = (ign_d, 0.0)
 
         if any_masks:
             self.tex_masks.write(self.masks_buf[:n_lgt].tobytes(), viewport=(0, 0, self.tex_walls.width, n_lgt*self.tex_walls.height))
@@ -312,6 +423,7 @@ class GPULightShader:
             self.hud_col_buf[j] = (hcr, hcg, hcb, 1.0)
 
         self.prog["u_cam"].value = (float(cam_x), float(cam_y))
+        self.prog["u_viewer"].value = viewer
         self.prog["u_temple_exposure"].value = temple_exposure
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
         self.prog["u_num_lights"].value = n_lgt
@@ -325,6 +437,7 @@ class GPULightShader:
         self.prog["u_hud_col"].write(self.hud_col_buf.tobytes())
 
         self.fbo.use()
+        self.ctx.viewport = (0, 0, VIEW_W, CANVAS_H)
         self.tex_diff.use(0)
         self.tex_norm.use(1)
         self.tex_ent_y.use(2)
@@ -332,6 +445,7 @@ class GPULightShader:
         self.tex_masks.use(4)
         self.tex_walls.use(5)
         self.tex_emissive.use(6)
+        self.tex_shadows.use(7)
         self.vao.render(self.moderngl.TRIANGLE_STRIP)
 
         raw_rgb = self.fbo.read(components=3, alignment=1)

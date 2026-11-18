@@ -9,6 +9,7 @@ from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
 from elenor.rendering.fog import FogRenderer
+from elenor.rendering.occlusion import LightOcclusion
 from elenor.rendering.lighting import GPULightShader
 from elenor.rendering.pixel_fx import PixelLayer
 from elenor.rendering.physical import render_ground_traps, render_physical
@@ -34,7 +35,8 @@ class Renderer(UIRendererMixin):
         pygame.draw.ellipse(self._shadow_small, (8, 6, 12, 120), (0, 0, 10, 4))
         self._shadow_big = pygame.Surface((20, 6), pygame.SRCALPHA)
         pygame.draw.ellipse(self._shadow_big, (8, 6, 12, 120), (0, 0, 20, 6))
-        self.fog_renderer = FogRenderer()
+        self.light_occlusion = LightOcclusion()
+        self.fog_renderer = FogRenderer(self.light_occlusion)
         self.gpu_shader = None
         try:
             self.gpu_shader = GPULightShader()
@@ -921,6 +923,8 @@ class Renderer(UIRendererMixin):
                 radius = cloud["radius"]*TILE_W
                 if -radius <= sx <= VIEW_W+radius and -radius <= sy <= VIEW_H+radius:
                     clouds.append(cloud)
+        self.light_occlusion.update(dungeon, objects)
+        viewer = (player.x * TILE_W, player.y * TILE_H)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
@@ -931,6 +935,7 @@ class Renderer(UIRendererMixin):
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
                 temple_exposure=dungeon.interior == "temple",
+                occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -993,6 +998,14 @@ class Renderer(UIRendererMixin):
                 ndotl = np.maximum(z_wrap, raw_dot)
                 atten = np.clip(1.0 - (dist / radius) ** 1.65, 0.0, 1.0)
 
+                shadow = 1.0
+                if not lgt.get("ambient", False):
+                    shadow = self.light_occlusion.surface_visibility(
+                        dx, -dy, self.px[x0:x1, :] + cam_x, self.py[:, y0:y1] + cam_y,
+                        lx + cam_x, ly + cam_y, radius, viewer,
+                    )
+                    atten *= shadow
+
                 allowed_tiles = lgt.get("allowed_tiles")
                 if allowed_tiles is not None:
                     if isinstance(allowed_tiles, np.ndarray):
@@ -1011,7 +1024,7 @@ class Renderer(UIRendererMixin):
                     close_falloff = np.clip(1.0 - dist_2d / min(radius * 0.72, 48.0), 0.0, 1.0) ** 2.4
                     if isinstance(allowed_tiles, np.ndarray):
                         close_falloff = close_falloff * allowed_tiles[tx_screen[x0:x1, None], ty_screen[None, y0:y1]]
-                    rim_boost = sub_rim * behind_ratio * close_falloff * 145.0
+                    rim_boost = sub_rim * behind_ratio * close_falloff * 145.0 * shadow
                     rim_add_r[x0:x1, y0:y1] += rim_boost * cr
                     rim_add_g[x0:x1, y0:y1] += rim_boost * cg
                     rim_add_b[x0:x1, y0:y1] += rim_boost * cb
@@ -1041,12 +1054,10 @@ class Renderer(UIRendererMixin):
             seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y)
             remember_tiles(dungeon, seen, objects)
 
-        if volume_enabled:
-            volume_lights = [light for light in lights if light.get("volume", True)]
-            volume_lights.extend(ui_texts.get("_occluded_lights", ()))
-            if clouds or volume_lights:
-                self.fog_renderer.render(lit_surf, dungeon, clouds, volume_lights, fov_mask,
-                                         self.entity_y_canvas, cam_x, cam_y, now_sec)
+        if clouds:
+            fog_lights = [light for light in lights if not light.get("ambient", False)]
+            self.fog_renderer.render(lit_surf, dungeon, clouds, fog_lights, fov_mask,
+                                     self.entity_y_canvas, cam_x, cam_y, now_sec)
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))
 
