@@ -1,4 +1,4 @@
-"""Full-screen exploration chart, drawn only from remembered terrain."""
+"""Exploration map and HUD minimap drawn only from remembered terrain."""
 
 import pygame
 
@@ -31,17 +31,32 @@ MARKER_STYLE = {
     "forward": ("right", (230, 231, 185)),
     "back": ("left", (230, 231, 185)),
     "up": ("up", (230, 231, 185)),
+    "down": ("down", (230, 231, 185)),
+    "merchant": ("circle", (247, 205, 118)),
     "player": ("diamond", (253, 246, 212)),
 }
 
 
-def chart_surface(dungeon):
+def chart_surface(dungeon, region=None):
     """One pixel per known tile. The world grid is deliberately absent here."""
-    surface = pygame.Surface((dungeon.width, dungeon.height))
+    surface = pygame.Surface((dungeon.width, dungeon.height) if region is None else region.size)
     surface.fill(INK)
-    for point, kind in dungeon.explored_tiles.items():
-        surface.set_at(point, TERRAIN[kind])
+    if region is None:
+        for point, kind in dungeon.explored_tiles.items():
+            surface.set_at(point, TERRAIN[kind])
+    else:
+        for y in range(region.height):
+            for x in range(region.width):
+                kind = dungeon.explored_tiles.get((region.x + x, region.y + y))
+                if kind is not None:
+                    surface.set_at((x, y), TERRAIN[kind])
     return surface
+
+
+def discovered_landmarks(dungeon):
+    for position, kind in (dungeon.map_landmarks | dungeon.passages).items():
+        if position in dungeon.explored_tiles:
+            yield position, kind
 
 
 def draw_marker(screen, kind, point, radius=8):
@@ -112,8 +127,47 @@ def draw_marker(screen, kind, point, radius=8):
             ),
             "left": ((x - radius, y), (x + 3, y - radius + 1), (x + 3, y + radius - 1)),
             "up": ((x, y - radius), (x - radius + 1, y + 3), (x + radius - 1, y + 3)),
+            "down": ((x, y + radius), (x - radius + 1, y - 3), (x + radius - 1, y - 3)),
         }[shape]
         pygame.draw.polygon(screen, color, [tip, upper, lower])
+
+
+def draw_map_hud(screen, game):
+    labels = game.loc["exploration_map"]
+    font = game.renderer.font_small
+    hint = font.render(labels["hint"], True, TEXT)
+    if not game.profile["show_minimap"]:
+        rect = hint.get_rect(topleft=(31, 24))
+        pygame.draw.rect(screen, PAPER, rect.inflate(22, 12), border_radius=4)
+        screen.blit(hint, rect)
+        return
+
+    tile_size = 7
+    region = pygame.Rect(0, 0, 29, 21)
+    region.center = (int(game.player.x), int(game.player.y))
+    viewport = pygame.Rect(30, 47, region.width * tile_size, region.height * tile_size)
+    panel = pygame.Rect(20, 16, viewport.width + 20, viewport.height + 41)
+    pygame.draw.rect(screen, PAPER, panel, border_radius=5)
+    pygame.draw.rect(screen, BORDER, panel, width=1, border_radius=5)
+    screen.blit(hint, hint.get_rect(midleft=(viewport.left, 32)))
+    north = font.render(labels["north"], True, DIM)
+    screen.blit(north, north.get_rect(midright=(viewport.right, 32)))
+    chart = chart_surface(game.dungeon, region)
+    screen.blit(pygame.transform.scale(chart, viewport.size), viewport)
+
+    def pixel(x, y):
+        return (
+            viewport.x + round((x - region.x) * tile_size),
+            viewport.y + round((y - region.y) * tile_size),
+        )
+
+    original_clip = screen.get_clip()
+    screen.set_clip(original_clip.clip(viewport))
+    for (x, y), kind in discovered_landmarks(game.dungeon):
+        if region.collidepoint(x, y):
+            draw_marker(screen, kind, pixel(x + 0.5, y + 0.5), 5)
+    draw_marker(screen, "player", pixel(game.player.x, game.player.y), 6)
+    screen.set_clip(original_clip)
 
 
 def draw_map(screen, game, chart, mouse_pos):
@@ -122,7 +176,10 @@ def draw_map(screen, game, chart, mouse_pos):
     labels = game.loc["exploration_map"]
     screen.fill(PAPER)
 
-    heading = labels[dungeon.interior or "valley"].format(number=dungeon.floor_num)
+    if game.campaign == "jungle":
+        heading = labels[dungeon.interior or "valley"].format(number=dungeon.floor_num)
+    else:
+        heading = labels["tavern"] if dungeon.floor_num == 1 else labels["floor"].format(number=dungeon.floor_num)
     screen.blit(renderer.font_ui.render(labels["title"], True, DIM), (70, 43))
     screen.blit(renderer.font_title.render(heading, True, TEXT), (70, 71))
     close = renderer.font_ui.render(labels["close"], True, DIM)
@@ -162,11 +219,10 @@ def draw_map(screen, game, chart, mouse_pos):
         )
 
     marker_hitboxes = []
-    for position, kind in (dungeon.map_landmarks | dungeon.passages).items():
-        if position in dungeon.explored_tiles:
-            marker_pos = pixel((position[0] + 0.5, position[1] + 0.5))
-            draw_marker(screen, kind, marker_pos)
-            marker_hitboxes.append((marker_pos, kind))
+    for (x, y), kind in discovered_landmarks(dungeon):
+        marker_pos = pixel((x + 0.5, y + 0.5))
+        draw_marker(screen, kind, marker_pos)
+        marker_hitboxes.append((marker_pos, kind))
     player_pos = pixel((game.player.x, game.player.y))
     draw_marker(screen, "player", player_pos, 10)
     marker_hitboxes.append((player_pos, "player"))

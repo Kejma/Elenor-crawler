@@ -53,7 +53,7 @@ def mask_overlay(surface, visibility, cache):
 def visible_lit_tiles(lit_surface, fov_mask, visible_tiles, cam_x, cam_y):
     """Use the lit scene before overlays, with a few samples inside each tile."""
     if not visible_tiles:
-        return []
+        return set()
     tiles = np.array(list(visible_tiles), dtype=np.int32)
     offsets = np.array((-4, 0, 4))
     xs = tiles[:, 0, None, None] * TILE_W + TILE_W // 2 - round(cam_x) + offsets[None, :, None]
@@ -65,4 +65,4 @@ def visible_lit_tiles(lit_surface, fov_mask, visible_tiles, cam_x, cam_y):
     light = pixels[xs, ys].sum(axis=-1)
     del pixels
     readable = on_screen & (fov_mask[xs, ys] > 0.5) & (light >= 39)
-    return [tuple(tile) for tile in tiles[readable.sum(axis=(1, 2)) >= 2].tolist()]
+    return {tuple(tile) for tile in tiles[readable.sum(axis=(1, 2)) >= 2].tolist()}

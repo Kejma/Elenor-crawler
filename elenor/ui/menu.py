@@ -4,7 +4,7 @@ from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER
 from elenor.rendering.normals import LiveLightPreview
 
 
-from elenor.profile import get_profile_dir, save_profile, reset_profile_progress, apply_display_mode, get_available_resolutions, WINDOW_MODES_LIST
+from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, apply_display_mode, get_available_resolutions, WINDOW_MODES_LIST
 from elenor.data.economy import format_copper_Trigger
 from elenor.rendering.appearance import HERO_TYPES_ORDER, HERO_CUSTOMIZATION_DB, build_custom_hero_sprite
 
@@ -23,6 +23,7 @@ class MainMenuController:
         self.confirm_reset_timer = 0.0
         self.open_dropdown = None
         self.dropdown_item_rects = []
+        self.can_resume = False
 
         # Левый сайдбар и резиновая правая область, адаптивная под любой SCREEN_W / SCREEN_H
         self.sidebar_w = 300
@@ -49,6 +50,9 @@ class MainMenuController:
                 if self.meltdown_active:
                     self.meltdown_active = False
                     self.active_tab = 0
+                    return True
+                if self.can_resume:
+                    self._trigger_button("resume_run", prof)
                     return True
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -150,8 +154,13 @@ class MainMenuController:
                 self.preview_cloak_color = list(random.choice(adjs).get("color", [200, 70, 75]))
 
         elif b_key in ("start_run", "start_jungle"):
+            self.can_resume = False
             self.game.in_main_menu = False
             self.game.reset_run(campaign="jungle" if b_key == "start_jungle" else "rats")
+
+        elif b_key == "resume_run":
+            self.can_resume = False
+            self.game.in_main_menu = False
 
         elif b_key == "vol_down":
             prof["volume"] = round(max(0.0, prof.get("volume", 0.85) - 0.10), 2)
@@ -172,6 +181,10 @@ class MainMenuController:
             prof["thought_freq_mode"] = (prof.get("thought_freq_mode", 2) + step) % 4
             save_profile(prof)
 
+        elif b_key == "toggle_minimap":
+            prof["show_minimap"] = not prof.get("show_minimap", DEFAULT_PROFILE["show_minimap"])
+            save_profile(prof)
+
         elif b_key == "dd_win_mode":
             self.open_dropdown = None if self.open_dropdown == "win_mode" else "win_mode"
 
@@ -186,6 +199,7 @@ class MainMenuController:
                 self.confirm_reset_timer = 0.0
                 reset_profile_progress(prof)
                 self.game.reset_run()
+                self.can_resume = False
                 self.game.sfx.play("crit")
 
         elif b_key == "cancel_meltdown":
@@ -276,6 +290,14 @@ class MainMenuController:
                 self._render_exit_tab(screen, p_rect, mouse_pos)
 
         screen.set_clip(old_clip)
+
+        if self.can_resume and not self.meltdown_active:
+            rect = self.nav_rects[-1].move(0, 105)
+            self.btn_rects["resume_run"] = rect
+            hover = rect.collidepoint(mouse_pos)
+            r.draw_pixel_frame(screen, rect, (46, 92, 52) if hover else (32, 68, 38), UI_BORDER_GOLD, hover, 1.0)
+            label = r.font_ui.render(self.game.loc["exploration_map"]["resume"], True, UI_TEXT_MAIN)
+            screen.blit(label, label.get_rect(center=rect.center))
 
     def _draw_selector_row(self, screen, x, y, w, label, val_text, prev_key, next_key, mouse_pos, locked=False):
         r = self.game.renderer
@@ -523,8 +545,21 @@ class MainMenuController:
         f_idx = prof.get("thought_freq_mode", 2) % 4
         self._draw_selector_row(screen, row_x, box.y + 32 + step_y * 4, row_w, "ЧАСТОТА МЫСЛЕЙ ГЕРОЯ:", freq_modes[f_idx], "freq_prev", "freq_next", mouse_pos)
 
-        pygame.draw.line(screen, UI_BORDER_WOOD, (box.x + 50, box.y + 42 + step_y * 5), (box.right - 50, box.y + 42 + step_y * 5), 1)
-        rst_btn = pygame.Rect(row_x, box.y + 64 + step_y * 5, row_w, 56)
+        map_labels = self.game.loc["exploration_map"]["settings"]
+        toggle_rect = pygame.Rect(row_x, box.y + 54 + step_y * 5, row_w, 42)
+        self.btn_rects["toggle_minimap"] = toggle_rect
+        enabled = prof.get("show_minimap", DEFAULT_PROFILE["show_minimap"])
+        hover = toggle_rect.collidepoint(mouse_pos)
+        bg = (52, 42, 38) if hover else UI_SLOT_BG
+        r.draw_pixel_frame(screen, toggle_rect, bg, UI_BORDER_GOLD if enabled else UI_BORDER_WOOD, hover, 1.0)
+        name = r.font_ui.render(map_labels["minimap"], True, UI_TEXT_MAIN)
+        value = r.font_ui.render(map_labels["on" if enabled else "off"], True, UI_BORDER_HIGHLIGHT if enabled else UI_TEXT_DIM)
+        screen.blit(name, name.get_rect(midleft=(toggle_rect.left + 20, toggle_rect.centery)))
+        screen.blit(value, value.get_rect(midright=(toggle_rect.right - 20, toggle_rect.centery)))
+
+        line_y = box.y + 42 + step_y * 6
+        pygame.draw.line(screen, UI_BORDER_WOOD, (box.x + 50, line_y), (box.right - 50, line_y), 1)
+        rst_btn = pygame.Rect(row_x, box.y + 64 + step_y * 6, row_w, 56)
         self.btn_rects["reset_progress"] = rst_btn
         hov_r = rst_btn.collidepoint(mouse_pos)
         if self.confirm_reset_timer > 0.0:

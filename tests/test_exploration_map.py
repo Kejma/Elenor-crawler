@@ -4,8 +4,9 @@ import numpy as np
 import pygame
 
 from elenor.config import TILE_H, TILE_W, VIEW_H, VIEW_W
+from elenor.entities import Interactable
 from elenor.rendering.visibility import visible_lit_tiles
-from elenor.ui.exploration_map import INK, TERRAIN, chart_surface
+from elenor.ui.exploration_map import INK, TERRAIN, chart_surface, discovered_landmarks
 from elenor.world.dungeon import Door, Dungeon
 from elenor.world.exploration import remember_tiles
 
@@ -29,7 +30,7 @@ class ExplorationMapTests(unittest.TestCase):
         observed = visible_lit_tiles(
             scene, mask, {seen, dark, occluded, (0, 0)}, cam_x, cam_y
         )
-        self.assertEqual(observed, [seen])
+        self.assertEqual(observed, {seen})
 
     def test_chart_uses_last_seen_door_and_never_reads_undiscovered_ground(self):
         dungeon = Dungeon()
@@ -46,3 +47,25 @@ class ExplorationMapTests(unittest.TestCase):
         self.assertEqual(chart_surface(dungeon).get_at((5, 5))[:3], TERRAIN["wood"])
         dungeon.generate()
         self.assertFalse(dungeon.explored_tiles)
+
+    def test_minimap_uses_local_memory_and_dynamic_landmarks_require_sight(self):
+        dungeon = Dungeon()
+        stairs = Interactable(8, 20, "stairs")
+        dungeon.grid[20][8] = 3
+        dungeon.grid[20][9] = 4
+        remember_tiles(dungeon, {(8, 20)})
+        remember_tiles(dungeon, {(9, 20)}, [stairs])
+        self.assertEqual(list(discovered_landmarks(dungeon)), [])
+
+        remember_tiles(dungeon, {(8, 20)}, [stairs])
+        self.assertEqual(list(discovered_landmarks(dungeon)), [((8, 20), "down")])
+        chart = chart_surface(dungeon, pygame.Rect(7, 20, 3, 2))
+        self.assertEqual(chart.get_size(), (3, 2))
+        self.assertEqual(chart.get_at((1, 0))[:3], TERRAIN["grass"])
+        self.assertEqual(chart.get_at((2, 0))[:3], TERRAIN["wood"])
+        self.assertEqual(chart.get_at((0, 0))[:3], INK)
+        self.assertEqual(chart.get_at((1, 1))[:3], INK)
+
+        dungeon.generate(floor_num=2)
+        self.assertFalse(dungeon.explored_tiles)
+        self.assertEqual(list(discovered_landmarks(dungeon)), [])

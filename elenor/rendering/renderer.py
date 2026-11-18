@@ -965,7 +965,7 @@ class Renderer(UIRendererMixin):
             from elenor.rendering.visibility import visible_lit_tiles
             from elenor.world.exploration import remember_tiles
             seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y)
-            remember_tiles(dungeon, seen)
+            remember_tiles(dungeon, seen, objects)
 
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))

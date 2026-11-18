@@ -14,7 +14,7 @@ from elenor.game.targeting import is_cursor_on_mob
 
 from elenor.minigames.fishing import press_fishing, start_fishing, update_fishing
 from elenor.ui.fishing import draw_fishing
-from elenor.ui.exploration_map import chart_surface, draw_map
+from elenor.ui.exploration_map import chart_surface, draw_map, draw_map_hud
 
 
 def main():
@@ -42,12 +42,15 @@ def main():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                else:
+                    break
+                if game.in_main_menu:
                     if hasattr(event, "pos"):
                         event.pos = map_window_to_logical(event.pos, game.viewport_rect)
                     game.main_menu.handle_event(event, getattr(event, "pos", mouse_pos))
             if not running:
                 break
+            if not game.in_main_menu:
+                continue
             game.main_menu.update(dt)
             game.main_menu.render(screen, dt, mouse_pos)
             present_logical_canvas(game.display_surface, screen, game.viewport_rect)
@@ -62,6 +65,8 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
                 break
+            if game.in_main_menu:
+                continue
 
             key_down = event.type == pygame.KEYDOWN and not getattr(event, "repeat", False)
             if game.map_open:
@@ -70,7 +75,7 @@ def main():
                     map_chart = None
                     game.sfx.play("ui")
                 continue
-            if (key_down and event.key == pygame.K_m and game.campaign == "jungle"
+            if (key_down and event.key == pygame.K_m
                     and not game.inv_open and not game.levelup_choices and game.fishing_cast is None):
                 game.map_open = True
                 map_chart = chart_surface(game.dungeon)
@@ -120,6 +125,7 @@ def main():
                         game.inv_open = False
                     else:
                         game.in_main_menu = True
+                        game.main_menu.can_resume = game.player.hp > 0
                     game.sfx.play("ui")
                     continue
                 elif event.key == pygame.K_F5:
@@ -294,6 +300,8 @@ def main():
 
         if not running:
             break
+        if game.in_main_menu:
+            continue
         if game.map_open:
             draw_map(screen, game, map_chart, mouse_pos)
             present_logical_canvas(game.display_surface, screen, game.viewport_rect)
@@ -833,10 +841,7 @@ def main():
 
         ui_bundle = dict(game.loc["ui"])
         ui_bundle["_game_ref"] = game
-        ui_bundle["_survey_map"] = (
-            game.campaign == "jungle" and not game.inv_open
-            and not getattr(game.dev_panel, "reveal_map", False)
-        )
+        ui_bundle["_survey_map"] = not game.inv_open and not game.dev_panel.reveal_map
         ui_bundle["_perks_db"] = game.loc.get("perks", {})
         ui_bundle["_world_hover_item"] = world_hover_item
         ui_bundle["_visual_fx"] = game.visual_fx
@@ -874,11 +879,6 @@ def main():
 
         if game.campaign == "jungle" and not game.inv_open:
             draw_fishing(screen, game, (world_mx, world_my), fov_mask)
-            if game.fishing_cast is None and not game.levelup_choices:
-                hint = game.renderer.font_small.render(game.loc["exploration_map"]["hint"], True, (231, 224, 199))
-                rect = hint.get_rect(topleft=(31, 24))
-                pygame.draw.rect(screen, (20, 29, 26), rect.inflate(22, 12), border_radius=4)
-                screen.blit(hint, rect)
             for (x, y), action in game.dungeon.passages.items():
                 if math.hypot(x+.5-game.player.x, y+.5-game.player.y) <= 1.65:
                     label = game.renderer.font_ui.render(game.loc["jungle_passages"][action], True, (246,225,178))
@@ -886,6 +886,9 @@ def main():
                     pygame.draw.rect(screen, (23,32,27), rect.inflate(18,8), border_radius=4)
                     screen.blit(label, rect)
                     break
+
+        if not game.inv_open and not game.levelup_choices and game.fishing_cast is None and not dev_open:
+            draw_map_hud(screen, game)
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)

@@ -9,6 +9,8 @@ from elenor.config import (
     SHALLOW_WATER,
 )
 
+OBJECT_LANDMARKS = {"stairs": "down", "npc_merchant": "merchant"}
+
 
 def terrain_kind(tile):
     if tile in (5, 21, 22, 56, 57):
@@ -23,12 +25,12 @@ def terrain_kind(tile):
         return "wood"
     if tile in (9, 11, 12, 25, PEBBLE_SHORE, 41, 42):
         return "trail"
-    if tile in (10, 23, 45, 47, 49):
+    if tile in (3, 10, 23, 45, 47, 49):
         return "grass"
     return "floor"
 
 
-def remember_tiles(dungeon, seen):
+def remember_tiles(dungeon, seen, objects=()):
     """Snapshot terrain, including the state of doors when last seen."""
     for x, y in seen:
         position = (x, y)
@@ -36,3 +38,7 @@ def remember_tiles(dungeon, seen):
         dungeon.explored_tiles[position] = (
             "door" if door and not door.is_open else terrain_kind(dungeon.grid[y][x])
         )
+    if seen:
+        for obj in objects:
+            if not obj.used and obj.kind in OBJECT_LANDMARKS and (obj.x, obj.y) in seen:
+                dungeon.map_landmarks[(obj.x, obj.y)] = OBJECT_LANDMARKS[obj.kind]
