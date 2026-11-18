@@ -102,18 +102,27 @@ class NarrativeMixin:
             self.last_tick_char = 0
 
 
-    def set_thought(self, text, important=False, chance=1.0):
+    def inspect_prop(self, obj):
+        pool = self.loc.get("prop_thoughts", {}).get(obj.kind)
+        if pool:
+            self.play_spatial("step", obj.x + 0.5, obj.y + 0.5)
+            self.set_thought(self.pick_text(pool, f"prop_{obj.kind}"), on_inspect=True)
+
+    def set_thought(self, text, important=False, chance=1.0, *, on_inspect=False):
         """
         Управляет мыслями и репликами с поддержкой очереди Важных событий:
         - Если `important=True` и предыдущая важная мысль ещё держится свои 4 секунды — новая встаёт в очередь и запустится строго после неё!
         - Если `important=False` — подчиняется настройке частоты мыслей и не перебивает важные.
+        - Осмотр по запросу игрока пропускает паузу между обычными мыслями.
         """
         if not text:
             return False
 
         if not important:
             mult, _ = self.get_thought_freq_params()
-            if mult <= 0.0 or self.bg_thought_cd > 0.0 or self.important_thought_lock > 0.0 or self.important_thought_queue:
+            if mult <= 0.0 or self.important_thought_lock > 0.0 or self.important_thought_queue:
+                return False
+            if self.bg_thought_cd > 0.0 and not on_inspect:
                 return False
             if chance < 1.0 and random.random() > min(1.0, chance * mult):
                 return False

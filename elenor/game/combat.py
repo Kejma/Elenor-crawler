@@ -174,10 +174,6 @@ class CombatMixin:
         if obj.kind == "merchant_counter":
             self.interact_with_merchant(obj.merchant_owner)
             return True
-        if obj.kind in ("merchant_shelves", "merchant_goods", "merchant_sign"):
-            self.set_thought(self.loc.get("merchant_room", {}).get(obj.kind, ""), important=False)
-            return True
-
         if obj.kind == "npc_merchant":
             self.interact_with_merchant(obj)
             return True
@@ -209,8 +205,7 @@ class CombatMixin:
                 self.trigger_event_thought("campfire_take_torch")
                 self.add_popup(obj.x + 0.5, obj.y + 0.5, "+Смоляной факел", (255, 200, 80))
             else:
-                self.sfx.play("step")
-                self.trigger_event_thought("campfire_has_torch")
+                self.inspect_prop(obj)
             return True
 
         if obj.kind == "loot":
@@ -316,7 +311,7 @@ class CombatMixin:
                 self.play_spatial("step", ox_c, oy_c)
                 self.trigger_event_thought("idol_dumb")
         else:
-            # Consume the interaction, leaving scenery intact.
+            self.inspect_prop(obj)
             return True
 
         obj.used = True

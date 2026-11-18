@@ -238,11 +238,10 @@ def populate_mission_floor(game, floor_num, EnemyCls, InteractableCls):
 def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
     """
     Обрабатывает СТРОГО сюжетные объекты Кампании I:
-    Трактирщик Гуго, реплики осмотра мебели таверны и ритуальный алтарь Крысиного Короля.
+    Трактирщик Гуго и ритуальный алтарь Крысиного Короля.
     Базовые пропсы (бочки, сундуки, стойки) обрабатываются общим движком!
     """
     m1 = get_mission_texts(game.loc)
-    prop_thoughts_db = game.loc.get("prop_thoughts", {})
 
     if obj.kind == "npc_innkeeper":
         npc_cfg = m1.get("npc_innkeeper", {})
@@ -257,12 +256,6 @@ def handle_mission_object_interaction(game, obj, EnemyCls, InteractableCls):
         obj.speech_timer = 5.5
         game.play_spatial("mob_talk", obj.x + 0.5, obj.y + 0.5)
         game.set_thought(line, important=True)
-        return True
-
-    if obj.kind in prop_thoughts_db:
-        game.play_spatial("step", obj.x + 0.5, obj.y + 0.5)
-        if game.can_trigger_background_thought(chance=0.75):
-            game.set_thought(game.pick_text(prop_thoughts_db[obj.kind], f"prop_{obj.kind}"), important=False, chance=1.0)
         return True
 
     if obj.kind == "ritual_altar":

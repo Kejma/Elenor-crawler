@@ -37,6 +37,7 @@ class HeadlessGame(GameController):
         self.play_spatial, self.emit_noise = Mock(), Mock()
         self.trigger_event_thought = Mock()
         self.balance_data = {}
+        self._last_picked_line = {}
 
 
 def empty_dungeon():
