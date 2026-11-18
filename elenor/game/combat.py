@@ -4,6 +4,7 @@ import random
 from elenor.entities import Enemy, Interactable, Projectile, Particle
 from elenor.entities.objects import JUNGLE_CHESTS, JUNGLE_KEY_COLORS, JUNGLE_VASES
 from elenor.config import COMBAT_INPUT_WINDOW
+from elenor.data.abilities import PASSIVES, spell_school
 from elenor.missions.rats import get_mission_texts, handle_mission_object_interaction
 from elenor.profile import save_profile
 
@@ -20,6 +21,8 @@ class CombatMixin:
             # Уворот даёт умеренную прибавку через трёхплечевые весы
             if not getattr(source, "no_rewards", False):
                 self.player.record_build_action("cunning", 0.08)
+            if self.player.passive_power("sidestep"):
+                self.player.passive_until["sidestep"] = self.player.passive_time + PASSIVES["sidestep"]["duration"]
             self.add_popup(self.player.x, self.player.y, "УВОРОТ", (140, 230, 255))
             self.add_log("combat", "Уклонение от вражеской атаки!", (140, 230, 255))
             self.trigger_event_thought("combat_dodge")
@@ -32,7 +35,10 @@ class CombatMixin:
                     self.record_combat_growth(m, getattr(self.player, "ignite_growth_credit", None))
 
         defense = self.player.mag_defense if is_magic else self.player.phys_defense
-        dmg = max(1, int(math.floor((raw_dmg - defense) * (.55 if getattr(self.player,"guard_timer",0)>0 else 1))))
+        reduction = 0.55 if self.player.guard_timer > 0 else 1.0
+        if self.player.passive_active("firm_stance"):
+            reduction *= 1.0 - self.player.passive_power("firm_stance")
+        dmg = max(1, math.floor((raw_dmg - defense) * reduction))
         self.player.hp = max(0.0, self.player.hp - dmg)
         self.sfx.play("hurt")
         self.add_log("combat", f"Получен урон: -{dmg} ХП ({'магия' if is_magic else 'физ. удар'}).", (255, 110, 110))
@@ -451,6 +457,72 @@ class CombatMixin:
             self._execute_melee_swing(target_wx, target_wy)
 
 
+    def _physical_attack_context(self):
+        if not self.player.passive_power("quiet_work"):
+            return {}
+        return {"unaware_targets": {mob for mob in self.mobs if mob.state != "combat"}}
+
+    def _trigger_firm_stance(self):
+        p = self.player
+        settings = PASSIVES["firm_stance"]
+        if (p.passive_power("firm_stance") and p.stationary_for >= settings["stationary"]
+                and (p.x, p.y) == p.last_passive_position):
+            p.passive_until["firm_stance"] = p.passive_time + settings["duration"]
+
+    def _physical_hit_damage(self, mob, power, armor_pierce, was_unaware=False, action=None):
+        p = self.player
+        now = p.passive_time
+        quiet = p.passive_power("quiet_work")
+        if quiet and action is not None and not action.get("quiet_work_used"):
+            if was_unaware or mob in action.get("unaware_targets", ()):
+                power *= 1.0 + quiet
+                action["quiet_work_used"] = True
+
+        switch = p.passive_power("change_target")
+        if (switch and p.passive_active("change_target") and mob is not p.last_killed_target
+                and not (action and action.get("change_target_kill"))):
+            power *= 1.0 + switch
+            p.passive_until.pop("change_target", None)
+            p.last_killed_target = None
+
+        armor = mob.phys_def
+        breaker = p.passive_power("armor_breaker")
+        if breaker and armor > 0:
+            settings = PASSIVES["armor_breaker"]
+            if now >= mob.armor_breaker_ready_at:
+                mob.armor_breaker_until = now + settings["duration"]
+                mob.armor_breaker_ready_at = now + settings["cooldown"]
+            if now < mob.armor_breaker_until:
+                armor -= max(1, round(armor * breaker))
+        return max(1, int(power) - max(0, armor - armor_pierce))
+
+    def _trigger_spell_passives(self, item):
+        school = spell_school(item)
+        if not school:
+            return
+        p = self.player
+        p.recent_spell_schools[school] = p.passive_time
+        focus = p.passive_power("spell_focus")
+        if focus:
+            for other in p.ability_slots:
+                if other and other.id != item.id and spell_school(other) == school and other.id in p.cooldowns:
+                    p.cooldowns[other.id] *= 1.0 - focus
+
+        pulse = p.passive_power("warding_pulse")
+        if not pulse or p.passive_time < p.passive_ready_at.get("warding_pulse", 0.0):
+            return
+        settings = PASSIVES["warding_pulse"]
+        radius = settings["radius"]
+        p.passive_ready_at["warding_pulse"] = p.passive_time + settings["cooldown"]
+        self.visual_fx.append({
+            "kind": "aoe_ring", "x": p.x, "y": p.y, "radius": radius,
+            "color": (145, 195, 255), "timer": 0.28, "max_timer": 0.28,
+        })
+        for mob in self.mobs:
+            if (math.hypot(mob.x - p.x, mob.y - p.y) <= radius
+                    and self.dungeon.has_line_of_sight(p.x, p.y, mob.x, mob.y, radius + 0.5)):
+                mob.apply_status("slow", pulse, self.add_popup)
+
     def _execute_melee_swing(self, target_wx, target_wy):
         px, py = self.player.x, self.player.y
         weap = self.player.equipment["right_hand"]
@@ -471,6 +543,7 @@ class CombatMixin:
         dist = max(0.001, math.hypot(dx, dy))
         nx, ny = dx / dist, dy / dist
 
+        action = self._physical_attack_context()
         # 1. МЕТАТЕЛЬНОЕ ОРУЖИЕ В ПРАВОЙ РУКЕ (с замедлением при броске)
         if style == "thrown" and weap is not None:
             self.emit_noise(px, py, 4.2)
@@ -500,8 +573,14 @@ class CombatMixin:
                 life_steal=life_steal,
                 max_dist=reach + 0.85
             ))
+            self.projectiles[-1].passive_action = action
             return
 
+        wide = self.player.passive_power("wide_swing")
+        wide_attack = bool(wide and self.player.passive_active("wide_swing"))
+        if wide_attack:
+            arc_deg = min(360, arc_deg * (1.0 + wide))
+            self.player.passive_until.pop("wide_swing", None)
         # 2. ПЛАВНЫЙ ВЫПАД С ШАГОМ ВПЕРЁД (Сабля, Гладиус, Фальката, Эсток, Фламберг)
         lunge = getattr(weap, "lunge_dist", 0.0) if weap else 0.0
         if lunge > 0.0:
@@ -536,7 +615,7 @@ class CombatMixin:
                     math.cos(ang) * 2.2, math.sin(ang) * 2.2, col, 3.0, 0.18
                 ))
 
-        cos_threshold = math.cos(half_arc_rad + 0.18)
+        cos_threshold = math.cos(min(math.pi, half_arc_rad + 0.18))
         candidates = []
         for m in self.mobs:
             size_pad = 0.55 if getattr(m, "size_tiles", 1) >= 2 else 0.0
@@ -569,6 +648,7 @@ class CombatMixin:
 
         multi_hit = getattr(weap, "multi_hit", 1) if weap else 1
         any_killed = False
+        hit_count = 0
 
         for md, m in targets_selected:
             for hit_i in range(multi_hit):
@@ -578,7 +658,8 @@ class CombatMixin:
 
                 bs_bonus = getattr(weap, "backstab_bonus", 0.0) if weap else 0.0
                 is_vulnerable = (m.state != "combat" or m.stun_timer > 0 or m.root_timer > 0 or m.slow_timer > 0)
-                if m.state != "combat":
+                was_unaware = m.state != "combat"
+                if was_unaware:
                     dmg = int(dmg * (1 if hidden_strike else max(self.player.backstab_mult, bs_bonus)))
                     is_crit = True
                     m.alert_to_combat(self.sfx, self.add_popup)
@@ -597,11 +678,12 @@ class CombatMixin:
                 if weap and getattr(weap, "close_penalty", False) and md < 1.15:
                     dmg = max(1, int(dmg * 0.50))
 
-                eff_def = max(0, m.phys_def - armor_pierce)
                 if hidden_strike:
                     dmg = int(dmg * 1.35)
-                final_dmg = max(1, dmg - eff_def)
+                final_dmg = self._physical_hit_damage(m, dmg, armor_pierce, was_unaware, action)
                 m.hp -= final_dmg
+                if hit_i == 0:
+                    hit_count += 1
 
                 # Раскол лат
                 shatter = getattr(weap, "shatter_armor", 0) if weap else 0
@@ -651,7 +733,15 @@ class CombatMixin:
 
                 if m.hp <= 0:
                     any_killed = True
-                self._check_mob_death(m)
+                self._check_mob_death(m, action)
+
+        p = self.player
+        if hit_count:
+            self._trigger_firm_stance()
+        if (wide and not wide_attack and hit_count >= 2
+                and p.passive_time >= p.passive_ready_at.get("wide_swing", 0.0)):
+            p.passive_until["wide_swing"] = math.inf
+            p.passive_ready_at["wide_swing"] = p.passive_time + PASSIVES["wide_swing"]["cooldown"]
 
         if any_killed and weap and getattr(weap, "reset_cd_on_kill", False):
             self.player.attack_cd = 0.05
@@ -672,14 +762,15 @@ class CombatMixin:
         return True
 
 
-    def _execute_skill_or_spell(self, item, target_wx, target_wy):
+    def _execute_skill_or_spell(self, item, target_wx, target_wy, mana_paid=0.0):
         self.player.cast_glow_color = None
         px, py = self.player.x, self.player.y
+        is_combat = item.type == "combat_skill"
+        action = self._physical_attack_context() if is_combat else {}
         if getattr(item,"shape",None) not in ("stealth","trap","evade"):
             self.emit_noise(px, py, 7.2)
         if getattr(item,"shape",None) not in ("stealth","trap","evade","guard"):
             self.player.stealth_timer = 0
-        is_combat = (item.type == "combat_skill")
         if item.type == "consumable_spell":
             total_pwr = int(math.floor(item.power * 1.65 + self.player.mag_attack * 1.5))
             growth = ("mind", 0.30)
@@ -691,8 +782,10 @@ class CombatMixin:
         else:
             total_pwr = int(math.floor(item.power + self.player.mag_attack))
             growth = ("mind", 0.35)
-        growth_credit = {"action": growth, "awarded": False}
+        growth_credit = {"action": growth, "awarded": False, **action}
         c_type = getattr(item, "cast_type", "projectile")
+        if c_type not in ("targeted", "chain_lightning"):
+            self._trigger_spell_passives(item)
 
         if c_type == "physical":
             self._execute_physical_ability(item, total_pwr, target_wx, target_wy, growth_credit)
@@ -781,11 +874,12 @@ class CombatMixin:
             )
             if not target_mob:
                 if item.type in ("spell", "permanent_spell"):
-                    self.player.mp = min(float(self.player.max_mp), self.player.mp + item.mp_cost)
+                    self.player.mp = min(float(self.player.max_mp), self.player.mp + mana_paid)
                 self.player.cooldowns.pop(item.id, None)
                 self.add_popup(target_wx, target_wy, "Нет цели!", (195, 195, 210))
                 return
 
+            self._trigger_spell_passives(item)
             self.sfx.play("crit")
             if hasattr(self, "fx") and self.fx:
                 self.fx.trigger_shake(1.7, 0.14)
@@ -981,10 +1075,11 @@ class CombatMixin:
             )
             if not target_mob:
                 if item.type in ("spell", "permanent_spell"):
-                    self.player.mp = min(float(self.player.max_mp), self.player.mp + item.mp_cost)
+                    self.player.mp = min(float(self.player.max_mp), self.player.mp + mana_paid)
                 self.player.cooldowns.pop(item.id, None)
                 self.add_popup(target_wx, target_wy, "Нет цели!", (195, 195, 210))
                 return
+            self._trigger_spell_passives(item)
             self.sfx.play("magic")
             target_mob.alert_to_combat(self.sfx, self.add_popup)
             dmg = max(1, int(math.floor(total_pwr - target_mob.mag_def)))
@@ -1048,7 +1143,7 @@ class CombatMixin:
             credit["awarded"] = True
 
 
-    def _check_mob_death(self, m):
+    def _check_mob_death(self, m, action=None):
         if m.hp <= 0 and m in self.mobs:
             self.mobs.remove(m)
             self.fx.add_blood_splatter(m.x, m.y, count=10, is_kill=True)
@@ -1059,6 +1154,14 @@ class CombatMixin:
                     spd = random.uniform(0.8, 2.8)
                     self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, (190, 180, 170), 2.8, 0.40))
                 return
+            p = self.player
+            if p.passive_power("change_target") and p.passive_time >= p.passive_ready_at.get("change_target", 0.0):
+                settings = PASSIVES["change_target"]
+                p.last_killed_target = m
+                p.passive_until["change_target"] = p.passive_time + settings["duration"]
+                p.passive_ready_at["change_target"] = p.passive_time + settings["cooldown"]
+                if action is not None:
+                    action["change_target_kill"] = True
             name = self.loc.get("jungle_enemy_names", {}).get(m.kind, m.kind)
             self.add_log("combat", f"Враг повержен: {name} (+{m.xp_value} опыта).", (135, 245, 160))
             drop_tx, drop_ty = int(m.x), int(m.y)

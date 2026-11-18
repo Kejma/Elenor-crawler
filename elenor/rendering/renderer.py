@@ -4,6 +4,7 @@ import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
 from elenor.config import DEEP_WATER, FALLEN_LOG, PEBBLE_SHORE, PIER, SHALLOW_WATER
 from elenor.entities.objects import JUNGLE_KEY_COLORS
+from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
@@ -51,8 +52,7 @@ class Renderer(UIRendererMixin):
         self.font_popup_big = pygame.font.SysFont("consolas", 24, bold=True)
 
         hud_y = CANVAS_H * SCALE
-        # Центрируем весь боевой пояс ([Q/E] + [1..4] + [5 пассивок]) ровно по центру экрана 1920px!
-        belt_total_w = (4 * 58) + 18 + (4 * 58)
+        belt_total_w = 4 * 58 + 18 + 4 * 58 + 24 + PASSIVE_SLOT_LIMIT * 52
         belt_start_x = (SCREEN_W - belt_total_w) // 2
         ab_x = belt_start_x
         hb_x = ab_x + 4 * 58 + 18
@@ -60,12 +60,15 @@ class Renderer(UIRendererMixin):
 
         self.ability_rects = [pygame.Rect(ab_x + i * 58, hud_y + 22, 54, 56) for i in range(4)]
         self.hotbar_rects = [pygame.Rect(hb_x + i * 58, hud_y + 22, 54, 56) for i in range(4)]
-        self.passive_slot_rects = []
+        self.passive_slot_rects = [
+            pygame.Rect(ps_x + i * 52, hud_y + 26, 48, 48) for i in range(PASSIVE_SLOT_LIMIT)
+        ]
         self.bag_btn_rect = pygame.Rect(SCREEN_W - 176, hud_y + 22, 156, 56)
         self.inv_slot_rects = []
         self.equip_slot_rects = {}
         self.stat_plus_rects = {}
         self.perk_card_rects = []
+        self.perk_glow_cache = {}
         self.modal_rect = pygame.Rect(0, 0, 0, 0)
         self.journal_btn_rect = pygame.Rect(0, 0, 0, 0)
         self.journal_seed_rect = pygame.Rect(0, 0, 0, 0)
@@ -1607,16 +1610,17 @@ class Renderer(UIRendererMixin):
         coin_s = self.font_small.render(format_copper_Trigger(player.gold, compact=True), True, (255, 215, 80))
         screen.blit(coin_s, (262 + (88 - coin_s.get_width()) // 2, hud_y + 51))
 
-        # 4A. Active Ability Slots [Q] and [E] (с серо-синим фильтром Warcraft 3 при нехватке маны!)
+        # Active slots Q/E/R/F.
         hovered_hud_item = None
         key_labels = ("Q", "E", "R", "F")
         for i, rect in enumerate(self.ability_rects):
             is_hov = rect.collidepoint(hover_pos)
             item = player.ability_slots[i]
-            is_oom = bool(item and item.type in ("spell", "permanent_spell") and player.mp < item.mp_cost)
-            bd_col = (58, 78, 118) if is_oom else (item.rarity_color if item else (65, 105, 145))
-            self.draw_pixel_frame(screen, rect, UI_SLOT_BG, bd_col, is_hov, player.illumination)
-            if item:
+            is_oom = bool(item and item.type in ("spell", "permanent_spell") and player.mp < player.ability_mana_cost(item))
+            bd_col = VECTOR_COLORS.get(item.branch, UI_BORDER_WOOD) if item else UI_BORDER_WOOD
+            self.draw_pixel_frame(screen, rect, (43, 35, 48) if is_hov else UI_SLOT_BG,
+                                  bd_col, False, player.illumination)
+            if item and drag_item is not item:
                 if is_oom:
                     ic_tmp = pygame.Surface((32, 32), pygame.SRCALPHA)
                     self.draw_item_icon(ic_tmp, item.icon, 0, 0, 32)
@@ -1664,7 +1668,6 @@ class Renderer(UIRendererMixin):
             screen.blit(self.font_small.render(str(i + 1), True, UI_BORDER_HIGHLIGHT), (rect.x + 6, rect.y + 5))
 
         # 5. 5 Passive Perk Slots with Hover Tooltip!
-        from elenor.config import RARITY_COLORS
         perks_db = ui_texts.get("_perks_db", {})
         owned_passives = list(player.passive_perks.items())
         hovered_passive = None
@@ -1672,13 +1675,16 @@ class Renderer(UIRendererMixin):
             if p_idx < len(owned_passives):
                 pid, plvl = owned_passives[p_idx]
                 pdata = perks_db.get(pid, {})
-                p_col = RARITY_COLORS.get(pdata.get("rarity", "common"), UI_BORDER_GOLD)
+                p_col = VECTOR_COLORS.get(perk_branch(pid, pdata), UI_BORDER_WOOD)
                 is_p_hov = pr.collidepoint(hover_pos)
-                self.draw_pixel_frame(screen, pr, UI_SLOT_BG, p_col, is_p_hov, player.illumination)
+                self.draw_pixel_frame(screen, pr, (43, 35, 48) if is_p_hov else UI_SLOT_BG,
+                                      p_col, False, player.illumination)
                 self.draw_item_icon(screen, pdata.get("icon", "trinket"), pr.x + 8, pr.y + 8, 32)
                 lv_txt = self.font_small.render(str(plvl), True, (255, 235, 110))
                 pygame.draw.rect(screen, (14, 12, 18), (pr.right - lv_txt.get_width() - 6, pr.bottom - 16, lv_txt.get_width() + 4, 14))
                 screen.blit(lv_txt, (pr.right - lv_txt.get_width() - 4, pr.bottom - 16))
+                if player.passive_active(pid):
+                    pygame.draw.rect(screen, p_col, (pr.x + 5, pr.y + 5, 6, 3))
                 if is_p_hov:
                     hovered_passive = (pid, plvl, pdata)
             else:
@@ -1702,10 +1708,19 @@ class Renderer(UIRendererMixin):
             self._render_levelup_modal(screen, player, levelup_choices, ui_texts, hover_pos)
         elif inv_open:
             self._render_character_sheet_modal(screen, player, ui_texts, hover_pos, drag_item)
+            if not ui_texts.get("_journal_open"):
+                if any(player.ability_slots):
+                    hint = self.font_small.render("Перетащи способности между Q/E/R/F", True, UI_TEXT_MAIN)
+                    center = (self.ability_rects[0].left + self.ability_rects[-1].right) // 2
+                    screen.blit(hint, (center - hint.get_width() // 2, self.ability_rects[0].bottom - 2))
+                if not drag_item and hovered_hud_item:
+                    self._render_item_tooltip(screen, player, hovered_hud_item, ui_texts, hover_pos)
+                elif not drag_item and hovered_passive:
+                    self._render_passive_perk_tooltip(screen, player, hovered_passive, hover_pos)
         elif hovered_hud_item:
             self._render_item_tooltip(screen, player, hovered_hud_item, ui_texts, hover_pos, compare=False)
         elif hovered_passive:
-            self._render_passive_perk_tooltip(screen, player, hovered_passive, ui_texts, hover_pos)
+            self._render_passive_perk_tooltip(screen, player, hovered_passive, hover_pos)
         elif world_hover_item:
             self._render_item_tooltip(screen, player, world_hover_item, ui_texts, hover_pos, compare=True, world_item=True)
 

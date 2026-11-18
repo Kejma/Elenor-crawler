@@ -143,6 +143,9 @@ def main():
                     game.player.buffered_combat = None
                     if game.inv_open:
                         game.inv_open = False
+                        game.journal_open = False
+                        game.drag_item = None
+                        game.drag_source = None
                     else:
                         game.in_main_menu = True
                         game.main_menu.can_resume = game.player.hp > 0
@@ -176,7 +179,7 @@ def main():
                     if not game.inv_open and not game.levelup_choices:
                         ab_idx = (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f).index(event.key)
                         game.use_or_equip_item(game.player.ability_slots[ab_idx], world_mx, world_my, from_hotbar=True)
-                elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5):
+                elif pygame.K_1 <= event.key <= pygame.K_9:
                     slot_idx = event.key - pygame.K_1
                     if game.levelup_choices and slot_idx < len(game.levelup_choices["choices"]):
                         game.select_perk_choice(slot_idx)
@@ -213,7 +216,13 @@ def main():
                         clicked_ui = False
                         for i, ar in enumerate(game.renderer.ability_rects):
                             if ar.collidepoint(event.pos):
-                                game.use_or_equip_item(game.player.ability_slots[i], world_mx, world_my, from_hotbar=True)
+                                ability = game.player.ability_slots[i]
+                                if game.inv_open:
+                                    if ability and not game.journal_open:
+                                        game.drag_item = ability
+                                        game.drag_source = ("ability", i)
+                                else:
+                                    game.use_or_equip_item(ability, world_mx, world_my, from_hotbar=True)
                                 clicked_ui = True
                                 break
                         for i, hr in enumerate(game.renderer.hotbar_rects):
@@ -267,6 +276,17 @@ def main():
                                 break
 
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if game.drag_source and game.drag_source[0] == "ability":
+                    source = game.drag_source[1]
+                    if game.inv_open and not game.journal_open:
+                        for target, rect in enumerate(game.renderer.ability_rects):
+                            if target != source and rect.collidepoint(event.pos):
+                                game.player.swap_ability_slots(source, target)
+                                game.sfx.play("ui")
+                                break
+                    game.drag_item = None
+                    game.drag_source = None
+                    continue
                 if game.drag_item:
                     dropped = False
                     for i, hr in enumerate(game.renderer.hotbar_rects):
@@ -415,7 +435,7 @@ def main():
                     if pa["kind"] == "melee":
                         game._execute_melee_swing(pa["tx"], pa["ty"])
                     elif pa["kind"] == "spell":
-                        game._execute_skill_or_spell(pa["item"], pa["tx"], pa["ty"])
+                        game._execute_skill_or_spell(pa["item"], pa["tx"], pa["ty"], mana_paid=pa["mana_paid"])
                     elif pa["kind"] == "light_torch":
                         game.player.torch_on = True
                         game.sfx.play("torch")
@@ -510,8 +530,9 @@ def main():
 
                                 is_crit = was_unaware or (random.random() < getattr(pr, "crit_chance", 0.0))
                                 raw_d = int(pr.mag_dmg * (1.75 if is_crit else 1.0))
-                                eff_def = max(0, m.phys_def - getattr(pr, "armor_pierce", 0))
-                                dmg = max(1, raw_d - eff_def)
+                                dmg = game._physical_hit_damage(
+                                    m, raw_d, pr.armor_pierce, was_unaware, pr.passive_action,
+                                )
                                 if getattr(pr, "shatter_armor", 0) > 0 and m.phys_def > 0:
                                     m.phys_def = max(0, m.phys_def - pr.shatter_armor)
                                 if getattr(pr, "life_steal", 0) > 0:
@@ -545,7 +566,7 @@ def main():
                                 game.sfx.play("hit")
                                 game.add_popup(m.x, m.y, f"-{dmg}", pr.color)
 
-                            game._check_mob_death(m)
+                            game._check_mob_death(m, pr.passive_action)
 
                             bounced = False
                             if getattr(pr, "bounces", 0) > 0:

@@ -13,7 +13,7 @@ class ProgressionMixin:
         ptype = pdata.get("type", "passive")
         if ptype == "active":
             return (pid in self.player.active_perks) or (len(self.player.active_perks) < 4)
-        return False
+        return self.player.can_learn_passive(pid)
 
 
     def _get_perk_branch(self, pid, pdata):
@@ -101,7 +101,7 @@ class ProgressionMixin:
             used_ids.add(picked_pid)
             p_copy = dict(picked_data)
             p_copy["id"] = picked_pid
-            if picked_pid in self.player.perks and picked_data.get("type") == "active":
+            if picked_pid in self.player.perks:
                 upg_rar, upg_roll = self._roll_spell_upgrade_stats(picked_data, tier_weights_list)
                 p_copy["rarity"] = upg_rar
                 p_copy["upgrade_roll"] = upg_roll
@@ -126,8 +126,6 @@ class ProgressionMixin:
             if pid in perks_db:
                 p_copy = dict(perks_db[pid])
                 p_copy["id"] = pid
-                equipped = next((item for item in self.player.ability_slots if item and item.id == pid), None)
-                p_copy["rarity"] = equipped.rarity if equipped else "common"
                 choices.append(p_copy)
         self.inv_open = False
         self.levelup_choices = {"mode": "erase", "choices": choices, "lock_timer": 0.4, "seal_item": seal_item}

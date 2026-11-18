@@ -1,6 +1,29 @@
 """Mechanics registry; rarity belongs to each acquired instance."""
 
+PASSIVE_SLOT_LIMIT = 5
+
+VECTOR_COLORS = {
+    "body": (245, 102, 104),
+    "cunning": (112, 220, 133),
+    "mind": (115, 175, 255),
+}
+
+# Power is a fraction. Durations and trigger cooldowns stay fixed across ranks.
+PASSIVES = {
+    "firm_stance": dict(branch="body", power=0.18, cap=0.45, duration=2.0, stationary=0.5),
+    "wide_swing": dict(branch="body", power=0.30, cap=0.75, cooldown=3.0),
+    "armor_breaker": dict(branch="body", power=0.22, cap=0.65, duration=3.0, cooldown=8.0),
+    "sidestep": dict(branch="cunning", power=0.20, cap=0.50, duration=1.5),
+    "quiet_work": dict(branch="cunning", power=0.20, cap=0.60),
+    "change_target": dict(branch="cunning", power=0.22, cap=0.60, duration=3.0, cooldown=4.0),
+    "divine_pact": dict(branch="mind", power=0.15, cap=0.45, duration=5.0),
+    "spell_focus": dict(branch="mind", power=0.15, cap=0.40),
+    "warding_pulse": dict(branch="mind", power=0.85, cap=2.1, radius=2.3, cooldown=5.0),
+}
+
 ABILITIES = {
+    **{pid: dict(data, type="passive", icon=f"ability_{pid}", upgradable_stats=["power"])
+       for pid, data in PASSIVES.items()},
     "whirlwind": {
         "type": "active",
         "skill_kind": "combat",
@@ -225,6 +248,7 @@ ABILITIES = {
         "duration": 3.5,
     },
     "pyro_firebolt": {
+        "school": "pyro",
         "type": "active",
         "skill_kind": "spell",
         "cast_type": "projectile",
@@ -240,6 +264,7 @@ ABILITIES = {
         "branch": "mind",
     },
     "pyro_ignite": {
+        "school": "pyro",
         "type": "active",
         "skill_kind": "spell",
         "cast_type": "self_ignite",
@@ -254,6 +279,7 @@ ABILITIES = {
         "branch": "mind",
     },
     "stratos_frost_nova": {
+        "school": "stratos",
         "type": "active",
         "skill_kind": "spell",
         "cast_type": "frost_nova",
@@ -270,6 +296,7 @@ ABILITIES = {
         "branch": "mind",
     },
     "stratos_chain_lightning": {
+        "school": "stratos",
         "type": "active",
         "skill_kind": "spell",
         "cast_type": "chain_lightning",
@@ -285,6 +312,7 @@ ABILITIES = {
         "branch": "mind",
     },
     "persephone_rejuvenation": {
+        "school": "persephone",
         "type": "active",
         "skill_kind": "spell",
         "cast_type": "self_rejuvenation",
@@ -299,6 +327,7 @@ ABILITIES = {
         "branch": "mind",
     },
     "persephone_entangle": {
+        "school": "persephone",
         "type": "active",
         "skill_kind": "spell",
         "cast_type": "entangle_cursor",
@@ -323,3 +352,14 @@ def perk_branch(perk_id, data=None):
 def acquisition_bonuses(rarity, stats):
     budget = {"common": 0.0, "uncommon": 0.12, "rare": 0.24, "epic": 0.4, "legendary": 0.6}.get(rarity, 0.0)
     return {stat: budget / len(stats) for stat in stats}
+
+
+def passive_power_at(pid, bonus):
+    data = PASSIVES[pid]
+    return min(data["cap"], round(data["power"] * (1.0 + bonus), 3))
+
+
+def spell_school(item):
+    if item.type == "permanent_spell":
+        return ABILITIES.get(item.id, {}).get("school")
+    return None

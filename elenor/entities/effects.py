@@ -52,6 +52,7 @@ class Projectile:
         self.crit_chance = crit_chance
         self.life_steal = life_steal
         self.hit_mobs = set()
+        self.passive_action = {}
         self.angle = math.atan2(dir_y, dir_x)
         self.life = (max_dist / max(1.0, speed)) if max_dist else 4.5
         self.spawn_timer = 0.0

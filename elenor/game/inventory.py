@@ -252,10 +252,10 @@ class InventoryMixin:
                 return
         if pending is not None:
             return
-        ev = self.loc["events"]
+        mana_cost = self.player.ability_mana_cost(item) if item.type in ("spell", "permanent_spell") else 0.0
 
         # 1. Сначала проверяем ману: если не хватает — короткий грустный звук без надписей "КД"!
-        if item.type in ("spell", "permanent_spell") and self.player.mp < item.mp_cost:
+        if self.player.mp < mana_cost:
             self.sfx.play("no_mana")
             return
 
@@ -286,11 +286,6 @@ class InventoryMixin:
             return
 
         if is_ability:
-            if item.type in ("spell", "permanent_spell") and self.player.mp < item.mp_cost:
-                self.set_thought(ev["no_mana"])
-                self.sfx.play("ui")
-                return
-
             tx = target_wx if target_wx is not None else (self.player.x + 1.0)
             ty = target_wy if target_wy is not None else self.player.y
 
@@ -310,8 +305,7 @@ class InventoryMixin:
                     self.add_popup(tx, ty, "Нет цели!", (195, 195, 210))
                     return
 
-            if item.type in ("spell", "permanent_spell"):
-                self.player.mp -= item.mp_cost
+            self.player.mp -= mana_cost
             self.player.buffered_combat = None
             self.world_active = True
             self.player.cooldowns[item.id] = item.cooldown
@@ -326,13 +320,14 @@ class InventoryMixin:
                 self.player.pending_action = {
                     "kind": "spell",
                     "item": item,
+                    "mana_paid": mana_cost,
                     "timer": item.windup,
                     "max_timer": item.windup,
                     "tx": tx,
                     "ty": ty
                 }
             else:
-                self._execute_skill_or_spell(item, tx, ty)
+                self._execute_skill_or_spell(item, tx, ty, mana_paid=mana_cost)
             return
 
         elif item.type == "equipment":

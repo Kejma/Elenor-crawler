@@ -1,5 +1,7 @@
 from elenor.config import SHALLOW_WATER
-from elenor.data.abilities import acquisition_bonuses, perk_branch
+from elenor.data.abilities import (
+    PASSIVES, PASSIVE_SLOT_LIMIT, acquisition_bonuses, passive_power_at, perk_branch, spell_school,
+)
 import math
 import random
 from elenor.config import PLAYER_BASE_SPEED, TORCH_BASE_RADIUS, DARK_VISION_RADIUS
@@ -45,10 +47,18 @@ class Player:
         self.stat_points = 0
         self.pending_perk_rolls = 0
 
-        # Max 2 Active abilities ([Q], [E]) and max 5 Passive perks!
+        # Active slots are bound to Q/E/R/F.
         self.perks = {}              # perk_id -> level
         self.active_perks = {}       # perk_id -> level (max 4 keys)
-        self.passive_perks = {}      # perk_id -> level (disabled)
+        self.passive_perks = {}      # perk_id -> level
+        self.passive_bonuses = {}
+        self.passive_ready_at = {}
+        self.passive_until = {}
+        self.passive_time = 0.0
+        self.stationary_for = 0.0
+        self.last_passive_position = (self.x, self.y)
+        self.recent_spell_schools = {}
+        self.last_killed_target = None
         self.perk_timers = {"storm_aura": 1.5}
         self.cooldowns = {}          # item_or_perk_id -> remaining cooldown seconds
         self.pending_action = None   # Holds windup action dict before strike/cast fires!
@@ -351,65 +361,69 @@ class Player:
             new_v = self.eval_stat_with_pct(sp_item.id, st_key, base_v, pct)
             setattr(sp_item, st_key, new_v)
 
+    def passive_power(self, perk_id):
+        if perk_id not in self.passive_perks:
+            return 0.0
+        return passive_power_at(perk_id, self.passive_bonuses[perk_id])
+
+    def passive_active(self, perk_id):
+        return self.passive_until.get(perk_id, 0.0) > self.passive_time
+
+    def can_learn_passive(self, perk_id):
+        if perk_id not in PASSIVES:
+            return False
+        if perk_id in self.passive_perks:
+            return self.passive_power(perk_id) < PASSIVES[perk_id]["cap"]
+        return len(self.passive_perks) < PASSIVE_SLOT_LIMIT
+
+    def ability_mana_cost(self, item):
+        school = spell_school(item)
+        discount = self.passive_power("divine_pact")
+        window = PASSIVES["divine_pact"]["duration"]
+        if school and discount and any(
+            other != school and self.passive_time - cast_at < window
+            for other, cast_at in self.recent_spell_schools.items()
+        ):
+            return round(item.mp_cost * (1.0 - discount), 3)
+        return item.mp_cost
+
+    def swap_ability_slots(self, source, target):
+        self.ability_slots[source], self.ability_slots[target] = (
+            self.ability_slots[target], self.ability_slots[source],
+        )
+
     def apply_perk(self, perk_id, perks_db, upgrade_roll=None):
         p_data = perks_db.get(perk_id, {})
-        p_type = p_data.get("type", "passive")
-        if p_type != "active" or (perk_id not in self.active_perks and all(self.ability_slots)):
+        if p_data.get("type", "passive") == "passive":
+            if not self.can_learn_passive(perk_id):
+                return
+            if perk_id in self.passive_perks:
+                bonus = (upgrade_roll or {"power": 0.12})["power"]
+            else:
+                bonus = acquisition_bonuses(p_data.get("rarity", "common"), ["power"])["power"]
+            level = self.perks.get(perk_id, 0) + 1
+            self.perks[perk_id] = self.passive_perks[perk_id] = level
+            self.passive_bonuses[perk_id] = self.passive_bonuses.get(perk_id, 0.0) + bonus
             return
 
-        new_lvl = self.perks.get(perk_id, 0) + 1
-        self.perks[perk_id] = new_lvl
+        if p_data.get("type") != "active" or (perk_id not in self.active_perks and all(self.ability_slots)):
+            return
+        level = self.perks.get(perk_id, 0) + 1
+        self.perks[perk_id] = self.active_perks[perk_id] = level
+        existing_spell = next((item for item in self.ability_slots if item and item.id == perk_id), None)
+        if existing_spell:
+            bonuses = upgrade_roll or dict.fromkeys(existing_spell.upgradable_stats[:1], 0.12)
+            for stat, bonus in bonuses.items():
+                existing_spell.stat_bonuses_pct[stat] = existing_spell.stat_bonuses_pct.get(stat, 0.0) + bonus
+            self.recalculate_spell_from_base(existing_spell)
+            return
 
-        if p_type == "active":
-            self.active_perks[perk_id] = new_lvl
-            existing_spell = next((h for h in self.ability_slots if h and h.id == perk_id), None)
-            if existing_spell:
-                # Суммируем новые проценты с уже накопленными и пересчитываем от БАЗЫ!
-                if upgrade_roll:
-                    for st_k, add_pct in upgrade_roll.items():
-                        existing_spell.stat_bonuses_pct[st_k] = existing_spell.stat_bonuses_pct.get(st_k, 0.0) + add_pct
-                else:
-                    for st_k in existing_spell.upgradable_stats[:1]:
-                        existing_spell.stat_bonuses_pct[st_k] = existing_spell.stat_bonuses_pct.get(st_k, 0.0) + 0.12
-                self.recalculate_spell_from_base(existing_spell)
-            else:
-                s_kind = p_data.get("skill_kind", "spell")
-                spell_item_data = dict(p_data)
-                spell_item_data["type"] = "combat_skill" if s_kind == "combat" else "permanent_spell"
-                sp_item = Item(perk_id, spell_item_data)
-                sp_item.stat_bonuses_pct.update(acquisition_bonuses(sp_item.rarity, sp_item.upgradable_stats))
-                self.recalculate_spell_from_base(sp_item)
-                for index, slot in enumerate(self.ability_slots):
-                    if slot is None:
-                        self.ability_slots[index] = sp_item
-                        break
-        else:
-            self.passive_perks[perk_id] = new_lvl
-            if perk_id == "tough_skin":
-                self.hp_bonus += 8
-                self.hp = min(float(self.max_hp), self.hp + 10.0)
-            elif perk_id == "iron_grip":
-                self.perk_phys_atk += 2
-            elif perk_id == "clear_mind":
-                self.perk_mag_atk += 2
-                self.mp_bonus += 3
-                self.mp = min(float(self.max_mp), self.mp + 3.0)
-            elif perk_id == "cat_step":
-                self.perk_noise -= 0.18
-                self.perk_dodge += 0.05
-            elif perk_id == "keen_edge":
-                self.perk_crit += 0.08
-                self.body += 1
-            elif perk_id == "stone_ribs":
-                self.perk_phys_def += 3
-                self.perk_mag_def += 3
-            elif perk_id == "blood_hunger":
-                self.perk_lifesteal += 2
-            elif perk_id == "titan_blood":
-                self.hp_bonus += 18
-                self.hp = min(float(self.max_hp), self.hp + 18.0)
-                self.perk_phys_def += 3
-                self.hp_regen += 1.2
+        s_kind = p_data.get("skill_kind", "spell")
+        item_type = "combat_skill" if s_kind == "combat" else "permanent_spell"
+        spell = Item(perk_id, dict(p_data, type=item_type))
+        spell.stat_bonuses_pct.update(acquisition_bonuses(spell.rarity, spell.upgradable_stats))
+        self.recalculate_spell_from_base(spell)
+        self.ability_slots[self.ability_slots.index(None)] = spell
 
     def remove_perk(self, perk_id):
         """Completely erases an active or passive perk and all its stacks without compensation."""
@@ -418,6 +432,10 @@ class Player:
             return False
         self.active_perks.pop(perk_id, None)
         self.passive_perks.pop(perk_id, None)
+        self.passive_bonuses.pop(perk_id, None)
+        self.passive_until.pop(perk_id, None)
+        if perk_id == "change_target":
+            self.last_killed_target = None
 
         for i in range(len(self.ability_slots)):
             if self.ability_slots[i] and self.ability_slots[i].id == perk_id:
@@ -545,6 +563,8 @@ class Player:
             spd_mult *= 0.50
         if self.evade_timer > 0:
             spd_mult *= 1.3
+        if self.passive_active("sidestep"):
+            spd_mult *= 1.0 + self.passive_power("sidestep")
         step = PLAYER_BASE_SPEED * spd_mult * dt
 
         rad = 0.28
@@ -674,6 +694,13 @@ class Player:
         self.lunge_vy *= decay
 
     def update_timers(self, dt):
+        self.passive_time += dt
+        position = (self.x, self.y)
+        if position == self.last_passive_position:
+            self.stationary_for += dt
+        else:
+            self.stationary_for = 0.0
+            self.last_passive_position = position
         for name in ("guard_timer", "evade_timer", "stealth_timer"):
             setattr(self, name, max(0, getattr(self,name,0)-dt))
         self.anim_timer += dt

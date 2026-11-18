@@ -32,11 +32,13 @@ def _spawn_particles(game, wx, wy, count, colors, spd_range=(1.0, 3.0), size=2.6
 
 
 def hit(game, mob, item, power, credit, nx, ny):
+    was_unaware = mob.state != "combat"
     mob.alert_to_combat(game.sfx, game.add_popup)
     weapon = game.player.equipment["right_hand"]
-    armor = max(0, mob.phys_def - getattr(weapon, "armor_pierce", 0))
-    damage = max(1, int(power) - armor)
+    damage = game._physical_hit_damage(mob, power, getattr(weapon, "armor_pierce", 0), was_unaware, credit)
     mob.hp -= damage
+    if item.shape not in ("knife", "trap"):
+        game._trigger_firm_stance()
     mob.apply_knockback(nx, ny, item.knockback)
     mob.apply_status(
         item.status, item.status_dur, game.add_popup, dmg_val=max(1, int(power) // 4)
@@ -59,7 +61,7 @@ def hit(game, mob, item, power, credit, nx, ny):
     )
     game.add_popup(mob.x, mob.y, f"-{damage}", item.color)
     game.record_combat_growth(mob, credit)
-    game._check_mob_death(mob)
+    game._check_mob_death(mob, credit)
 
 
 def move_step(game, nx, ny, distance):

@@ -1,7 +1,9 @@
-"""Semantic pixel glyphs for active skills; cached at each requested size."""
+"""Semantic pixel glyphs for abilities; cached at each requested size."""
 
 import math
 import pygame
+
+from elenor.data.abilities import PASSIVES
 
 CACHE = {}
 
@@ -36,10 +38,10 @@ def draw_ability_icon(surface, name, x, y, size):
         shadow = (115, 105, 185)
         shadow_hi = (185, 195, 245)
 
-        # Контрастная подложка по стилю способности
-        if glyph in ("whirlwind", "earth_slam", "heavy_strike", "shield_bash", "cleave", "war_stomp"):
+        passive_branch = PASSIVES.get(glyph, {}).get("branch")
+        if passive_branch == "body" or glyph in ("whirlwind", "earth_slam", "heavy_strike", "shield_bash", "cleave", "war_stomp"):
             bg_col, rim_col = (42, 24, 22, 220), (110, 58, 38, 240)
-        elif glyph in ("throw_knife", "poison_flask", "piercing_shot", "hamstring", "fan_blades", "venom_strike"):
+        elif passive_branch == "cunning" or glyph in ("throw_knife", "poison_flask", "piercing_shot", "hamstring", "fan_blades", "venom_strike"):
             bg_col, rim_col = (20, 36, 34, 220), (52, 105, 88, 240)
         else:
             bg_col, rim_col = (22, 26, 46, 220), (62, 84, 135, 240)
@@ -308,6 +310,116 @@ def draw_ability_icon(surface, name, x, y, size):
             outlined_line(green, [(6, 18), (16, 15), (26, 18)], 2)
             for lx, ly in ((9, 12), (19, 11), (14, 5), (23, 13), (11, 21)):
                 poly(green_hi, [(lx, ly - 3), (lx + 3, ly), (lx, ly + 2), (lx - 2, ly)], outline=False)
+
+        elif glyph == "firm_stance":
+            # Copper-rimmed shield dug into the earth.
+            poly((104, 61, 54), [(4, 26), (10, 24), (13, 25), (21, 24), (28, 27), (24, 29), (7, 29)])
+            line((192, 110, 63), [(6, 27), (12, 26), (15, 27), (22, 25), (26, 27)], 1)
+            poly(gold, [(8, 7), (16, 4), (24, 7), (24, 16), (21, 22), (16, 26), (11, 22), (8, 16)])
+            poly((100, 120, 151), [(10, 9), (16, 7), (22, 9), (22, 16), (19, 21), (16, 24), (12, 20), (10, 16)], False)
+            poly(steel, [(10, 9), (16, 7), (16, 23), (12, 20), (10, 16)], False)
+            poly((91, 51, 49), [(16, 10), (20, 14), (16, 20), (12, 14)], False)
+            poly(warm_hi, [(16, 11), (18, 14), (16, 17), (14, 14)], False)
+            line(steel_hi, [(9, 9), (9, 15)], 1)
+
+        elif glyph == "wide_swing":
+            # Broad axe and a graduated crescent of motion.
+            poly(warm_d, [(4, 23), (9, 12), (17, 6), (24, 5), (29, 8), (23, 8), (15, 13), (8, 21), (7, 27)])
+            poly(warm, [(5, 24), (10, 14), (18, 8), (25, 6), (29, 8), (24, 8), (17, 11), (11, 17)], False)
+            line(warm_hi, [(6, 20), (10, 14), (17, 9), (24, 7)], 1)
+            outlined_line(wood, [(10, 27), (24, 13)], 3)
+            line(gold, [(12, 25), (19, 18)], 1)
+            poly(steel_d, [(19, 12), (25, 10), (29, 15), (28, 20), (24, 22), (22, 17), (18, 15)])
+            poly(steel, [(25, 11), (29, 15), (28, 20), (24, 22), (26, 17)], False)
+            line(steel_hi, [(28, 15), (27, 19), (25, 21)], 1)
+            icon.set_at((8, 10), warm_hi)
+            icon.set_at((14, 5), warm)
+
+        elif glyph == "armor_breaker":
+            # A split breastplate, backlit by the blow.
+            poly(steel_d, [(7, 8), (12, 5), (15, 8), (18, 8), (21, 5), (26, 8), (25, 14),
+                           (22, 16), (22, 24), (18, 27), (10, 26), (10, 17), (7, 14)])
+            poly(steel, [(8, 9), (12, 6), (15, 9), (12, 14), (10, 16), (8, 13)], False)
+            poly(steel, [(19, 9), (21, 6), (25, 9), (23, 13), (18, 15), (17, 12)], False)
+            poly((163, 174, 193), [(13, 17), (16, 19), (20, 19), (20, 24), (17, 26), (11, 25), (11, 21)], False)
+            outlined_line(crimson, [(18, 8), (14, 14), (18, 16), (13, 21), (17, 23), (15, 28)], 2)
+            line(warm_hi, [(18, 9), (15, 14), (18, 16), (14, 21), (17, 23)], 1)
+            line(warm, [(5, 16), (8, 18)], 1)
+            line(warm_hi, [(24, 18), (27, 16)], 1)
+
+        elif glyph == "sidestep":
+            # A boot cutting diagonally across two fading trails.
+            line(green_d, [(4, 23), (13, 23), (4, 28)], 2)
+            line(teal, [(5, 18), (13, 18), (7, 21)], 1)
+            poly((73, 117, 93), [(16, 6), (25, 8), (24, 13), (20, 18),
+                                  (21, 21), (27, 22), (27, 25), (16, 26), (12, 23), (14, 17)])
+            poly((135, 193, 132), [(17, 7), (24, 9), (21, 14), (15, 16)], False)
+            line(green_hi, [(17, 8), (22, 10)], 2)
+            line((35, 67, 59), [(13, 22), (17, 24), (25, 24)], 2)
+            line(green_hi, [(16, 17), (19, 18)], 1)
+            line(green_hi, [(15, 20), (18, 20)], 1)
+
+        elif glyph == "quiet_work":
+            # A dagger silhouetted against a crescent, in deep teal shadow.
+            poly((57, 112, 109), [(19, 4), (11, 5), (7, 9), (5, 15), (6, 21), (10, 25), (16, 27),
+                                   (21, 24), (15, 23), (11, 18), (10, 13), (13, 8)], False)
+            line(green_hi, [(18, 4), (11, 6), (8, 10), (6, 15), (7, 20), (10, 23)], 1)
+            dagger_shape((12, 25), (26, 9), (123, 191, 181), (116, 188, 120))
+            line(shadow, [(16, 27), (22, 26), (26, 23)], 1)
+            for point in ((23, 6), (27, 17), (22, 20)):
+                icon.set_at(point, teal)
+
+        elif glyph == "change_target":
+            # Two targets linked by a bent arrow.
+            pygame.draw.circle(icon, (44, 103, 85), (10, 20), 5, 1)
+            pygame.draw.circle(icon, teal, (10, 20), 2, 1)
+            pygame.draw.circle(icon, green_d, (22, 10), 6, 2)
+            pygame.draw.circle(icon, green_hi, (22, 10), 5, 1)
+            pygame.draw.circle(icon, (230, 253, 181), (22, 10), 2)
+            outlined_line(green, [(10, 24), (16, 26), (22, 24), (26, 20), (27, 16)], 2)
+            poly(green_hi, [(24, 18), (27, 14), (29, 19), (27, 18)], False)
+            line(teal, [(6, 14), (10, 10), (14, 9)], 1)
+            icon.set_at((19, 24), green_hi)
+
+        elif glyph == "divine_pact":
+            # Three schools meet around a shared center.
+            centers = ((16, 7, warm_d, warm, warm_hi), (8, 21, green_d, green, green_hi),
+                       (24, 21, cold_d, cold, cold_hi))
+            outlined_line(shadow, [(16, 7), (8, 21), (24, 21), (16, 7)], 3)
+            line(shadow_hi, [(16, 7), (8, 21), (24, 21), (16, 7)], 1)
+            for cx, cy, low, mid, high in centers:
+                pygame.draw.circle(icon, dark, (cx, cy), 6)
+                pygame.draw.circle(icon, low, (cx, cy), 5)
+                pygame.draw.circle(icon, mid, (cx - 1, cy - 1), 3)
+                line(high, [(cx - 2, cy), (cx - 2, cy - 2), (cx, cy - 3)], 1)
+            poly(cold_hi, [(16, 13), (18, 17), (16, 19), (14, 17)], False)
+
+        elif glyph == "spell_focus":
+            # Glass hourglass and a returning arc.
+            pygame.draw.arc(icon, cold_d, (3, 3, 26, 26), 0.10, 4.7, 2)
+            pygame.draw.arc(icon, cold, (4, 4, 24, 24), 0.22, 2.8, 1)
+            poly(cold_hi, [(15, 26), (10, 29), (16, 30)], False)
+            poly((43, 72, 130), [(10, 7), (22, 7), (21, 12), (17, 16), (21, 20),
+                                   (22, 25), (10, 25), (11, 20), (15, 16), (11, 12)])
+            line(cold_hi, [(11, 8), (12, 12), (16, 16), (12, 20), (11, 24)], 1)
+            line(cold, [(21, 8), (20, 12), (16, 16), (20, 20), (21, 24)], 1)
+            poly(warm_hi, [(13, 11), (19, 11), (16, 15)], False)
+            poly(gold, [(16, 20), (20, 24), (12, 24)], False)
+            line(shadow_hi, [(10, 7), (22, 7)], 2)
+            line(shadow_hi, [(10, 25), (22, 25)], 2)
+
+        elif glyph == "warding_pulse":
+            # Descending rings under a ward crystal.
+            for bounds, color in (((3, 13, 26, 13), cold_d), ((5, 12, 22, 12), shadow),
+                                  ((8, 13, 16, 8), cold)):
+                pygame.draw.ellipse(icon, color, bounds, 1)
+            line(cold_hi, [(5, 22), (10, 25), (16, 26), (22, 25), (27, 22)], 1)
+            poly((82, 125, 198), [(16, 4), (22, 10), (21, 16), (16, 21), (11, 16), (10, 10)])
+            poly(cold, [(16, 5), (16, 19), (12, 15), (11, 11)], False)
+            poly(shadow_hi, [(16, 7), (20, 11), (16, 15), (13, 11)], False)
+            line(cold_hi, [(16, 6), (12, 11), (16, 14)], 1)
+            for sx, sy in ((7, 11), (25, 11), (4, 17), (28, 17), (16, 28)):
+                icon.set_at((sx, sy), cold_hi)
 
         CACHE[key] = pygame.transform.scale(icon, (size, size))
     surface.blit(CACHE[key], (x, y))

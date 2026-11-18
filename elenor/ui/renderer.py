@@ -1,7 +1,9 @@
 import math
 import pygame
-from elenor.data.abilities import acquisition_bonuses
-from elenor.config import VIEW_H, SCALE, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
+from elenor.data.abilities import (
+    PASSIVES, PASSIVE_SLOT_LIMIT, VECTOR_COLORS, acquisition_bonuses, passive_power_at, perk_branch,
+)
+from elenor.config import VIEW_H, SCALE, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, RARITY_COLORS
 
 
 class UIRendererMixin:
@@ -81,55 +83,26 @@ class UIRendererMixin:
                         lines.append(f"{lbl}: {int(o_val)} -> {int(n_val)} (+{pct_int}%)")
                 return lines
 
-        # Passive perks numerical breakdown
-        def fmt(label, per_lvl, unit="", is_float=False):
-            if not is_upgrade:
-                v = per_lvl * max(1, target_lvl)
-                val_s = f"{v:.2f}" if is_float else f"{int(v)}"
-                return f"{label}: + {val_s}{unit}" if per_lvl > 0 else f"{label}: {val_s}{unit}"
-            v0 = per_lvl * cur_lvl
-            v1 = per_lvl * target_lvl
-            s0 = f"{v0:.2f}" if is_float else f"{int(v0)}"
-            s1 = f"{v1:.2f}" if is_float else f"{int(v1)}"
-            sign = "+" if per_lvl > 0 else ""
-            return f"{label}: {sign}{s0}{unit} -> {sign}{s1}{unit}"
+        if pid in PASSIVES:
+            bonus = player.passive_bonuses.get(pid, 0.0)
+            if not cur_lvl:
+                bonus = acquisition_bonuses(pdata.get("rarity", "common"), ["power"])["power"]
+            unit, factor = (" с", 1) if pid == "warding_pulse" else ("%", 100)
 
-        if pid == "tough_skin":
-            return [fmt("Макс. здоровье", 8, " ХП")]
-        elif pid == "iron_grip":
-            return [fmt("Физ. атака", 2, " ед.")]
-        elif pid == "clear_mind":
-            return [fmt("Маг. мощь", 2, " ед."), fmt("Макс. мана", 3, " МП")]
-        elif pid == "cat_step":
-            return [fmt("Шум шагов", -18, "%"), fmt("Уклонение", 5, "%")]
-        elif pid == "keen_edge":
-            return [fmt("Шанс крита", 8, "%"), fmt("Тело (Сила)", 1, " ед.")]
-        elif pid == "stone_ribs":
-            return [fmt("Физ. и Маг. броня", 3, " ед.")]
-        elif pid == "blood_hunger":
-            return [fmt("Вампиризм в бою", 2, " ХП")]
-        elif pid == "titan_blood":
-            return [fmt("Макс. здоровье", 18, " ХП"), fmt("Физ. броня", 3, " ед."), fmt("Реген ХП", 1.2, "/с", True)]
-        elif pid == "storm_aura":
-            if not is_upgrade:
-                l_use = max(1, target_lvl)
-                dmg = max(1, 1 + l_use + player.mag_attack // 4)
-                cd = max(1.35, 3.0 - (l_use - 1) * 0.35)
-                return [f"Урон авто-молнии: {dmg} ед.", f"Интервал разряда: {cd:.2f}с"]
-            d0 = max(1, 1 + cur_lvl + player.mag_attack // 4)
-            d1 = max(1, 1 + target_lvl + player.mag_attack // 4)
-            c0 = max(1.35, 3.0 - (cur_lvl - 1) * 0.35)
-            c1 = max(1.35, 3.0 - (target_lvl - 1) * 0.35)
-            return [f"Урон молнии: {d0} -> {d1}", f"Интервал: {c0:.2f}с -> {c1:.2f}с"]
+            def format_power(total_bonus):
+                value = passive_power_at(pid, total_bonus) * factor
+                return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",") + unit
+
+            amount = format_power(bonus)
+            if is_upgrade:
+                amount += f" → {format_power(bonus + pdata.get('upgrade_roll', {}).get('power', 0.0))}"
+            return [f"{pdata.get('stat_label', 'Эффект')}: {amount}"]
         return []
 
-    def _render_passive_perk_tooltip(self, screen, player, passive_tuple, ui_texts, mouse_pos):
-        from elenor.config import RARITY_COLORS
+    def _render_passive_perk_tooltip(self, screen, player, passive_tuple, mouse_pos):
         pid, plvl, pdata = passive_tuple
-        r_col = RARITY_COLORS.get(pdata.get("rarity", "common"), UI_BORDER_GOLD)
-        rar_title = ui_texts["rarities"].get(pdata.get("rarity", "common"), "Особенность")
-
-        lines = [(f"{rar_title} (Пассивный дар, Ур.{plvl})", r_col)]
+        r_col = VECTOR_COLORS.get(perk_branch(pid, pdata), UI_BORDER_WOOD)
+        lines = [(f"Пассивный дар · Ур. {plvl}", r_col)]
         for st_line in self._get_perk_progression_lines(player, pid, pdata, plvl, plvl):
             lines.append((st_line, (125, 240, 155)))
         clean_d = self._clean_perk_desc(pdata.get("desc", ""))
@@ -146,8 +119,56 @@ class UIRendererMixin:
         for i, (txt, col) in enumerate(lines):
             screen.blit(self.font_small.render(txt, True, col), (tx + 14, ty + 36 + i * 19))
 
+    def _draw_rarity_glow(self, screen, rect, tier, color, time, hovered):
+        if tier == 0:
+            return
+        # Soft pixels outside the card, with stronger glints at higher ranks.
+        glow_w = 3 + 3 * tier
+        key = rect.size, tier, color, hovered
+        cache = self.perk_glow_cache
+        if key not in cache:
+            glow = pygame.Surface(rect.inflate(2 * glow_w, 2 * glow_w).size, pygame.SRCALPHA)
+            inner = pygame.Rect(glow_w, glow_w, *rect.size)
+            for offset in range(glow_w, 0, -1):
+                strength = (1.0 - offset / (glow_w + 1)) ** 2
+                alpha = int((18 + 11 * tier + 16 * hovered) * strength)
+                pygame.draw.rect(glow, (*color, alpha), inner.inflate(2 * offset, 2 * offset), 1, border_radius=6)
+            cache[key] = glow
+        screen.blit(cache[key], rect.move(-glow_w, -glow_w))
+
+        rim = rect.inflate(-13, -13)
+        for index in range((0, 3, 6, 11, 17)[tier]):
+            side = index % 4
+            along = (index * 0.381966 + time * (0.055 + tier * 0.009)) % 1.0
+            offset = 3 + (index * 5 % (glow_w - 2))
+            wave = 0.5 + 0.5 * math.sin(time * 2.4 + index * 2.39)
+            if side < 2:
+                x = round(rect.left + along * rect.width)
+                y = rect.top - offset if side == 0 else rect.bottom + offset
+            else:
+                x = rect.left - offset if side == 2 else rect.right + offset
+                y = round(rect.top + along * rect.height)
+            brightness = 0.39 + 0.48 * wave
+            spark = tuple(int(channel * brightness) for channel in color)
+            radius = 1 + int(tier >= 3 and wave > 0.45) + int(tier == 4 and wave > 0.8)
+            pygame.draw.line(screen, spark, (x - radius, y), (x + radius, y))
+            pygame.draw.line(screen, spark, (x, y - radius), (x, y + radius))
+            if radius >= 2:
+                screen.set_at((x, y), tuple((255 + c) // 2 for c in color))
+        if tier >= 3:
+            for x, direction in ((rim.left, 1), (rim.right, -1)):
+                for y, inward in ((rim.top, 1), (rim.bottom, -1)):
+                    arm = 9 if tier == 3 else 15
+                    pygame.draw.lines(screen, color, False, [
+                        (x, y + inward * arm), (x, y + inward * 3),
+                        (x + direction * 3, y), (x + direction * arm, y),
+                    ], 2)
+                    if tier == 4:
+                        pygame.draw.polygon(screen, (255, 230, 158), [
+                            (x, y - 3), (x + 3, y), (x, y + 3), (x - 3, y),
+                        ])
+
     def _render_levelup_modal(self, screen, player, modal_data, ui_texts, hover_pos):
-        from elenor.config import RARITY_COLORS
         choices = modal_data["choices"]
         lock_timer = modal_data.get("lock_timer", 0.0)
         is_erase_mode = modal_data.get("mode") == "erase"
@@ -163,7 +184,7 @@ class UIRendererMixin:
             banner_txt = f"НОВЫЙ УРОВЕНЬ ({player.level})! Защита от случайного клика: {lock_timer:.1f} сек..."
             b_col = (180, 175, 190)
         else:
-            banner_txt = f"НОВЫЙ УРОВЕНЬ ({player.level})! ВЫБЕРИ ДАР [Акт: {len(player.active_perks)}/4]"
+            banner_txt = f"НОВЫЙ УРОВЕНЬ ({player.level})! ВЫБЕРИ ДАР  ·  Активные {len(player.active_perks)}/4  ·  Пассивные {len(player.passive_perks)}/{PASSIVE_SLOT_LIMIT}"
             b_col = UI_BORDER_HIGHLIGHT
 
         b_surf = self.font_title.render(banner_txt, True, b_col)
@@ -176,17 +197,27 @@ class UIRendererMixin:
         card_w = 215 if n_cards > 3 else 292
         card_h = 355
         gap = 14 if n_cards > 3 else 26
-        total_w = n_cards * card_w + (n_cards - 1) * gap
-        start_x = (SCREEN_W - total_w) // 2
-        card_y = 88
-
+        per_row = 5 if is_erase_mode else n_cards
+        time = pygame.time.get_ticks() / 1000.0
         for idx, perk in enumerate(choices):
-            rect = pygame.Rect(start_x + idx * (card_w + gap), card_y, card_w, card_h)
+            row, column = divmod(idx, per_row)
+            row_cards = min(per_row, n_cards - row * per_row)
+            total_w = row_cards * card_w + (row_cards - 1) * gap
+            x = (SCREEN_W - total_w) // 2 + column * (card_w + gap)
+            rect = pygame.Rect(x, 88 + row * (card_h + gap), card_w, card_h)
             self.perk_card_rects.append(rect)
             is_hov = rect.collidepoint(hover_pos) and (lock_timer <= 0.0)
-            r_col = RARITY_COLORS.get(perk["rarity"], (215, 215, 220))
+            rarity = perk.get("rarity", "common")
+            if is_erase_mode:
+                r_col = VECTOR_COLORS.get(perk_branch(perk["id"], perk), UI_BORDER_WOOD)
+                tier = 0
+            else:
+                r_col = RARITY_COLORS[rarity]
+                tier = tuple(RARITY_COLORS).index(rarity)
 
-            self.draw_pixel_frame(screen, rect, (32, 26, 42) if is_hov else (22, 18, 30), r_col, is_hov, 1.0)
+            self.draw_pixel_frame(screen, rect, (32, 26, 42) if is_hov else (22, 18, 30), r_col, False, 1.0)
+
+            self._draw_rarity_glow(screen, rect, tier, r_col, time, is_hov)
 
             k_lbl = self.font_ui.render(f"[{idx + 1}]", True, UI_BORDER_HIGHLIGHT)
             screen.blit(k_lbl, (rect.x + 12, rect.y + 12))
@@ -197,7 +228,7 @@ class UIRendererMixin:
                 l_col = (255, 95, 95)
             else:
                 lvl_str = "УЛУЧШЕНИЕ" if cur_lvl > 0 else ("АКТИВ [Q/E/R/F]" if perk.get("type") == "active" else "ПАССИВ")
-                l_col = (130, 240, 160) if cur_lvl > 0 else ((110, 210, 255) if perk.get("type") == "active" else UI_TEXT_DIM)
+                l_col = UI_TEXT_MAIN if cur_lvl > 0 else UI_TEXT_DIM
 
             l_surf = self.font_small.render(lvl_str, True, l_col)
             screen.blit(l_surf, (rect.right - 12 - l_surf.get_width(), rect.y + 14))
@@ -206,12 +237,15 @@ class UIRendererMixin:
             self.draw_pixel_frame(screen, ic_box, UI_SLOT_BG, r_col, False, 1.0)
             self.draw_item_icon(screen, perk["icon"], ic_box.x + 12, ic_box.y + 12, 32)
 
-            n_surf = self.font_ui.render(perk["name"][:22], True, r_col)
+            n_surf = self.font_ui.render(perk["name"], True, r_col)
+            if n_surf.get_width() > rect.width - 24:
+                n_surf = self.font_small.render(perk["name"], True, r_col)
             screen.blit(n_surf, (rect.centerx - n_surf.get_width() // 2, rect.y + 108))
 
-            rar_name = ui_texts["rarities"].get(perk["rarity"], perk["rarity"])
-            r_surf = self.font_small.render(rar_name, True, UI_TEXT_DIM)
-            screen.blit(r_surf, (rect.centerx - r_surf.get_width() // 2, rect.y + 128))
+            if not is_erase_mode:
+                rar_name = ui_texts["perk_ranks"][rarity]
+                r_surf = self.font_small.render(rar_name, True, r_col)
+                screen.blit(r_surf, (rect.centerx - r_surf.get_width() // 2, rect.y + 128))
 
             pygame.draw.line(screen, r_col, (rect.x + 16, rect.y + 150), (rect.right - 16, rect.y + 150), 1)
 
@@ -220,15 +254,15 @@ class UIRendererMixin:
             stat_lines = self._get_perk_progression_lines(player, perk["id"], perk, cur_lvl, target_lvl)
             cur_y = rect.y + 160
             for st_ln in stat_lines:
-                st_col = (115, 245, 145) if cur_lvl > 0 and not is_erase_mode else (255, 215, 110)
-                st_s = self.font_small.render(st_ln[:28], True, st_col)
-                screen.blit(st_s, (rect.centerx - st_s.get_width() // 2, cur_y))
-                cur_y += 18
+                for stat_line in self.wrap_text(st_ln, self.font_small, card_w - 26):
+                    st_s = self.font_small.render(stat_line, True, UI_TEXT_MAIN)
+                    screen.blit(st_s, (rect.centerx - st_s.get_width() // 2, cur_y))
+                    cur_y += 18
 
             cur_y += 6
             clean_desc = self._clean_perk_desc(perk.get("desc", ""))
             desc_lines = self.wrap_text(clean_desc, self.font_small, card_w - 26)
-            for ln in desc_lines[:5]:
+            for ln in desc_lines:
                 if cur_y + 16 > rect.bottom - 10:
                     break
                 d_s = self.font_small.render(ln, True, UI_TEXT_MAIN)
@@ -508,12 +542,13 @@ class UIRendererMixin:
             for ln in self.wrap_text(str(text), self.font_small, max_w):
                 raw_lines.append((ln, color))
 
-        rarity_title = ui_texts["rarities"].get(item.rarity, item.rarity)
-        if item.two_handed:
-            rarity_title += " • Двуручное"
-        elif item.weap_style == "thrown":
-            rarity_title += " • Метательное"
-        add_wrapped(rarity_title, item.rarity_color)
+        if item.type not in ("permanent_spell", "combat_skill", "spell"):
+            rarity_title = ui_texts["rarities"].get(item.rarity, item.rarity)
+            if item.two_handed:
+                rarity_title += " • Двуручное"
+            elif item.weap_style == "thrown":
+                rarity_title += " • Метательное"
+            add_wrapped(rarity_title, item.rarity_color)
 
         # Лаконичный формат для Драгоценностей и Монет
         if item.type in ("gem", "currency_coin"):
@@ -536,7 +571,7 @@ class UIRendererMixin:
         elif item.type == "permanent_spell":
             tot_spell = int(math.floor(item.power + player.mag_attack))
             pwr_lbl = "Исцеление" if item.id == "persephone_rejuvenation" else ("Урон горения" if item.id == "pyro_ignite" else "Урон")
-            add_wrapped(f"Заклинание ({item.mp_cost} Маны | КД {item.cooldown:.2f}с) — {pwr_lbl} {tot_spell}", UI_TEXT_MAIN)
+            add_wrapped(f"Заклинание ({player.ability_mana_cost(item):g} маны | КД {item.cooldown:.2f}с) — {pwr_lbl} {tot_spell}", UI_TEXT_MAIN)
         elif item.type == "combat_skill":
             tot_skill = int(math.floor(item.power + player.phys_attack))
             add_wrapped(f"Боевой приём (0 Маны | КД {item.cooldown:.2f}с) — Урон {tot_skill}", UI_TEXT_MAIN)
@@ -634,8 +669,10 @@ class UIRendererMixin:
                 tx = mouse_pos[0] + 18
                 cx = tx + card_w + 8
 
-        self.draw_pixel_frame(screen, (tx, ty, card_w, card_h), (20, 17, 26), item.rarity_color, False, 1.0)
-        screen.blit(self.font_ui.render(item.name, True, item.rarity_color), (tx + 14, ty + 12))
+        color = (VECTOR_COLORS.get(item.branch, UI_BORDER_WOOD)
+                 if item.type in ("permanent_spell", "combat_skill", "spell") else item.rarity_color)
+        self.draw_pixel_frame(screen, (tx, ty, card_w, card_h), (20, 17, 26), color, False, 1.0)
+        screen.blit(self.font_ui.render(item.name, True, color), (tx + 14, ty + 12))
         for i, (txt, col) in enumerate(main_lines):
             screen.blit(self.font_small.render(txt, True, col), (tx + 14, ty + 36 + i * 19))
 

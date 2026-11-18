@@ -234,6 +234,8 @@ class Enemy:
         self.burn_tick = 0.0
         self.burn_dmg = 3
         self.slow_timer = 0.0
+        self.armor_breaker_until = 0.0
+        self.armor_breaker_ready_at = 0.0
         self.stun_timer = 0.0
         self.root_timer = 0.0
         self.chill_after_root = 0.0
