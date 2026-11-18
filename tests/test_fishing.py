@@ -331,7 +331,7 @@ class FishingTests(unittest.TestCase):
         self.assertTrue(isolated)
         self.assertFalse(d.is_blocking_sight(*isolated[0]))
 
-    def test_clicking_scenery_leaves_it_in_place(self):
+    def test_clicking_scenery_uses_localized_inspection_and_leaves_it_in_place(self):
         dungeon = Dungeon()
         dungeon.generate(campaign="jungle")
         game = HeadlessGame(dungeon)
@@ -345,6 +345,11 @@ class FishingTests(unittest.TestCase):
             obj = next(obj for obj in game.objects if obj.kind == kind)
             game.player.x, game.player.y = obj.x + 0.5, obj.y - 0.5
             game.try_interact_or_melee(obj.x + 0.5, obj.y + 0.5, via_mouse=True)
+            pool = game.loc["prop_thoughts"][kind]
+            self.assertGreaterEqual(len(set(pool)), 5)
+            args, kwargs = game.set_thought.call_args
+            self.assertIn(args[0], pool)
+            self.assertEqual(kwargs, {"on_inspect": True})
             self.assertFalse(obj.used)
 
     def test_results_release_controls_and_use_the_thought_channel(self):

@@ -53,7 +53,6 @@
 
     "door_open":           {"important": false, "chance": 0.16},
     "torch_off":           {"important": false, "chance": 0.25},
-    "campfire_has_torch":  {"important": false, "chance": 0.35},
     "pickup":              {"important": false, "chance": 0.22},
     "auto_equip":          {"important": false, "chance": 0.30},
     "pickup_coin":         {"important": false, "chance": 0.16},
@@ -114,10 +113,6 @@
     "campfire_take_torch": [
       "Выдернул из костра смоляную головню. Чтобы зажечь её, нужно нажать [F].",
       "Прихватил из костра добротную сосновую ветку со смолой. Зажигается по клавише [F]!"
-    ],
-    "campfire_has_torch": [
-      "Костёр жарко трещит, но факел у меня уже есть.",
-      "Протянул ладони к живительному огню. Второй факел мне ни к чему."
     ],
     "pickup": [
       "Забрал трофей: {item}.",

@@ -374,4 +374,4 @@
 2. Прописать процедурную отрисовку `(d_surf, n_surf)` в `create_placeholder_assets()` (`renderer.py`).
 3. Если объект непроходимый — добавить `role_id` в `solid_kinds` (`main.py` / `fx_lab.py`).
 4. Если объект интерактивный базовый — прописать взаимодействие в `_try_precise_interaction` (`main.py`).
-5. Если объект декоративный сюжетный — добавить реплику в `prop_thoughts.json` и прописать реакцию в `handle_mission_object_interaction` (`mission_rats.py`).
+5. Для осмотра декора добавьте ключ объекта в `prop_thoughts` в локализации. Реплики Крысиного погреба лежат в `prop_thoughts.json`, джунглей — в `jungle_prop_thoughts.json`. Массив должен содержать минимум пять фраз обычной важности.

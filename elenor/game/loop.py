@@ -115,8 +115,7 @@ def main():
             if game.campaign == "jungle" and (click_world or press_space):
                 player_tile = int(game.player.x), int(game.player.y)
                 if player_tile in game.dungeon.fishing_edges and not game.inv_open and not game.levelup_choices:
-                    if click_world or mouse_pos[1] < VIEW_H * SCALE:
-                        start_fishing(game, *aim)
+                    if (click_world or mouse_pos[1] < VIEW_H * SCALE) and start_fishing(game, *aim):
                         continue
 
             if event.type == pygame.KEYDOWN:
@@ -228,8 +227,8 @@ def main():
                                             game.drag_item = itm
                                             game.drag_source = ("pocket", i)
                                         break
-                        if not clicked_ui and mouse_pos[1] < VIEW_H * SCALE:
-                            game.try_interact_or_melee(world_mx, world_my, via_mouse=True)
+                        if not clicked_ui and click_world:
+                            game.try_interact_or_melee(*aim, via_mouse=True)
 
                 elif event.button == 3:
                     if game.levelup_choices and game.levelup_choices.get("mode") == "erase":
