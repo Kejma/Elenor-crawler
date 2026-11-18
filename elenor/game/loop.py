@@ -14,6 +14,7 @@ from elenor.game.targeting import is_cursor_on_mob
 
 from elenor.minigames.fishing import press_fishing, start_fishing, update_fishing
 from elenor.ui.fishing import draw_fishing
+from elenor.ui.exploration_map import chart_surface, draw_map
 
 
 def main():
@@ -29,6 +30,7 @@ def main():
     game = GameController()
     apply_display_mode(game.profile, game)
     running = True
+    map_chart = None
 
     while running:
         dt = min(0.05, clock.tick(0) / 1000.0)
@@ -59,6 +61,21 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+                break
+
+            key_down = event.type == pygame.KEYDOWN and not getattr(event, "repeat", False)
+            if game.map_open:
+                if key_down and event.key in (pygame.K_m, pygame.K_ESCAPE):
+                    game.map_open = False
+                    map_chart = None
+                    game.sfx.play("ui")
+                continue
+            if (key_down and event.key == pygame.K_m and game.campaign == "jungle"
+                    and not game.inv_open and not game.levelup_choices and game.fishing_cast is None):
+                game.map_open = True
+                map_chart = chart_surface(game.dungeon)
+                game.sfx.play("ui")
+                continue
             if hasattr(event, "pos"):
                 event.pos = map_window_to_logical(event.pos, game.viewport_rect)
 
@@ -274,6 +291,15 @@ def main():
             elif event.type == pygame.MOUSEWHEEL:
                 if game.inv_open and game.journal_open:
                     game.journal_scroll = max(0, game.journal_scroll + event.y * 3)
+
+        if not running:
+            break
+        if game.map_open:
+            draw_map(screen, game, map_chart, mouse_pos)
+            present_logical_canvas(game.display_surface, screen, game.viewport_rect)
+            pygame.display.flip()
+            clock.tick(30)
+            continue
 
         # The bank is still rendered and its water animates during a cast.
         if game.fishing_cast is not None:
@@ -807,6 +833,10 @@ def main():
 
         ui_bundle = dict(game.loc["ui"])
         ui_bundle["_game_ref"] = game
+        ui_bundle["_survey_map"] = (
+            game.campaign == "jungle" and not game.inv_open
+            and not getattr(game.dev_panel, "reveal_map", False)
+        )
         ui_bundle["_perks_db"] = game.loc.get("perks", {})
         ui_bundle["_world_hover_item"] = world_hover_item
         ui_bundle["_visual_fx"] = game.visual_fx
@@ -844,6 +874,11 @@ def main():
 
         if game.campaign == "jungle" and not game.inv_open:
             draw_fishing(screen, game, (world_mx, world_my), fov_mask)
+            if game.fishing_cast is None and not game.levelup_choices:
+                hint = game.renderer.font_small.render(game.loc["exploration_map"]["hint"], True, (231, 224, 199))
+                rect = hint.get_rect(topleft=(31, 24))
+                pygame.draw.rect(screen, (20, 29, 26), rect.inflate(22, 12), border_radius=4)
+                screen.blit(hint, rect)
             for (x, y), action in game.dungeon.passages.items():
                 if math.hypot(x+.5-game.player.x, y+.5-game.player.y) <= 1.65:
                     label = game.renderer.font_ui.render(game.loc["jungle_passages"][action], True, (246,225,178))

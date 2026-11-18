@@ -278,6 +278,8 @@ class FXManager:
         d = g.dungeon
         d.thickets = set()
         d.passages = {}
+        d.explored_tiles = {}
+        d.map_landmarks = {}
         d.floor_num = 99
         d.rooms = []
         d.braziers = []

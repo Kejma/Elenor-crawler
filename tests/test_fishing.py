@@ -165,9 +165,12 @@ class FishingTests(unittest.TestCase):
         self.assertFalse(
             any(tile in (45, 46, 47, 56, 57) for row in dungeon.grid for tile in row)
         )
+        dungeon.explored_tiles[dungeon.start_pos] = "trail"
         for action in ("temple", "cave"):
             game.travel_jungle(action)
             inside = game.dungeon
+            self.assertFalse(inside.explored_tiles)
+            inside.explored_tiles[inside.start_pos] = "floor"
             self.assertFalse(inside.fishing_edges)
             self.assertEqual(set(inside.passages.values()), {"up"})
             treasure = next(obj for obj in game.objects if obj.kind == "chest")
@@ -179,6 +182,7 @@ class FishingTests(unittest.TestCase):
             )
             game.travel_jungle(action)
             self.assertIs(game.dungeon, inside)
+            self.assertEqual(inside.explored_tiles, {inside.start_pos: "floor"})
             self.assertIn(treasure, game.objects)
             self.assertTrue(treasure.used)
             game.travel_jungle("up")
@@ -186,6 +190,7 @@ class FishingTests(unittest.TestCase):
         self.assertEqual(game.dungeon.floor_num, 2)
         game.travel_jungle("back")
         self.assertIs(game.dungeon, dungeon)
+        self.assertEqual(dungeon.explored_tiles, {dungeon.start_pos: "trail"})
 
     def test_underground_vault_does_not_gate_the_return_or_main_treasure(self):
         for interior in ("temple", "cave"):

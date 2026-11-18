@@ -86,6 +86,8 @@ class Dungeon:
         self.floor_num = floor_num
         self.thickets = set()
         self.passages = {}
+        self.explored_tiles = {}
+        self.map_landmarks = {}
         self.interior = interior
         self.fishing_edges = {}
         self.rooms = []

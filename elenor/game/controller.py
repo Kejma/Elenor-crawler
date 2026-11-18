@@ -218,6 +218,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.objects = []
         self.mirror_puzzles = []
         self.current_visible_tiles = set()
+        self.map_open = False
         self.seen_entities = set()
         self._prev_tile_id = self.dungeon.grid[int(self.player.y)][int(self.player.x)]
         self._was_near_fire = True

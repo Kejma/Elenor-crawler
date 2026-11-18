@@ -358,6 +358,7 @@ def river_crossings(plan, wet, island):
                     plan.d.overlays[point] = "ov_water_lily"
         left, right = channel[y]
         landings.extend(((left - 2, y), (right + 2, y)))
+        plan.d.map_landmarks[((left + right) // 2, y)] = "ford"
 
     bands = [range(24, 34), range(51, 62)]
     plan.rng.shuffle(bands)
@@ -377,6 +378,7 @@ def river_crossings(plan, wet, island):
     plan.routes.update(trunk | bank)
     plan.light((left - 2, row), 63, (0.4, 0.62, 0.58))
     landings.extend(((left - 2, row), (right + 2, row)))
+    plan.d.map_landmarks[((left + right) // 2, row)] = "log"
     plan.crossing_approaches = list(zip(landings[::2], landings[1::2]))
     return landings
 
@@ -435,6 +437,8 @@ def build_landing(plan, landing):
             and plan.tile(point(reach + 3, side)) == DEEP_WATER
         ):
             plan.d.fishing_edges[edge] = landing.profile
+    if painted & plan.d.fishing_edges.keys():
+        plan.d.map_landmarks[point(0)] = "pier"
     plan.lamp(point(-2), 152)
     plan.mist(point(reach + 3), 5.4)
     # Dry cabinets, racks and the hauled-up boat are distributed around the

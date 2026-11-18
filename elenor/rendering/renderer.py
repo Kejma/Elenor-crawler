@@ -961,6 +961,12 @@ class Renderer(UIRendererMixin):
                 out[:, :VIEW_H] += glow[:,:,None] * np.asarray(cloud["color"])*65
             lit_surf = pygame.surfarray.make_surface(out.clip(0,255).astype(np.uint8))
 
+        if ui_texts.get("_survey_map"):
+            from elenor.rendering.visibility import visible_lit_tiles
+            from elenor.world.exploration import remember_tiles
+            seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y)
+            remember_tiles(dungeon, seen)
+
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))
 
