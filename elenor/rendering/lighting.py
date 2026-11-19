@@ -4,6 +4,35 @@ from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MA
 from elenor.rendering.occlusion import PROP_SAMPLE_STEPS, PROP_SHADOW_STRENGTH, SHADOW_RAYS
 
 
+# Peak-channel compression preserves RGB ratios in warm or saturated lights.
+WORLD_HIGHLIGHTS = (195.0, 60.0)
+TEMPLE_HIGHLIGHTS = (164.0, 77.0)
+
+
+def tone_map_world(rgb, is_entity, temple_exposure):
+    """Compress world highlights in place, in the renderer's 0–255 range."""
+    knee, headroom = WORLD_HIGHLIGHTS
+    if temple_exposure:
+        knee = np.where(is_entity, knee, TEMPLE_HIGHLIGHTS[0])
+        headroom = np.where(is_entity, headroom, TEMPLE_HIGHLIGHTS[1])
+    peak = np.maximum(np.maximum(rgb[..., 0], rgb[..., 1]), rgb[..., 2])
+    excess = np.maximum(peak - knee, 0.0)
+    # 1 - (peak - mapped_peak) / peak, with zero change below the knee.
+    scale = 1.0 - excess / (headroom + excess) * (excess / np.maximum(peak, 1.0))
+    rgb *= scale[..., None]
+
+
+def bounce_color_for(dungeon):
+    """RGB reflectance for one approximate diffuse bounce from the surroundings."""
+    if dungeon.interior == "temple":
+        return .12, .135, .15
+    if dungeon.campaign == "rats" and dungeon.floor_num == 1:
+        return .16, .115, .075
+    if dungeon.campaign == "jungle" and not dungeon.interior:
+        return .095, .13, .095
+    return .11, .115, .125
+
+
 class GPULightShader:
     """Аппаратный 2.5D-шейдер освещения, нормалей, AO и точечного Emissive Bloom."""
     MAX_LIGHTS = 48
@@ -52,11 +81,12 @@ class GPULightShader:
             uniform sampler2D u_props;
             uniform bool u_has_props;
             uniform bool u_temple_exposure;
+            uniform vec3 u_bounce_color;
             uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
             uniform int u_num_lights;
             uniform vec4 u_light_pos_rad[{self.MAX_LIGHTS}];
             uniform vec4 u_light_col_foot[{self.MAX_LIGHTS}];
-            uniform vec3 u_light_flags[{self.MAX_LIGHTS}];
+            uniform vec4 u_light_flags[{self.MAX_LIGHTS}];
 
             uniform int u_num_hud_lights;
             uniform vec4 u_hud_pos_rad[{self.MAX_HUD_LIGHTS}];
@@ -225,7 +255,7 @@ class GPULightShader:
                         float dy = -(pos_rad.y - float(p.y));
                         if (abs(dx) > rad + 2.0 || abs(dy) > rad + 2.0) continue;
 
-                        vec3 flags = u_light_flags[i];
+                        vec4 flags = u_light_flags[i];
                         float mask_w = 1.0;
                         if (flags.y > 0.5) {{
                             mask_w = sample_light_mask_smooth(i, wx_px, wy_px);
@@ -254,7 +284,9 @@ class GPULightShader:
 
                         float front_shade = 1.0 - behind_ratio * (1.0 - sub_rim) * 0.65;
                         float intensity = ndotl * atten * 1.45 * front_shade;
-                        mult += intensity * col_foot.rgb;
+                        // Approximate diffuse fill with the same occlusion and range as its source.
+                        vec3 bounce = u_bounce_color * (flags.w * atten * max(1.0 - ndotl, 0.0));
+                        mult += (vec3(intensity) + bounce) * col_foot.rgb;
 
                         if (flags.x < 0.5 && sub_rim > 0.5 && behind_ratio > 0.01) {{
                             float dist_2d = sqrt(dx * dx + dy * dy);
@@ -296,11 +328,12 @@ class GPULightShader:
                         rim_add.b > (0.5 / 255.0) ? min(220.0 / 255.0, base_c.b * 1.25 + rim_add.b) : base_c.b
                     );
 
-                    if (u_temple_exposure && ent_y < -9000.0) {{
-                        float peak = max(lit_out.r, max(lit_out.g, lit_out.b)) * 255.0;
-                        float excess = max(peak - 164.0, 0.0);
-                        if (excess > 0.0) lit_out *= (164.0 + 77.0 * excess / (77.0 + excess)) / peak;
-                    }}
+                    bool temple_ground = u_temple_exposure && ent_y <= -9000.0;
+                    float knee = (temple_ground ? {TEMPLE_HIGHLIGHTS[0]} : {WORLD_HIGHLIGHTS[0]}) / 255.0;
+                    float headroom = (temple_ground ? {TEMPLE_HIGHLIGHTS[1]} : {WORLD_HIGHLIGHTS[1]}) / 255.0;
+                    float peak = max(lit_out.r, max(lit_out.g, lit_out.b));
+                    float excess = max(peak - knee, 0.0);
+                    lit_out *= 1.0 - excess / (headroom + excess) * (excess / max(peak, 1.0 / 255.0));
                     fragColor = clamp(lit_out, 0.0, 1.0);
                 }} else {{
                     vec3 mult = vec3(0.74, 0.74, 0.80);
@@ -388,7 +421,7 @@ class GPULightShader:
 
         self.pos_rad_buf = np.zeros((self.MAX_LIGHTS, 4), dtype=np.float32)
         self.col_foot_buf = np.zeros((self.MAX_LIGHTS, 4), dtype=np.float32)
-        self.flags_buf = np.zeros((self.MAX_LIGHTS, 3), dtype=np.float32)
+        self.flags_buf = np.zeros((self.MAX_LIGHTS, 4), dtype=np.float32)
         self.masks_buf = np.zeros((self.MAX_LIGHTS, MAP_ROWS, MAP_COLS), dtype=np.float32)
 
 
@@ -424,7 +457,7 @@ class GPULightShader:
             self.ctx.viewport = (0, row, SHADOW_RAYS, 1)
             self.shadow_vao.render(self.moderngl.TRIANGLE_STRIP)
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0)):
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0)):
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
@@ -459,8 +492,9 @@ class GPULightShader:
             self.col_foot_buf[i] = (cr, cg, cb, lgt.get("foot_y", ly + 4.0))
             ign_d = 1.0 if lgt.get("ignore_depth", False) else 0.0
             allowed = lgt.get("allowed_tiles")
-            shadows = occlusion is not None and not lgt.get("ambient", False)
-            self.flags_buf[i] = (ign_d, isinstance(allowed, np.ndarray), shadows)
+            local = not lgt.get("ambient", False)
+            shadows = occlusion is not None and local
+            self.flags_buf[i] = (ign_d, isinstance(allowed, np.ndarray), shadows, local)
             if isinstance(allowed, np.ndarray):
                 self.masks_buf[i] = allowed.T
                 any_masks = True
@@ -482,6 +516,7 @@ class GPULightShader:
         self.prog["u_viewer"].value = viewer
         self.prog["u_has_props"].value = occlusion is not None and occlusion.has_props
         self.prog["u_temple_exposure"].value = temple_exposure
+        self.prog["u_bounce_color"].value = bounce_color
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
         self.prog["u_num_lights"].value = n_lgt
         self.prog["u_light_pos_rad"].write(self.pos_rad_buf.tobytes())

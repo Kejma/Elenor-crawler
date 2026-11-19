@@ -239,8 +239,9 @@ class MainMenuController:
             prof["thought_freq_mode"] = (prof.get("thought_freq_mode", 2) + step) % 4
             save_profile(prof)
 
-        elif b_key == "toggle_minimap":
-            prof["show_minimap"] = not prof.get("show_minimap", DEFAULT_PROFILE["show_minimap"])
+        elif b_key in ("toggle_minimap", "toggle_performance"):
+            setting = "show_minimap" if b_key == "toggle_minimap" else "show_performance"
+            prof[setting] = not prof.get(setting, DEFAULT_PROFILE[setting])
             save_profile(prof)
 
         elif b_key == "dd_win_mode":
@@ -587,7 +588,7 @@ class MainMenuController:
 
         row_x = box.x + 80
         row_w = box.width - 160
-        step_y = 92
+        step_y = 84
 
         cur_wmode = prof.get("window_mode", "windowed")
         wmode_title = dict(WINDOW_MODES_LIST).get(cur_wmode, "В окне")
@@ -623,20 +624,24 @@ class MainMenuController:
         self._draw_selector_row(screen, row_x, box.y + 32 + step_y * 4, row_w, "ЧАСТОТА МЫСЛЕЙ ГЕРОЯ:", freq_modes[f_idx], "freq_prev", "freq_next", mouse_pos)
 
         map_labels = self.game.loc["exploration_map"]["settings"]
-        toggle_rect = pygame.Rect(row_x, box.y + 54 + step_y * 5, row_w, 42)
-        self.btn_rects["toggle_minimap"] = toggle_rect
-        enabled = prof.get("show_minimap", DEFAULT_PROFILE["show_minimap"])
-        hover = toggle_rect.collidepoint(mouse_pos)
-        bg = (52, 42, 38) if hover else UI_SLOT_BG
-        r.draw_pixel_frame(screen, toggle_rect, bg, UI_BORDER_GOLD if enabled else UI_BORDER_WOOD, hover, 1.0)
-        name = r.font_ui.render(map_labels["minimap"], True, UI_TEXT_MAIN)
-        value = r.font_ui.render(map_labels["on" if enabled else "off"], True, UI_BORDER_HIGHLIGHT if enabled else UI_TEXT_DIM)
-        screen.blit(name, name.get_rect(midleft=(toggle_rect.left + 20, toggle_rect.centery)))
-        screen.blit(value, value.get_rect(midright=(toggle_rect.right - 20, toggle_rect.centery)))
+        for index, (key, setting, label, states) in enumerate((
+            ("toggle_minimap", "show_minimap", map_labels["minimap"], (map_labels["off"], map_labels["on"])),
+            ("toggle_performance", "show_performance", "Показывать производительность", ("Нет", "Да")),
+        )):
+            toggle_rect = pygame.Rect(row_x, box.y + 54 + step_y * 5 + index * 50, row_w, 42)
+            self.btn_rects[key] = toggle_rect
+            enabled = prof.get(setting, DEFAULT_PROFILE[setting])
+            hover = toggle_rect.collidepoint(mouse_pos)
+            bg = (52, 42, 38) if hover else UI_SLOT_BG
+            r.draw_pixel_frame(screen, toggle_rect, bg, UI_BORDER_GOLD if enabled else UI_BORDER_WOOD, hover, 1.0)
+            name = r.font_ui.render(label, True, UI_TEXT_MAIN)
+            value = r.font_ui.render(states[bool(enabled)], True, UI_BORDER_HIGHLIGHT if enabled else UI_TEXT_DIM)
+            screen.blit(name, name.get_rect(midleft=(toggle_rect.left + 20, toggle_rect.centery)))
+            screen.blit(value, value.get_rect(midright=(toggle_rect.right - 20, toggle_rect.centery)))
 
-        line_y = box.y + 42 + step_y * 6
+        line_y = box.y + 40 + step_y * 6 + 50
         pygame.draw.line(screen, UI_BORDER_WOOD, (box.x + 50, line_y), (box.right - 50, line_y), 1)
-        rst_btn = pygame.Rect(row_x, box.y + 64 + step_y * 6, row_w, 56)
+        rst_btn = pygame.Rect(row_x, box.y + 62 + step_y * 6 + 50, row_w, 56)
         self.btn_rects["reset_progress"] = rst_btn
         hov_r = rst_btn.collidepoint(mouse_pos)
         if self.confirm_reset_timer > 0.0:

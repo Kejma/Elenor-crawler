@@ -1,6 +1,7 @@
 import math
 import os
 import random
+from time import perf_counter
 import pygame
 
 from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, SHALLOW_WATER, FALLEN_LOG
@@ -39,6 +40,31 @@ def main():
     apply_display_mode(game.profile, game)
     running = True
     map_chart = None
+    fps_start = None
+    fps_frames = 0
+    fps_label = None
+
+    def present_frame():
+        nonlocal fps_start, fps_frames, fps_label
+        if game.profile["show_performance"]:
+            now = perf_counter()
+            if fps_start is None:
+                fps_start = now
+            else:
+                fps_frames += 1
+                elapsed = now - fps_start
+                if elapsed >= 0.25:
+                    fps = fps_frames / elapsed
+                    fps_label = game.renderer.font_small.render(f"{fps:.0f} FPS", True, (246, 225, 178))
+                    fps_start, fps_frames = now, 0
+            if fps_label is not None:
+                rect = fps_label.get_rect(midtop=(SCREEN_W // 2, 12))
+                pygame.draw.rect(screen, (20, 18, 27), rect.inflate(16, 6), border_radius=3)
+                screen.blit(fps_label, rect)
+        else:
+            fps_start, fps_frames, fps_label = None, 0, None
+        present_logical_canvas(game.display_surface, screen, game.viewport_rect)
+        pygame.display.flip()
 
     while running:
         dt = min(0.05, clock.tick(0) / 1000.0)
@@ -61,8 +87,7 @@ def main():
                 continue
             game.main_menu.update(dt)
             game.main_menu.render(screen, dt, mouse_pos)
-            present_logical_canvas(game.display_surface, screen, game.viewport_rect)
-            pygame.display.flip()
+            present_frame()
             continue
 
         game.sfx.stop_menu_music(fade_ms=500)
@@ -387,8 +412,7 @@ def main():
             continue
         if game.map_open:
             draw_map(screen, game, map_chart, mouse_pos)
-            present_logical_canvas(game.display_surface, screen, game.viewport_rect)
-            pygame.display.flip()
+            present_frame()
             clock.tick(30)
             continue
 
@@ -985,8 +1009,7 @@ def main():
         if hasattr(game, "dev_panel") and game.dev_panel:
             game.dev_panel.render(screen, game, mouse_pos)
 
-        present_logical_canvas(game.display_surface, screen, game.viewport_rect)
-        pygame.display.flip()
+        present_frame()
 
     pygame.quit()
 

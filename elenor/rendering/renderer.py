@@ -10,10 +10,10 @@ from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
 from elenor.rendering.fog import FogRenderer
 from elenor.rendering.occlusion import LightOcclusion
-from elenor.rendering.lighting import GPULightShader
+from elenor.rendering.lighting import GPULightShader, bounce_color_for, tone_map_world
 from elenor.rendering.pixel_fx import PixelLayer
 from elenor.rendering.physical import render_ground_traps, render_physical
-from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, canopy_visibility, misted_actor
+from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, misted_actor
 from elenor.ui.renderer import UIRendererMixin
 
 class Renderer(UIRendererMixin):
@@ -532,6 +532,8 @@ class Renderer(UIRendererMixin):
 
         now_sec = pygame.time.get_ticks() * 0.001
         self.canopy_visibility.begin_frame(dungeon.grid, now_sec)
+        self.canopy_visibility.set_view(dungeon, player.x, player.y)
+        reveal_map = ui_texts.get("_reveal_map", False)
         for role_id, anim_info in self.anim_bank.items():
             fr_list = anim_info["frames"]
             if len(fr_list) > 1:
@@ -627,10 +629,9 @@ class Renderer(UIRendererMixin):
                 elif t_val in TALL_TREE_MAP:
                     key, tree_asset_key = TALL_TREE_MAP[t_val]
                     # Hidden ground within the tree's own footprint is not a visibility test for its crown.
-                    target = canopy_visibility(dungeon, player.x, player.y, c, r)
-                    if ui_texts.get("_reveal_map", False):
-                        target = 1.0
-                    visible_base = self.canopy_visibility.sample((c, r), target)
+                    tile = (c, r)
+                    target = 1.0 if reveal_map else self.canopy_visibility.target(tile)
+                    visible_base = self.canopy_visibility.sample(tile, target)
                     if visible_base > 0.006:
                         if t_val != 5 and (c*17 + r*23) % 9 == 0:
                             tree_asset_key = {21:"tree_jungle",22:"tree_palm",56:"tree_bone",57:"tree_dead_mangrove"}[t_val]
@@ -925,6 +926,8 @@ class Renderer(UIRendererMixin):
                     clouds.append(cloud)
         self.light_occlusion.update(dungeon, objects)
         viewer = (player.x * TILE_W, player.y * TILE_H)
+        bounce_color = bounce_color_for(dungeon)
+        temple_exposure = dungeon.interior == "temple"
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
@@ -934,7 +937,7 @@ class Renderer(UIRendererMixin):
                 scene_fov, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
-                temple_exposure=dungeon.interior == "temple",
+                temple_exposure=temple_exposure, bounce_color=bounce_color,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
             )
             r_mult = g_mult = b_mult = None
@@ -999,7 +1002,8 @@ class Renderer(UIRendererMixin):
                 atten = np.clip(1.0 - (dist / radius) ** 1.65, 0.0, 1.0)
 
                 shadow = 1.0
-                if not lgt.get("ambient", False):
+                local = not lgt.get("ambient", False)
+                if local:
                     shadow = self.light_occlusion.surface_visibility(
                         dx, -dy, self.px[x0:x1, :] + cam_x, self.py[:, y0:y1] + cam_y,
                         lx + cam_x, ly + cam_y, radius, viewer, light_z=lz, ground=ent_y <= -9000.0,
@@ -1015,9 +1019,10 @@ class Renderer(UIRendererMixin):
                 front_shade = 1.0 - behind_ratio * (1.0 - sub_rim) * 0.65
                 intensity = ndotl * atten * 1.45 * front_shade
 
-                r_mult[x0:x1, y0:y1] += intensity * cr
-                g_mult[x0:x1, y0:y1] += intensity * cg
-                b_mult[x0:x1, y0:y1] += intensity * cb
+                bounce = atten * np.maximum(1.0 - ndotl, 0.0) if local else 0.0
+                r_mult[x0:x1, y0:y1] += (intensity + bounce * bounce_color[0]) * cr
+                g_mult[x0:x1, y0:y1] += (intensity + bounce * bounce_color[1]) * cg
+                b_mult[x0:x1, y0:y1] += (intensity + bounce * bounce_color[2]) * cb
 
                 if not lgt.get("ignore_depth", False):
                     dist_2d = np.sqrt(dx * dx + dy * dy)
@@ -1040,12 +1045,7 @@ class Renderer(UIRendererMixin):
             out[:, :, 0] = np.where(rim_add_r > 0.5, np.minimum(228.0, base_r * 1.25 + rim_add_r * scene_fov), base_r)
             out[:, :, 1] = np.where(rim_add_g > 0.5, np.minimum(222.0, base_g * 1.25 + rim_add_g * scene_fov), base_g)
             out[:, :, 2] = np.where(rim_add_b > 0.5, np.minimum(220.0, base_b * 1.25 + rim_add_b * scene_fov), base_b)
-            if dungeon.interior == "temple":
-                ground = out[:, :VIEW_H]
-                peak = ground.max(axis=-1)
-                excess = np.maximum(peak - 164.0, 0)
-                shoulder = (164.0 + 77.0 * excess / (77.0 + excess)) / np.maximum(peak, 1.0)
-                ground *= np.where((excess > 0) & ~is_ent[:, :VIEW_H], shoulder, 1.0)[:, :, None]
+            tone_map_world(out[:, :VIEW_H], is_ent[:, :VIEW_H], temple_exposure)
             lit_surf = pygame.surfarray.make_surface(out.clip(0,255).astype(np.uint8))
 
         if ui_texts.get("_survey_map"):

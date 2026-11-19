@@ -43,6 +43,8 @@ class CanopyVisibility:
 
     def __init__(self):
         self.grid = None
+        self.view = None
+        self.targets = {}
         self.previous = {}
         self.current = {}
         self.time = 0.0
@@ -51,6 +53,7 @@ class CanopyVisibility:
     def begin_frame(self, grid, time):
         if grid is not self.grid:
             self.grid = grid
+            self.targets.clear()
             self.previous = {}
             self.blend = 1.0
         else:
@@ -59,6 +62,18 @@ class CanopyVisibility:
             self.blend = 1.0 - math.exp(-dt * 12.0)
         self.current = {}
         self.time = time
+
+    def set_view(self, dungeon, x, y):
+        view = dungeon, dungeon.geometry_revision, x, y
+        if view != self.view:
+            self.view = view
+            self.targets.clear()
+
+    def target(self, tile):
+        if tile not in self.targets:
+            dungeon, _, x, y = self.view
+            self.targets[tile] = canopy_visibility(dungeon, x, y, *tile)
+        return self.targets[tile]
 
     def sample(self, tile, target):
         old = self.previous.get(tile, 0.0)
