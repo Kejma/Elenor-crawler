@@ -160,6 +160,32 @@ class GPUSceneRenderer:
         self.quad_dn_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
         self.quad_dn_vao = ctx.simple_vertex_array(self.quad_dn_prog, self.unit_vbo, "in_corner")
 
+        self.quad_dnm_prog = ctx.program(
+            vertex_shader=_QUAD_VERT,
+            fragment_shader="""#version 330 core
+                uniform sampler2D u_tex0;
+                uniform sampler2D u_tex1;
+                uniform sampler2D u_tex2;
+                in vec2 v_uv;
+                layout(location = 0) out vec4 out_diff;
+                layout(location = 1) out vec4 out_norm;
+                layout(location = 2) out vec4 out_em;
+                void main() {
+                    ivec2 uv = ivec2(floor(v_uv));
+                    ivec2 sz = textureSize(u_tex0, 0);
+                    if (uv.x < 0 || uv.y < 0 || uv.x >= sz.x || uv.y >= sz.y) discard;
+                    out_diff = texelFetch(u_tex0, uv, 0);
+                    out_norm = texelFetch(u_tex1, uv, 0);
+                    out_em = vec4(texelFetch(u_tex2, uv, 0).rgb, 1.0);
+                }
+            """,
+        )
+        self.quad_dnm_prog["u_tex0"].value = 0
+        self.quad_dnm_prog["u_tex1"].value = 1
+        self.quad_dnm_prog["u_tex2"].value = 2
+        self.quad_dnm_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
+        self.quad_dnm_vao = ctx.simple_vertex_array(self.quad_dnm_prog, self.unit_vbo, "in_corner")
+
         self.quad_d_prog = ctx.program(
             vertex_shader=_QUAD_VERT,
             fragment_shader="""#version 330 core
@@ -229,8 +255,10 @@ class GPUSceneRenderer:
                     } else {
                         out_norm = vec4(0.0);
                     }
-                    if ((v_flags & 2) != 0) {
-                        out_em = texelFetch(u_atlas_em, uv, 0);
+                    if ((v_flags & 1) != 0) {
+                        float em_val = ((v_flags & 2) != 0) ? texelFetch(u_atlas_em, uv, 0).r : 0.0;
+                        float gloss_val = float((v_flags >> 8) & 255) / 255.0;
+                        out_em = vec4(em_val, gloss_val, 0.0, d.a * v_opacity);
                     } else {
                         out_em = vec4(0.0);
                     }
@@ -334,23 +362,27 @@ class GPUSceneRenderer:
             size = chunk.diffuse.get_size()
             td = self.ctx.texture(size, 4, dtype="f1")
             tn = self.ctx.texture(size, 4, dtype="f1")
+            tm = self.ctx.texture(size, 4, dtype="f1")
             td.filter = (self.gl.NEAREST, self.gl.NEAREST)
             tn.filter = (self.gl.NEAREST, self.gl.NEAREST)
+            tm.filter = (self.gl.NEAREST, self.gl.NEAREST)
             td.write(pygame.image.tobytes(chunk.diffuse, "RGBA"))
             tn.write(pygame.image.tobytes(chunk.normals, "RGBA"))
-            self._chunk_tex[cid] = (chunk, td, tn, chunk.frames)
+            tm.write(pygame.image.tobytes(chunk.material, "RGBA"))
+            self._chunk_tex[cid] = (chunk, td, tn, tm, chunk.frames)
             if len(self._chunk_tex) > _MAX_TERRAIN_TEX:
-                _, (_, old_d, old_n, _) = self._chunk_tex.popitem(last=False)
+                _, (_, old_d, old_n, old_m, _) = self._chunk_tex.popitem(last=False)
                 old_d.release()
                 old_n.release()
-            return td, tn
+                old_m.release()
+            return td, tn, tm
         self._chunk_tex.move_to_end(cid)
-        _, td, tn, frames = entry
+        _, td, tn, tm, frames = entry
         if frames != chunk.frames:
             td.write(pygame.image.tobytes(chunk.diffuse, "RGBA"))
             tn.write(pygame.image.tobytes(chunk.normals, "RGBA"))
-            self._chunk_tex[cid] = (chunk, td, tn, chunk.frames)
-        return td, tn
+            self._chunk_tex[cid] = (chunk, td, tn, tm, chunk.frames)
+        return td, tn, tm
 
     def _door_pair(self, assets, door):
         key = "door_open" if door.is_open else ("door_locked" if door.locked else "door_closed")
@@ -457,7 +489,7 @@ class GPUSceneRenderer:
         hero_pair = renderer.get_hero_pair(player)
         misted = player.stealth_timer > 0
         if misted:
-            hero_pair = (misted_actor(hero_pair[0], now_sec, min(1.0, player.stealth_timer / .24)), hero_pair[1])
+            hero_pair = (misted_actor(hero_pair[0], now_sec, min(float(1 | (28 << 8)), player.stealth_timer / .24)), hero_pair[1])
         render_list = [{
             "wx": player.x - 0.5 + player.bump_x,
             "wy": player.y - 0.5 + player.bump_y,
@@ -494,6 +526,7 @@ class GPUSceneRenderer:
                     "wx": float(br["x"]), "wy": float(br["y"]),
                     "is_light_source": True,
                     "emissive_role": "fire_prop",
+                    "gloss": 165,
                     "pair": assets["brazier"], "alpha": 255,
                 })
         for obj in objects:
@@ -510,12 +543,21 @@ class GPUSceneRenderer:
                 pair = renderer.get_world_loot_pair(obj.item) if obj.kind == "loot" else assets.get(obj.kind, assets["loot"])
                 is_npc = obj.kind in ("npc_innkeeper", "npc_merchant")
                 is_fire = obj.kind in ("campfire", "fireplace", "light_emitter", "light_receiver_on")
+                obj_gloss = 42
+                if obj.kind == "loot" and getattr(obj, "item", None) is not None:
+                    i_type = obj.item.type
+                    obj_gloss = 230 if i_type in ("gem", "currency_coin") else (165 if i_type == "equipment" else 85)
+                elif obj.kind in ("chest", "cauldron", "idol", "armor_stand", "rack", "light_emitter", "light_receiver_on", "light_receiver_off") or obj.kind.startswith("mirror_"):
+                    obj_gloss = 165
+                elif obj.kind in ("barrel", "bed", "tavern_table", "tribal_table", "bar_counter", "bookshelf", "crate_stack", "chair_bench", "stool"):
+                    obj_gloss = 28
                 render_list.append({
                     "wx": float(obj.x), "wy": float(obj.y),
                     "actor_wx": obj.x + 0.5, "actor_wy": obj.y + 0.5,
                     "is_actor": is_npc,
                     "is_light_source": is_fire,
                     "emissive_role": "fire_prop" if is_fire else None,
+                    "gloss": obj_gloss,
                     "pair": pair, "alpha": 255,
                 })
 
@@ -539,6 +581,7 @@ class GPUSceneRenderer:
                     "emissive_role": "mob",
                     "pair": renderer.get_mob_pair(m.sprite, getattr(m, "facing", -1), is_chilled=chilled, flash_mode=f_mode),
                     "alpha": 255,
+                    "gloss": 165 if m.kind in ("jade_scarab", "marble_golem", "vedalken_arbiter") else 62,
                 })
 
         render_list.sort(key=lambda item: item["wy"])
@@ -626,7 +669,7 @@ class GPUSceneRenderer:
                 pack(buf, count * _INST_STRIDE,
                      float(draw_x), float(draw_y), float(ew), float(eh),
                      float(ax), float(ay), float(aw), float(ah),
-                     opacity, -9999.0, float(ent["canopy_visibility"]), 25.0)
+                     opacity, -9999.0, float(ent["canopy_visibility"]), float(25 | (18 << 8)))
                 count += 1
                 continue
 
@@ -652,6 +695,7 @@ class GPUSceneRenderer:
                 fl |= 4
             if has_trees:
                 fl |= 16
+                fl |= (int(ent.get("gloss", 45)) & 255) << 8
             pack(buf, count * _INST_STRIDE,
                  float(draw_x), float(draw_y), float(ew), float(eh),
                  float(ax), float(ay), float(aw), float(ah),
@@ -675,21 +719,22 @@ class GPUSceneRenderer:
 
             ctx.scissor = (0, 0, VIEW_W, VIEW_H)
 
-            # 2. Чанки пола (непрозрачные, 2-6 квадов)
-            self.fbo_dn.use()
+            # 2. Чанки пола (непрозрачные, 2-6 квадов + карта материалов)
+            self.fbo_color.use()
             for chunk, visible in chunks:
-                td, tn = self._chunk_textures(chunk)
+                td, tn, tm = self._chunk_textures(chunk)
                 td.use(0)
                 tn.use(1)
-                self.quad_dn_prog["u_dest"].value = (
+                tm.use(2)
+                self.quad_dnm_prog["u_dest"].value = (
                     float(visible.x - cam_ix), float(visible.y - cam_iy),
                     float(visible.width), float(visible.height),
                 )
-                self.quad_dn_prog["u_src"].value = (
+                self.quad_dnm_prog["u_src"].value = (
                     float(visible.x - chunk.pixels.x), float(visible.y - chunk.pixels.y),
                     float(visible.width), float(visible.height),
                 )
-                self.quad_dn_vao.render(gl.TRIANGLE_STRIP)
+                self.quad_dnm_vao.render(gl.TRIANGLE_STRIP)
 
             # 3. Двери (с альфой поверх пола, но до декалей и сущностей)
             if doors:
@@ -701,7 +746,7 @@ class GPUSceneRenderer:
                     pack(d_buf, i * _INST_STRIDE,
                          float(dx * TILE_W - cam_ix), float(dy * TILE_H - cam_iy), float(aw), float(ah),
                          float(ax), float(ay), float(aw), float(ah),
-                         1.0, -9999.0, 0.0, 1.0)
+                         1.0, -9999.0, 0.0, float(1 | (65 << 8)))
                 self.inst_vbo.write(d_buf)
                 self.fbo_color.use()
                 atlas.diff.use(0)

@@ -16,6 +16,12 @@ class DevPanel:
         self.font_ui = pygame.font.SysFont("consolas", 13, bold=True)
         self.font_small = pygame.font.SysFont("consolas", 12, bold=True)
         self.buttons = []
+        self._panel_surf = None
+        self._panel_layout_key = None
+        self._panel_key = None
+        self._banner_key = None
+        self._banner_surf = None
+        self._lbl_cache = {}
 
     def handle_event(self, event, game, world_mx, world_my):
         if event.type == pygame.KEYDOWN:
@@ -142,126 +148,182 @@ class DevPanel:
             kind = b_id.split(":")[1]
             self.click_mode = ("spawn_obj", kind)
 
+    def _label(self, font, text, color):
+        key = (id(font), text, color)
+        surf = self._lbl_cache.get(key)
+        if surf is None:
+            if len(self._lbl_cache) >= 512:
+                self._lbl_cache.clear()
+            surf = font.render(text, True, color)
+            self._lbl_cache[key] = surf
+        return surf
+
     def render(self, screen, game, mouse_pos):
+        window = getattr(game, "gl_window", None)
         if self.click_mode and not self.is_open:
-            lbl = self.font_title.render(f"РЕЖИМ ЧИТ-КЛИКА: {self.click_mode} [Нажми F1 для отмены]", True, (255, 220, 80))
-            screen.blit(lbl, (20, 14))
+            if self.click_mode != self._banner_key or self._banner_surf is None:
+                self._banner_surf = self.font_title.render(
+                    f"РЕЖИМ ЧИТ-КЛИКА: {self.click_mode} [Нажми F1 для отмены]", True, (255, 220, 80)
+                )
+                self._banner_key = self.click_mode
+            if window is not None:
+                window.set_dev_panel(
+                    "dev_banner", pygame.Rect(20, 14, *self._banner_surf.get_size()),
+                    self._banner_key, self._banner_surf,
+                )
+            else:
+                screen.blit(self._banner_surf, (20, 14))
 
         if not self.is_open:
             return
 
-        self.buttons = []
         win_rect = pygame.Rect(80, 36, SCREEN_W - 160, 560)
-        pygame.draw.rect(screen, (18, 15, 24), win_rect, border_radius=8)
-        pygame.draw.rect(screen, UI_BORDER_GOLD, win_rect, 2, border_radius=8)
-
-        title = self.font_title.render("🛠 DEV CHEAT PANEL [F1 — Закрыть] (Клик вне окна = применить спавн/телепорт на карту)", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(title, (win_rect.x + 20, win_rect.y + 14))
-
-        # Top Quick Action Buttons
+        ox, oy = win_rect.x, win_rect.y
         p = game.player
-        quick_actions = [
-            ("act_heal", "Полный Хил"),
-            ("act_god", f"Бессмертие: {'ВКЛ' if getattr(p, 'god_mode', False) else 'ВЫКЛ'}"),
-            ("act_fov", f"Открыть карту: {'ВКЛ' if self.reveal_map else 'ВЫКЛ'}"),
-            ("act_lvl_up", "+1 Уровень (Дар)"),
-            ("act_lvl_down", "-1 Уровень"),
-            ("act_unlock_bag", "Открыть 24 яч."),
-            ("act_gold", "+100 Золота"),
-            ("act_next_floor", "След. Этаж >>"),
-            ("act_teleport", f"Телепорт: {'АКТИВЕН' if self.click_mode == 'teleport' else 'ВЫКЛ'}"),
-            ("act_kill_all", "Убить всех мобов"),
-        ]
-        qx, qy = win_rect.x + 20, win_rect.y + 46
-        for idx, (aid, atxt) in enumerate(quick_actions):
-            col = idx % 5
-            row = idx // 5
-            r = pygame.Rect(qx + col * 190, qy + row * 34, 182, 28)
-            hov = r.collidepoint(mouse_pos)
-            pygame.draw.rect(screen, (48, 38, 64) if hov else UI_SLOT_BG, r, border_radius=4)
-            pygame.draw.rect(screen, UI_BORDER_HIGHLIGHT if hov else UI_BORDER_WOOD, r, 1, border_radius=4)
-            s = self.font_small.render(atxt, True, UI_TEXT_MAIN)
-            screen.blit(s, (r.x + (r.width - s.get_width()) // 2, r.y + 7))
-            self.buttons.append((aid, r))
+        layout_key = (
+            self.active_tab,
+            self.click_mode,
+            self.reveal_map,
+            getattr(p, "god_mode", False),
+            self.spawn_rarity_idx if self.active_tab == "items" else None,
+            tuple(sorted(p.perks.items())) if self.active_tab == "perks" else None,
+        )
+        if layout_key == self._panel_layout_key and self.buttons:
+            hov_id = next((bid for bid, r in self.buttons if r.collidepoint(mouse_pos)), None)
+        else:
+            hov_id = "__rebuild__"
+        full_key = (layout_key, hov_id)
 
-        # Category Tabs
-        tabs = [
-            ("tab_items", "📦 Выдать Предмет", self.active_tab == "items"),
-            ("tab_perks", "⚡ Управление Перками (ЛКМ+/ПКМ-)", self.active_tab == "perks"),
-            ("tab_spawner", "👹 Спавнер Врагов и Объектов", self.active_tab == "spawner"),
-        ]
-        for ti, (tid, tlabel, tact) in enumerate(tabs):
-            tr = pygame.Rect(win_rect.x + 20 + ti * 310, win_rect.y + 122, 295, 30)
-            pygame.draw.rect(screen, (65, 50, 85) if tact else UI_PANEL_BG, tr, border_radius=4)
-            pygame.draw.rect(screen, UI_BORDER_GOLD if tact else UI_BORDER_WOOD, tr, 2 if tact else 1, border_radius=4)
-            ts = self.font_ui.render(tlabel, True, UI_BORDER_HIGHLIGHT if tact else UI_TEXT_DIM)
-            screen.blit(ts, (tr.x + (tr.width - ts.get_width()) // 2, tr.y + 6))
-            self.buttons.append((tid, tr))
+        if full_key != self._panel_key or self._panel_surf is None:
+            if self._panel_surf is None or self._panel_surf.get_size() != win_rect.size:
+                self._panel_surf = pygame.Surface(win_rect.size, pygame.SRCALPHA)
+            surf = self._panel_surf
+            surf.fill((0, 0, 0, 0))
+            local_win = pygame.Rect(0, 0, win_rect.width, win_rect.height)
+            self.buttons = []
 
-        content_y = win_rect.y + 164
+            pygame.draw.rect(surf, (18, 15, 24), local_win, border_radius=8)
+            pygame.draw.rect(surf, UI_BORDER_GOLD, local_win, 2, border_radius=8)
 
-        if self.active_tab == "items":
-            cur_rar = self.spawn_rarities[self.spawn_rarity_idx]
-            rar_col_btn = RARITY_COLORS.get(cur_rar, UI_TEXT_MAIN)
-            rar_names_ru = {"common": "ОБЫЧНОЕ [I]", "uncommon": "ДОБРОТНОЕ [II]", "rare": "РЕДКОЕ [III]", "epic": "ЭПИЧЕСКОЕ [IV]", "legendary": "ЛЕГЕНДАРНОЕ [V]"}
-            rar_rect = pygame.Rect(win_rect.right - 360, win_rect.y + 122, 340, 30)
-            pygame.draw.rect(screen, (36, 30, 48), rar_rect, border_radius=4)
-            pygame.draw.rect(screen, rar_col_btn, rar_rect, 2, border_radius=4)
-            rt_s = self.font_ui.render(f"Тир оружия: {rar_names_ru[cur_rar]} (ЛКМ/ПКМ)", True, rar_col_btn)
-            screen.blit(rt_s, (rar_rect.x + (rar_rect.width - rt_s.get_width()) // 2, rar_rect.y + 6))
-            self.buttons.append(("act_cycle_rarity", rar_rect))
+            title = self._label(self.font_title, "🛠 DEV CHEAT PANEL [F1 — Закрыть] (Клик вне окна = применить спавн/телепорт на карту)", UI_BORDER_HIGHLIGHT)
+            surf.blit(title, (20, 14))
 
-            items_db = game.loc.get("items", {})
-            for idx, (item_id, idata) in enumerate(items_db.items()):
-                col = idx % 7
-                row = idx // 7
-                ir = pygame.Rect(win_rect.x + 16 + col * 246, content_y + row * 31, 240, 27)
-                hov = ir.collidepoint(mouse_pos)
-                is_weap = (idata.get("type") == "equipment" and idata.get("slot") == "right_hand" and not idata.get("is_torch", False))
-                r_col = rar_col_btn if is_weap else RARITY_COLORS.get(idata.get("rarity", "common"), UI_TEXT_MAIN)
-                pygame.draw.rect(screen, (42, 36, 56) if hov else UI_SLOT_BG, ir, border_radius=4)
-                pygame.draw.rect(screen, r_col, ir, 2 if hov else 1, border_radius=4)
-                game.renderer.draw_item_icon(screen, idata["icon"], ir.x + 2, ir.y, 26)
-                nm = self.font_small.render(idata["name"][:22], True, r_col)
-                screen.blit(nm, (ir.x + 32, ir.y + 6))
-                self.buttons.append((f"give_item:{item_id}", ir))
+            quick_actions = [
+                ("act_heal", "Полный Хил"),
+                ("act_god", f"Бессмертие: {'ВКЛ' if getattr(p, 'god_mode', False) else 'ВЫКЛ'}"),
+                ("act_fov", f"Открыть карту: {'ВКЛ' if self.reveal_map else 'ВЫКЛ'}"),
+                ("act_lvl_up", "+1 Уровень (Дар)"),
+                ("act_lvl_down", "-1 Уровень"),
+                ("act_unlock_bag", "Открыть 24 яч."),
+                ("act_gold", "+100 Золота"),
+                ("act_next_floor", "След. Этаж >>"),
+                ("act_teleport", f"Телепорт: {'АКТИВЕН' if self.click_mode == 'teleport' else 'ВЫКЛ'}"),
+                ("act_kill_all", "Убить всех мобов"),
+            ]
+            qx, qy = 20, 46
+            for idx, (aid, atxt) in enumerate(quick_actions):
+                col = idx % 5
+                row = idx // 5
+                lr = pygame.Rect(qx + col * 190, qy + row * 34, 182, 28)
+                sr = lr.move(ox, oy)
+                hov = sr.collidepoint(mouse_pos)
+                pygame.draw.rect(surf, (48, 38, 64) if hov else UI_SLOT_BG, lr, border_radius=4)
+                pygame.draw.rect(surf, UI_BORDER_HIGHLIGHT if hov else UI_BORDER_WOOD, lr, 1, border_radius=4)
+                s = self._label(self.font_small, atxt, UI_TEXT_MAIN)
+                surf.blit(s, (lr.x + (lr.width - s.get_width()) // 2, lr.y + 7))
+                self.buttons.append((aid, sr))
 
-        elif self.active_tab == "perks":
-            perks_db = game.loc.get("perks", {})
-            for idx, (pid, pdata) in enumerate(perks_db.items()):
-                col = idx % 3
-                row = idx // 3
-                pr = pygame.Rect(win_rect.x + 20 + col * 316, content_y + row * 54, 304, 46)
-                hov = pr.collidepoint(mouse_pos)
-                r_col = RARITY_COLORS.get(pdata.get("rarity", "common"), UI_TEXT_MAIN)
-                cur_lvl = p.perks.get(pid, 0)
-                pygame.draw.rect(screen, (45, 38, 60) if hov else UI_SLOT_BG, pr, border_radius=4)
-                pygame.draw.rect(screen, r_col, pr, 2 if cur_lvl > 0 else 1, border_radius=4)
-                game.renderer.draw_item_icon(screen, pdata["icon"], pr.x + 6, pr.y + 7, 32)
-                nm = self.font_ui.render(f"{pdata['name']} [Ур.{cur_lvl}]", True, r_col)
-                tp = self.font_small.render("Активный" if pdata.get("type") == "active" else "Пассивный", True, UI_TEXT_DIM)
-                screen.blit(nm, (pr.x + 44, pr.y + 6))
-                screen.blit(tp, (pr.x + 44, pr.y + 25))
-                self.buttons.append((f"perk:{pid}", pr))
+            tabs = [
+                ("tab_items", "📦 Выдать Предмет", self.active_tab == "items"),
+                ("tab_perks", "⚡ Управление Перками (ЛКМ+/ПКМ-)", self.active_tab == "perks"),
+                ("tab_spawner", "👹 Спавнер Врагов и Объектов", self.active_tab == "spawner"),
+            ]
+            for ti, (tid, tlabel, tact) in enumerate(tabs):
+                ltr = pygame.Rect(20 + ti * 310, 122, 295, 30)
+                str_r = ltr.move(ox, oy)
+                pygame.draw.rect(surf, (65, 50, 85) if tact else UI_PANEL_BG, ltr, border_radius=4)
+                pygame.draw.rect(surf, UI_BORDER_GOLD if tact else UI_BORDER_WOOD, ltr, 2 if tact else 1, border_radius=4)
+                ts = self._label(self.font_ui, tlabel, UI_BORDER_HIGHLIGHT if tact else UI_TEXT_DIM)
+                surf.blit(ts, (ltr.x + (ltr.width - ts.get_width()) // 2, ltr.y + 6))
+                self.buttons.append((tid, str_r))
 
-        elif self.active_tab == "spawner":
-            mobs_list = [("rat", "Погребная крыса"), ("rat_cultist", "Крыса-сектант"), ("rat_king", "Крысиный Король"), ("skeleton", "Скелет-воин"), ("cultist", "Культист")]
-            objs_list = [("barrel", "Винная бочка"), ("ritual_altar", "Кровавый алтарь"), ("chest", "Сундук"), ("campfire", "Костёр"), ("alchemy", "Алхимия"), ("rack", "Оружейная стойка"), ("stairs", "Лестница вниз")]
-            screen.blit(self.font_ui.render("Выбери кого спавнить, затем кликай ЛКМ по карте вокруг окна:", True, UI_BORDER_HIGHLIGHT), (win_rect.x + 24, content_y))
-            for i, (mk, mname) in enumerate(mobs_list):
-                mr = pygame.Rect(win_rect.x + 24 + i * 186, content_y + 30, 176, 36)
-                act = (self.click_mode == ("spawn_mob", mk))
-                pygame.draw.rect(screen, (75, 40, 48) if act else UI_SLOT_BG, mr, border_radius=4)
-                pygame.draw.rect(screen, (255, 110, 110) if act else UI_BORDER_WOOD, mr, 2 if act else 1, border_radius=4)
-                screen.blit(self.font_small.render(f"Моб: {mname}", True, UI_TEXT_MAIN), (mr.x + 12, mr.y + 11))
-                self.buttons.append((f"spawn_mob:{mk}", mr))
+            content_y = 164
 
-            for i, (ok, oname) in enumerate(objs_list):
-                col = i % 4
-                row = i // 4
-                orr = pygame.Rect(win_rect.x + 24 + col * 230, content_y + 90 + row * 44, 218, 36)
-                act = (self.click_mode == ("spawn_obj", ok))
-                pygame.draw.rect(screen, (45, 65, 50) if act else UI_SLOT_BG, orr, border_radius=4)
-                pygame.draw.rect(screen, (120, 240, 150) if act else UI_BORDER_WOOD, orr, 2 if act else 1, border_radius=4)
-                screen.blit(self.font_small.render(f"Объект: {oname}", True, UI_TEXT_MAIN), (orr.x + 12, orr.y + 11))
-                self.buttons.append((f"spawn_obj:{ok}", orr))
+            if self.active_tab == "items":
+                cur_rar = self.spawn_rarities[self.spawn_rarity_idx]
+                rar_col_btn = RARITY_COLORS.get(cur_rar, UI_TEXT_MAIN)
+                rar_names_ru = {"common": "ОБЫЧНОЕ [I]", "uncommon": "ДОБРОТНОЕ [II]", "rare": "РЕДКОЕ [III]", "epic": "ЭПИЧЕСКОЕ [IV]", "legendary": "ЛЕГЕНДАРНОЕ [V]"}
+                l_rar = pygame.Rect(win_rect.width - 360, 122, 340, 30)
+                pygame.draw.rect(surf, (36, 30, 48), l_rar, border_radius=4)
+                pygame.draw.rect(surf, rar_col_btn, l_rar, 2, border_radius=4)
+                rt_s = self._label(self.font_ui, f"Тир оружия: {rar_names_ru[cur_rar]} (ЛКМ/ПКМ)", rar_col_btn)
+                surf.blit(rt_s, (l_rar.x + (l_rar.width - rt_s.get_width()) // 2, l_rar.y + 6))
+                self.buttons.append(("act_cycle_rarity", l_rar.move(ox, oy)))
+
+                items_db = game.loc.get("items", {})
+                for idx, (item_id, idata) in enumerate(items_db.items()):
+                    col = idx % 7
+                    row = idx // 7
+                    lir = pygame.Rect(16 + col * 246, content_y + row * 31, 240, 27)
+                    sir = lir.move(ox, oy)
+                    hov = sir.collidepoint(mouse_pos)
+                    is_weap = (idata.get("type") == "equipment" and idata.get("slot") == "right_hand" and not idata.get("is_torch", False))
+                    r_col = rar_col_btn if is_weap else RARITY_COLORS.get(idata.get("rarity", "common"), UI_TEXT_MAIN)
+                    pygame.draw.rect(surf, (42, 36, 56) if hov else UI_SLOT_BG, lir, border_radius=4)
+                    pygame.draw.rect(surf, r_col, lir, 2 if hov else 1, border_radius=4)
+                    game.renderer.draw_item_icon(surf, idata["icon"], lir.x + 2, lir.y, 26)
+                    nm = self._label(self.font_small, idata["name"][:22], r_col)
+                    surf.blit(nm, (lir.x + 32, lir.y + 6))
+                    self.buttons.append((f"give_item:{item_id}", sir))
+
+            elif self.active_tab == "perks":
+                perks_db = game.loc.get("perks", {})
+                for idx, (pid, pdata) in enumerate(perks_db.items()):
+                    col = idx % 3
+                    row = idx // 3
+                    lpr = pygame.Rect(20 + col * 316, content_y + row * 54, 304, 46)
+                    spr = lpr.move(ox, oy)
+                    hov = spr.collidepoint(mouse_pos)
+                    r_col = RARITY_COLORS.get(pdata.get("rarity", "common"), UI_TEXT_MAIN)
+                    cur_lvl = p.perks.get(pid, 0)
+                    pygame.draw.rect(surf, (45, 38, 60) if hov else UI_SLOT_BG, lpr, border_radius=4)
+                    pygame.draw.rect(surf, r_col, lpr, 2 if cur_lvl > 0 else 1, border_radius=4)
+                    game.renderer.draw_item_icon(surf, pdata["icon"], lpr.x + 6, lpr.y + 7, 32)
+                    nm = self._label(self.font_ui, f"{pdata['name']} [Ур.{cur_lvl}]", r_col)
+                    tp = self._label(self.font_small, "Активный" if pdata.get("type") == "active" else "Пассивный", UI_TEXT_DIM)
+                    surf.blit(nm, (lpr.x + 44, lpr.y + 6))
+                    surf.blit(tp, (lpr.x + 44, lpr.y + 25))
+                    self.buttons.append((f"perk:{pid}", spr))
+
+            elif self.active_tab == "spawner":
+                mobs_list = [("rat", "Погребная крыса"), ("rat_cultist", "Крыса-сектант"), ("rat_king", "Крысиный Король"), ("skeleton", "Скелет-воин"), ("cultist", "Культист")]
+                objs_list = [("barrel", "Винная бочка"), ("ritual_altar", "Кровавый алтарь"), ("chest", "Сундук"), ("campfire", "Костёр"), ("alchemy", "Алхимия"), ("rack", "Оружейная стойка"), ("stairs", "Лестница вниз")]
+                surf.blit(self._label(self.font_ui, "Выбери кого спавнить, затем кликай ЛКМ по карте вокруг окна:", UI_BORDER_HIGHLIGHT), (24, content_y))
+                for i, (mk, mname) in enumerate(mobs_list):
+                    lmr = pygame.Rect(24 + i * 186, content_y + 30, 176, 36)
+                    smr = lmr.move(ox, oy)
+                    act = (self.click_mode == ("spawn_mob", mk))
+                    pygame.draw.rect(surf, (75, 40, 48) if act else UI_SLOT_BG, lmr, border_radius=4)
+                    pygame.draw.rect(surf, (255, 110, 110) if act else UI_BORDER_WOOD, lmr, 2 if act else 1, border_radius=4)
+                    surf.blit(self._label(self.font_small, f"Моб: {mname}", UI_TEXT_MAIN), (lmr.x + 12, lmr.y + 11))
+                    self.buttons.append((f"spawn_mob:{mk}", smr))
+
+                for i, (ok, oname) in enumerate(objs_list):
+                    col = i % 4
+                    row = i // 4
+                    lor = pygame.Rect(24 + col * 230, content_y + 90 + row * 44, 218, 36)
+                    sor = lor.move(ox, oy)
+                    act = (self.click_mode == ("spawn_obj", ok))
+                    pygame.draw.rect(surf, (45, 65, 50) if act else UI_SLOT_BG, lor, border_radius=4)
+                    pygame.draw.rect(surf, (120, 240, 150) if act else UI_BORDER_WOOD, lor, 2 if act else 1, border_radius=4)
+                    surf.blit(self._label(self.font_small, f"Объект: {oname}", UI_TEXT_MAIN), (lor.x + 12, lor.y + 11))
+                    self.buttons.append((f"spawn_obj:{ok}", sor))
+
+            self._panel_layout_key = layout_key
+            hov_after = next((bid for bid, r in self.buttons if r.collidepoint(mouse_pos)), None)
+            self._panel_key = (layout_key, hov_after)
+
+        if window is not None:
+            window.set_dev_panel("dev_panel", win_rect, self._panel_key, self._panel_surf)
+        else:
+            screen.blit(self._panel_surf, win_rect.topleft)

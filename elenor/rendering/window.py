@@ -27,6 +27,11 @@ _TOP_BAND_H = 212
 _THOUGHT_Y = VIEW_H * SCALE
 _HUD_Y = CANVAS_H * SCALE
 _ROW_BYTES = SCREEN_W * 4
+_TOP_WIDGET_RECTS = (
+    pygame.Rect(0, 0, 270, _TOP_BAND_H),
+    pygame.Rect(600, 0, 720, 48),
+    pygame.Rect(1520, 0, SCREEN_W - 1520, 42),
+)
 
 
 class _Fences:
@@ -83,10 +88,16 @@ class GLWindow:
         self.thought_dirty = True
         self.full_dirty = True
         self.prev_full_dirty = True
-        self.world_y0 = _THOUGHT_Y
-        self.world_y1 = 0
-        self.prev_world_y0 = _THOUGHT_Y
-        self.prev_world_y1 = 0
+        self.world_rects = []
+        self.prev_world_rects = []
+        self.dev_pixels = bytearray(SCREEN_W * _THOUGHT_Y * 4)
+        self.dev_view = memoryview(self.dev_pixels)
+        self.dev_canvas = pygame.image.frombuffer(self.dev_pixels, (SCREEN_W, _THOUGHT_Y), "BGRA")
+        self.dev_ui = ctx.texture((SCREEN_W, _THOUGHT_Y), 4)
+        self.dev_ui.swizzle = "BGRA"
+        self._dev_next = []
+        self._dev_prev = []
+        self.has_dev_ui = False
         self._last_probe_time = 0.0
         self._probe_dungeon = None
         self._probe_revision = -1
@@ -120,6 +131,7 @@ class GLWindow:
             uniform sampler2D fov_tex;
             uniform sampler2D lit_fx;
             uniform sampler2D light_vis;
+            uniform sampler2D dev_ui;
             uniform ivec3 viewport;
             uniform vec2 logical_scale;
             uniform bool has_scene;
@@ -127,6 +139,7 @@ class GLWindow:
             uniform bool has_lit_fx;
             uniform bool has_native_fx;
             uniform bool mask_native_fx;
+            uniform bool has_dev_ui;
             out vec4 color;
 
             void main() {{
@@ -153,10 +166,15 @@ class GLWindow:
                     }}
                 }}
                 vec4 ui = texelFetch(overlay, logical, 0);
-                color = vec4(mix(base, ui.rgb, ui.a), 1.0);
+                vec3 out_col = mix(base, ui.rgb, ui.a);
+                if (has_dev_ui && logical.y < {_THOUGHT_Y}) {{
+                    vec4 dev = texelFetch(dev_ui, logical, 0);
+                    out_col = mix(out_col, dev.rgb, dev.a);
+                }}
+                color = vec4(out_col, 1.0);
             }}
         """)
-        for unit, name in enumerate(("world", "fog", "native_fx", "overlay", "fov_tex", "lit_fx", "light_vis")):
+        for unit, name in enumerate(("world", "fog", "native_fx", "overlay", "fov_tex", "lit_fx", "light_vis", "dev_ui")):
             self.present_program[name].value = unit
         self.quad = ctx.vertex_array(self.present_program, [])
 
@@ -276,37 +294,36 @@ class GLWindow:
             slot.fog = gpu_fog
             self.pending.append(slot)
 
-    def mark_world_y(self, y0, y1):
-        y0 = max(0, int(y0))
-        y1 = min(_THOUGHT_Y, int(y1))
-        if y0 < y1:
-            if y0 < self.world_y0:
-                self.world_y0 = y0
-            if y1 > self.world_y1:
-                self.world_y1 = y1
-            if y0 < _TOP_BAND_H:
+    def mark_world_rect(self, x, y, w, h):
+        r = pygame.Rect(int(x), int(y), int(w), int(h)).clip((0, 0, SCREEN_W, _THOUGHT_Y))
+        if r.width > 0 and r.height > 0:
+            self.world_rects.append(r)
+            if r.top < _TOP_BAND_H and any(r.colliderect(tw) for tw in _TOP_WIDGET_RECTS):
                 self.top_dirty = True
 
+    def mark_world_y(self, y0, y1):
+        self.mark_world_rect(0, y0, SCREEN_W, int(y1) - int(y0))
+
+    def set_dev_panel(self, name, rect, key, surface):
+        self._dev_next.append((name, rect, key, surface))
+
     def begin_ui_frame(self, full_clear=False):
+        self._dev_next = []
         if self.prev_full_dirty or full_clear:
             self.canvas.fill((0, 0, 0, 0))
             self.uploaded_hud = None
             self.thought_dirty = True
             self.top_dirty = True
-            self.prev_world_y0 = _THOUGHT_Y
-            self.prev_world_y1 = 0
+            self.prev_world_rects = []
             if full_clear:
                 self.prev_full_dirty = True
         else:
             self.top_dirty = False
-            if self.prev_world_y0 < self.prev_world_y1:
-                y0 = 0 if self.prev_world_y0 < _TOP_BAND_H else self.prev_world_y0
-                y1 = max(self.prev_world_y1, _TOP_BAND_H) if self.prev_world_y0 < _TOP_BAND_H else self.prev_world_y1
-                self.canvas.fill((0, 0, 0, 0), (0, y0, SCREEN_W, y1 - y0))
-                if y0 == 0:
+            for r in self.prev_world_rects:
+                self.canvas.fill((0, 0, 0, 0), r)
+                if r.top < _TOP_BAND_H and any(r.colliderect(tw) for tw in _TOP_WIDGET_RECTS):
                     self.top_dirty = True
-        self.world_y0 = _THOUGHT_Y
-        self.world_y1 = 0
+        self.world_rects = []
         self.middle_dirty = False
         self.full_dirty = bool(full_clear)
         self.native_fx_pixels = None
@@ -320,29 +337,46 @@ class GLWindow:
             self.ui.write(self.ui_pixels)
             self.uploaded_hud = None
             self.prev_full_dirty = True
-            self.prev_world_y0 = _THOUGHT_Y
-            self.prev_world_y1 = 0
+            self.prev_world_rects = []
             self.thought_dirty = True
         elif self.full_dirty or self.prev_full_dirty:
             self.ui.write(self.ui_pixels)
             self.uploaded_hud = hud if not self.full_dirty else None
-            self.prev_world_y0 = self.world_y0
-            self.prev_world_y1 = self.world_y1
+            self.prev_world_rects = self.world_rects
             self.prev_full_dirty = self.full_dirty
             self.thought_dirty = False
         else:
             if self.middle_dirty:
                 self.mark_world_y(0, _THOUGHT_Y)
-            up_y0 = min(self.world_y0, self.prev_world_y0)
-            up_y1 = max(self.world_y1, self.prev_world_y1)
             if self.top_dirty:
-                up_y0 = 0
-                up_y1 = max(up_y1, _TOP_BAND_H)
-            if up_y0 < up_y1:
-                self.ui.write(
-                    self.ui_view[up_y0 * _ROW_BYTES:up_y1 * _ROW_BYTES],
-                    viewport=(0, up_y0, SCREEN_W, up_y1 - up_y0),
-                )
+                self.ui.write(self.ui_top, viewport=(0, 0, SCREEN_W, _TOP_BAND_H))
+            dirty_rects = []
+            for r in (*self.prev_world_rects, *self.world_rects):
+                if self.top_dirty:
+                    r = r.clip((0, _TOP_BAND_H, SCREEN_W, _THOUGHT_Y - _TOP_BAND_H))
+                if r.width > 0 and r.height > 0:
+                    dirty_rects.append(r)
+            if len(dirty_rects) > 1:
+                merged = []
+                for r in dirty_rects:
+                    for i, m in enumerate(merged):
+                        if m.colliderect(r):
+                            merged[i] = m.union(r)
+                            break
+                    else:
+                        merged.append(r)
+                dirty_rects = [merged[0].unionall(merged[1:])] if len(merged) > 6 else merged
+            for r in dirty_rects:
+                if r.width == SCREEN_W:
+                    self.ui.write(
+                        self.ui_view[r.y * _ROW_BYTES:(r.y + r.height) * _ROW_BYTES],
+                        viewport=(0, r.y, SCREEN_W, r.height),
+                    )
+                else:
+                    self.ui.write(
+                        pygame.image.tobytes(self.canvas.subsurface(r), "BGRA"),
+                        viewport=(r.x, r.y, r.width, r.height),
+                    )
             if self.thought_dirty:
                 self.ui.write(self.ui_thought, viewport=(0, _THOUGHT_Y, SCREEN_W, _HUD_Y - _THOUGHT_Y))
             if hud is None:
@@ -351,10 +385,31 @@ class GLWindow:
             elif hud is not self.uploaded_hud:
                 self.ui.write(self.ui_hud, viewport=(0, _HUD_Y, SCREEN_W, SCREEN_H - _HUD_Y))
                 self.uploaded_hud = hud
-            self.prev_world_y0 = self.world_y0
-            self.prev_world_y1 = self.world_y1
+            self.prev_world_rects = self.world_rects
             self.prev_full_dirty = False
             self.thought_dirty = False
+        if gameplay:
+            next_sig = [(n, r, k) for n, r, k, _ in self._dev_next]
+            if next_sig != self._dev_prev:
+                rects = [r for _, r, _ in self._dev_prev] + [r for _, r, _, _ in self._dev_next]
+                if rects:
+                    dirty = rects[0].unionall(rects[1:]).clip((0, 0, SCREEN_W, _THOUGHT_Y))
+                    if dirty.width > 0 and dirty.height > 0:
+                        self.dev_canvas.fill((0, 0, 0, 0), dirty)
+                        for _, rect, _, surf in self._dev_next:
+                            self.dev_canvas.blit(surf, rect.topleft)
+                        if dirty.width == SCREEN_W:
+                            self.dev_ui.write(
+                                self.dev_view[dirty.y * _ROW_BYTES:(dirty.y + dirty.height) * _ROW_BYTES],
+                                viewport=(0, dirty.y, SCREEN_W, dirty.height),
+                            )
+                        else:
+                            self.dev_ui.write(
+                                pygame.image.tobytes(self.dev_canvas.subsurface(dirty), "BGRA"),
+                                viewport=(dirty.x, dirty.y, dirty.width, dirty.height),
+                            )
+                self._dev_prev = [(n, r.copy(), k) for n, r, k in next_sig]
+            self.has_dev_ui = bool(self._dev_next)
         if gameplay and self.upload_fog is not None:
             self.software_fog.write(pygame.image.tobytes(self.upload_fog, "RGBA"))
         has_nfx = gameplay and self.native_fx_pixels is not None
@@ -382,6 +437,7 @@ class GLWindow:
         self.present_program["has_lit_fx"].value = scene is not None and has_lfx
         self.present_program["has_native_fx"].value = scene is not None and has_nfx
         self.present_program["mask_native_fx"].value = self.native_fx_fov_mask
+        self.present_program["has_dev_ui"].value = gameplay and self.has_dev_ui
         (scene if scene is not None else self.probe).use(0)
         self.software_fog.use(1)
         self.native_fx.use(2)
@@ -389,6 +445,7 @@ class GLWindow:
         self.shader.tex_fov.use(4)
         self.lit_fx.use(5)
         self.shader.tex_out.use(6)
+        self.dev_ui.use(7)
         self.quad.render(self.gl.TRIANGLE_STRIP, vertices=4)
 
     def close(self):

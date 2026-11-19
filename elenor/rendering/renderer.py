@@ -61,6 +61,7 @@ class Renderer(UIRendererMixin):
         self._scene_fov_key = None
         self._cached_scene_fov = None
         self._minimap_ui_key = None
+        self._bubble_cache = {}
         self.current_hud_lights = []
 
         self.font_thought = pygame.font.SysFont("consolas", 19, bold=True)
@@ -543,6 +544,24 @@ class Renderer(UIRendererMixin):
             self.emissive_cache[key] = em
         return self.emissive_cache[key]
 
+    def _get_speech_bubble(self, text, txt_col, bg_col, border_col, max_w):
+        key = (text, txt_col, bg_col, border_col, max_w)
+        surf = self._bubble_cache.get(key)
+        if surf is None:
+            if len(self._bubble_cache) >= 64:
+                self._bubble_cache.clear()
+            lines = self.wrap_text(text, self.font_small, max_w)
+            rendered = [self.font_small.render(ln, True, txt_col) for ln in lines]
+            bw = max(s.get_width() for s in rendered) + 14
+            bh = len(rendered) * 16 + 8
+            surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
+            pygame.draw.rect(surf, bg_col, (0, 0, bw, bh), border_radius=4)
+            pygame.draw.rect(surf, border_col, (0, 0, bw, bh), 1, border_radius=4)
+            for li, r_surf in enumerate(rendered):
+                surf.blit(r_surf, ((bw - r_surf.get_width()) // 2, 4 + li * 16))
+            self._bubble_cache[key] = surf
+        return surf
+
     def render_frame(self, screen, dungeon, player, mobs, objects, projectiles, particles, popups, cam_x, cam_y, fov_mask, visible_tiles, lights, shown_thought, ui_texts, inv_open, hover_pos, drag_item, hover_target=None, levelup_choices=None, hud_lights=None):
         scene_start = perf_counter() if "_frame_timings" in ui_texts else 0.0
         # Привязываем камеру к целым пикселям буфера, чтобы полностью убрать субпиксельное дрожание тайлов!
@@ -923,8 +942,15 @@ class Renderer(UIRendererMixin):
             slot = window.begin_world(dungeon, timings, profile_key)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
-            en_bloom = (fx_mgr.flags.get("bloom", True) if fx_mgr else True) and self._emissive_dirty
+            en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
+            en_spec = fx_mgr.flags.get("specular", True) if fx_mgr else True
+            en_refl = fx_mgr.flags.get("water_reflections", True) if fx_mgr else True
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
+            extra_gl = {}
+            if scene_on_gpu:
+                extra_gl.update(scene_on_gpu=True, gpu_scene_fov=gpu_scene_fov, fov_on_gpu=fov_on_gpu)
+            if isinstance(self.gpu_shader, GPULightShader):
+                extra_gl.update(time_sec=now_sec, enable_specular=en_spec, enable_reflections=en_refl)
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
                 scene_fov, cam_x, cam_y, lights, self.current_hud_lights,
@@ -935,7 +961,7 @@ class Renderer(UIRendererMixin):
                 fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,
                 timer_queries=slot.timers if slot is not None and slot.timed else None,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
-                **({"scene_on_gpu": True, "gpu_scene_fov": gpu_scene_fov, "fov_on_gpu": fov_on_gpu} if scene_on_gpu else {}),
+                **extra_gl,
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -1302,21 +1328,16 @@ class Renderer(UIRendererMixin):
                 sx = int((m.x * TILE_W - cam_x) * SCALE)
                 sy = int(((m.y - head_off) * TILE_H - cam_y) * SCALE)
                 foot_y = int((m.y * TILE_H - cam_y) * SCALE)
-                if window is not None and (
-                    m.current_speech or (is_lit and (
-                        m.hp < m.max_hp or m.state in ("sleeping", "eating")
-                        or (m.state != "combat" and m.awareness > 2.0)
-                        or getattr(m, "alert_bang_timer", 0.0) > 0.0
-                        or getattr(m, "cast_windup_timer", 0.0) > 0.0
-                        or getattr(m, "root_timer", 0.0) > 0.0
-                        or getattr(m, "burn_timer", 0.0) > 0.0
-                        or getattr(m, "stun_timer", 0.0) > 0.0
-                    ))
+                if window is not None and is_lit and (
+                    m.hp < m.max_hp or m.state in ("sleeping", "eating")
+                    or (m.state != "combat" and m.awareness > 2.0)
+                    or getattr(m, "alert_bang_timer", 0.0) > 0.0
+                    or getattr(m, "cast_windup_timer", 0.0) > 0.0
+                    or getattr(m, "root_timer", 0.0) > 0.0
+                    or getattr(m, "burn_timer", 0.0) > 0.0
+                    or getattr(m, "stun_timer", 0.0) > 0.0
                 ):
-                    if m.current_speech:
-                        window.mark_world_y(0, VIEW_H * SCALE)
-                    else:
-                        window.mark_world_y(sy - 44, foot_y + 24)
+                    window.mark_world_rect(sx - 66, sy - 44, 132, foot_y - sy + 68)
 
                 # Clear visual indication on the enemy model when it begins channeling a pentagram!
                 if is_lit and not m.jungle_windup and getattr(m, "cast_windup_timer", 0.0) > 0.0 and 0 <= foot_y < VIEW_H * SCALE:
@@ -1382,20 +1403,20 @@ class Renderer(UIRendererMixin):
                         pygame.draw.rect(screen, (220, 55, 65), (sx - bar_w // 2 + 1, sy - 7, w_hp, 4))
 
                     if getattr(m, "alert_bang_timer", 0.0) > 0.0:
-                        lbl = self.font_popup.render("!", True, (255, 75, 75))
+                        lbl = hud_label(self.font_popup, "!", (255, 75, 75))
                         screen.blit(lbl, (sx - lbl.get_width() // 2, sy - 26))
                     elif m.state != "combat" and m.awareness > 2.0:
                         pct = m.awareness / 100.0
                         col = (255, int(235 * (1.0 - pct * 0.6)), 60)
                         pygame.draw.rect(screen, (20, 18, 25), (sx - 16, sy - 20, 32, 7))
                         pygame.draw.rect(screen, col, (sx - 15, sy - 19, int(30 * pct), 5))
-                        lbl = self.font_small.render("?", True, col)
+                        lbl = hud_label(self.font_small, "?", col)
                         screen.blit(lbl, (sx - lbl.get_width() // 2, sy - 35))
                     elif m.state == "sleeping" and not m.current_speech:
-                        lbl = self.font_small.render("Zzz...", True, (150, 175, 220))
+                        lbl = hud_label(self.font_small, "Zzz...", (150, 175, 220))
                         screen.blit(lbl, (sx - lbl.get_width() // 2, sy - 24))
                     elif m.state == "eating" and not m.current_speech:
-                        lbl = self.font_small.render("*хруст*", True, (215, 170, 120))
+                        lbl = hud_label(self.font_small, "*хруст*", (215, 170, 120))
                         screen.blit(lbl, (sx - lbl.get_width() // 2, sy - 24))
 
                 if m.current_speech:
@@ -1417,16 +1438,13 @@ class Renderer(UIRendererMixin):
                         bsy = int(((player.y + dir_y * rim_d - 0.6) * TILE_H - cam_y) * SCALE)
                         txt_col = (165, 160, 150)
 
-                    lines = self.wrap_text(m.current_speech, self.font_small, 250)
-                    rendered = [self.font_small.render(ln, True, txt_col) for ln in lines]
-                    bw = max(s.get_width() for s in rendered) + 14
-                    bh = len(rendered) * 16 + 8
+                    bubble = self._get_speech_bubble(m.current_speech, txt_col, (20, 18, 26), UI_BORDER_WOOD, 250)
+                    bw, bh = bubble.get_size()
                     bx = max(8, min(SCREEN_W - bw - 8, bsx - bw // 2))
                     by = max(6, min(VIEW_H * SCALE - bh - 6, bsy - bh - 12))
-                    pygame.draw.rect(screen, (20, 18, 26), (bx, by, bw, bh), border_radius=4)
-                    pygame.draw.rect(screen, UI_BORDER_WOOD, (bx, by, bw, bh), 1, border_radius=4)
-                    for li, r_surf in enumerate(rendered):
-                        screen.blit(r_surf, (bx + (bw - r_surf.get_width()) // 2, by + 4 + li * 16))
+                    screen.blit(bubble, (bx, by))
+                    if window is not None:
+                        window.mark_world_rect(bx, by, bw, bh)
 
         # Active Player Buff Visuals: Persephone Rejuvenation Fireflies & Pyro Ignite Flames!
         p_sx_scr = int((player.x * TILE_W - cam_x) * SCALE)
@@ -1466,40 +1484,40 @@ class Renderer(UIRendererMixin):
             sx = int((p.wx * TILE_W - cam_x) * SCALE)
             sy = int((p.wy * TILE_H - cam_y) * SCALE)
             if 0 <= sy < VIEW_H * SCALE:
+                f_use = self.font_popup_big if getattr(p, "big", False) else self.font_popup
+                txt_surf = hud_label(f_use, p.text, p.color)
+                sh_surf = hud_label(f_use, p.text, (10, 8, 14))
+                tw, th = txt_surf.get_size()
+                px = sx - tw // 2
                 if window is not None:
-                    if sy > VIEW_H * SCALE - 32:
+                    if sy + th + 2 > VIEW_H * SCALE:
                         window.full_dirty = True
                     else:
-                        window.mark_world_y(sy - 6, sy + 34)
-                f_use = self.font_popup_big if getattr(p, "big", False) else self.font_popup
-                txt_surf = f_use.render(p.text, True, p.color)
-                sh_surf = f_use.render(p.text, True, (10, 8, 14))
-                screen.blit(sh_surf, (sx - txt_surf.get_width() // 2 + 2, sy + 2))
-                screen.blit(txt_surf, (sx - txt_surf.get_width() // 2, sy))
+                        window.mark_world_rect(px, sy, tw + 2, th + 2)
+                screen.blit(sh_surf, (px + 2, sy + 2))
+                screen.blit(txt_surf, (px, sy))
 
         # Render NPC Quest Marker & Speech Bubble (Innkeeper Hugo & Dungeon Merchant)
         for obj in objects:
             if not obj.used and obj.kind in ("npc_innkeeper", "npc_merchant") and (obj.x, obj.y) in visible_tiles:
                 sx = int(((obj.x + 0.5) * TILE_W - cam_x) * SCALE)
                 sy = int(((obj.y - 0.35) * TILE_H - cam_y) * SCALE)
-                if window is not None:
-                    window.mark_world_y(sy - 120 if getattr(obj, "speech_text", None) else sy - 28, sy + 12)
                 if getattr(obj, "speech_text", None):
-                    lines = self.wrap_text(obj.speech_text, self.font_small, 260)
-                    rendered = [self.font_small.render(ln, True, (255, 235, 175)) for ln in lines]
-                    bw = max(s.get_width() for s in rendered) + 14
-                    bh = len(rendered) * 16 + 8
+                    bubble = self._get_speech_bubble(obj.speech_text, (255, 235, 175), (24, 20, 16), UI_BORDER_GOLD, 260)
+                    bw, bh = bubble.get_size()
                     bx = max(8, min(SCREEN_W - bw - 8, sx - bw // 2))
                     by = max(6, sy - bh - 10)
-                    pygame.draw.rect(screen, (24, 20, 16), (bx, by, bw, bh), border_radius=4)
-                    pygame.draw.rect(screen, UI_BORDER_GOLD, (bx, by, bw, bh), 1, border_radius=4)
-                    for li, r_surf in enumerate(rendered):
-                        screen.blit(r_surf, (bx + (bw - r_surf.get_width()) // 2, by + 4 + li * 16))
+                    screen.blit(bubble, (bx, by))
+                    if window is not None:
+                        window.mark_world_rect(bx, by, bw, bh)
                 else:
                     tag_str = "[?] Гуго" if obj.kind == "npc_innkeeper" else "[$] Скупщик"
                     tag_col = (255, 220, 75) if obj.kind == "npc_innkeeper" else (125, 245, 155)
-                    q_lbl = self.font_ui.render(tag_str, True, tag_col)
-                    screen.blit(q_lbl, (sx - q_lbl.get_width() // 2, sy - 20))
+                    q_lbl = hud_label(self.font_ui, tag_str, tag_col)
+                    qx, qy = sx - q_lbl.get_width() // 2, sy - 20
+                    screen.blit(q_lbl, (qx, qy))
+                    if window is not None:
+                        window.mark_world_rect(qx, qy, q_lbl.get_width(), q_lbl.get_height())
 
         # Render Cursor AoE target circle during windup
         if getattr(player, "pending_action", None):
@@ -1739,6 +1757,11 @@ class Renderer(UIRendererMixin):
                 self._minimap_ui_key = map_key
                 if window is not None:
                     window.top_dirty = True
+        elif self._minimap_ui_key is not None:
+            self._minimap_ui_key = None
+            if window is not None:
+                screen.fill((0, 0, 0, 0), (0, 0, 270, 212))
+                window.top_dirty = True
         if timings is not None:
             map_end = perf_counter()
             timings["minimap"] = (map_end - map_start) * 1000

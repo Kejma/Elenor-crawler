@@ -13,6 +13,11 @@ class FXManager:
         self.f3_open = False
         self.f3_btn_rects = {}
         self._fx_hint_state = None
+        self._f2_surf = None
+        self._f2_key = None
+        self._f3_surf = None
+        self._f3_key = None
+        self._lbl_cache = {}
 
         # Тумблеры графических улучшений
         self.flags = {
@@ -20,6 +25,8 @@ class FXManager:
             "reflected_light": True,
             "ao": True,             # 1. Fake Ambient Occlusion (угловые тени у стен и объектов в шейдере)
             "bloom": True,          # 2. Shader Bloom / Emissive (свечение огня, магии и глаз в темноте)
+            "specular": True,
+            "water_reflections": True,
             "gpu_fog": True,
             "volumetric_fog": True, # 3. 2.5D Объёмный туман и Ядовитые облака
             "drop_shadows": True,   # 4. Мягкие падающие тени под ногами существ
@@ -572,11 +579,21 @@ class FXManager:
                     return True
         return False
 
+    def _panel_label(self, font, text, color):
+        key = (id(font), text, color)
+        surf = self._lbl_cache.get(key)
+        if surf is None:
+            if len(self._lbl_cache) >= 256:
+                self._lbl_cache.clear()
+            surf = font.render(text, True, color)
+            self._lbl_cache[key] = surf
+        return surf
+
     def render_panel(self, screen, mouse_pos):
         r = self.game.renderer
         window = getattr(self.game, "gl_window", None)
         hint_state = (self.panel_open, self.f3_open)
-        if window is None or self.panel_open or self.f3_open or window.top_dirty or window.full_dirty or window.prev_full_dirty or hint_state != self._fx_hint_state:
+        if window is None or window.top_dirty or window.full_dirty or window.prev_full_dirty or hint_state != self._fx_hint_state:
             hint_txt = "[F2] FX-Лаб | [F3] Телеметрия билда"
             from elenor.ui.hud import hud_label
             h_s = hud_label(r.font_small, hint_txt, (255, 225, 95) if (self.panel_open or self.f3_open) else UI_TEXT_DIM)
@@ -588,87 +605,111 @@ class FXManager:
                 window.top_dirty = True
 
         if self.f3_open:
-            self._render_f3_telemetry(screen, mouse_pos)
+            self._render_f3_telemetry(screen, mouse_pos, window)
 
         if not self.panel_open:
             return
 
-        pw, ph = 376, 664
+        pw, ph = 376, 724
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
-        r.draw_pixel_frame(screen, panel_rect, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
+        hov_k = next((k for k, rect in self.toggle_rects.items() if rect.collidepoint(mouse_pos)), None)
+        if hov_k is None:
+            hov_k = next((k for k, rect in self.action_rects.items() if rect.collidepoint(mouse_pos)), None)
+        f2_key = (tuple(self.flags.items()), hov_k, bool(self.toggle_rects))
+        if f2_key != self._f2_key or self._f2_surf is None:
+            if self._f2_surf is None or self._f2_surf.get_size() != (pw, ph):
+                self._f2_surf = pygame.Surface((pw, ph), pygame.SRCALPHA)
+            surf = self._f2_surf
+            surf.fill((0, 0, 0, 0))
+            r.draw_pixel_frame(surf, (0, 0, pw, ph), UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
 
-        title = r.font_ui.render("🧪 ЭКСПЕРИМЕНТАЛЬНЫЕ FX [F2]", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(title, (px + (pw - title.get_width()) // 2, py + 12))
+            title = self._panel_label(r.font_ui, "🧪 ЭКСПЕРИМЕНТАЛЬНЫЕ FX [F2]", UI_BORDER_HIGHLIGHT)
+            surf.blit(title, ((pw - title.get_width()) // 2, 12))
 
-        items = [
-            ("tonemap", "Тонмаппинг"),
-            ("reflected_light", "Отражённый свет"),
-            ("gpu_fog", "Расчёт тумана на GPU"),
-            ("ao",             "1. Ambient Occlusion (Угловые тени)"),
-            ("bloom",          "2. Shader Bloom (Свечение огня/магии)"),
-            ("volumetric_fog", "3. 2.5D Объёмный туман / Ядовитый газ"),
-            ("drop_shadows",   "4. Падающие тени существ (Drop Shadows)"),
-            ("battle_memory",  "5. Память боя (Кровь / Обломки / Копоть)"),
-            ("dust_motes",     "6. Пыль/Споры (Только лес и спец-залы)"),
-            ("water_ripples",  "7. Круги по воде под сапогами"),
-            ("hit_flash",      "8. Hit-Flash (Красный / Бело-золотой)"),
-            ("screenshake",    "9. Мягкая микро-тряска камеры"),
-        ]
+            items = [
+                ("tonemap", "Тонмаппинг"),
+                ("reflected_light", "Отражённый свет"),
+                ("gpu_fog", "Расчёт тумана на GPU"),
+                ("ao",             "1. Ambient Occlusion (Угловые тени)"),
+                ("bloom",          "2. Shader Bloom (Свечение огня/магии)"),
+                ("specular",          "2а. PBR Блики (Specular + рябь воды)"),
+                ("water_reflections", "2б. Отражения в воде (SSR)"),
+                ("volumetric_fog", "3. 2.5D Объёмный туман / Ядовитый газ"),
+                ("drop_shadows",   "4. Падающие тени существ (Drop Shadows)"),
+                ("battle_memory",  "5. Память боя (Кровь / Обломки / Копоть)"),
+                ("dust_motes",     "6. Пыль/Споры (Только лес и спец-залы)"),
+                ("water_ripples",  "7. Круги по воде под сапогами"),
+                ("hit_flash",      "8. Hit-Flash (Красный / Бело-золотой)"),
+                ("screenshake",    "9. Мягкая микро-тряска камеры"),
+            ]
 
-        self.toggle_rects = {}
-        cur_y = py + 40
-        for key, label in items:
-            row_r = pygame.Rect(px + 16, cur_y, pw - 32, 32)
-            self.toggle_rects[key] = row_r
-            hov = row_r.collidepoint(mouse_pos)
-            on = self.flags[key]
-            bg = (38, 52, 42) if on else (32, 24, 30)
-            if hov:
-                bg = (52, 70, 56) if on else (46, 34, 42)
-            pygame.draw.rect(screen, bg, row_r, border_radius=4)
-            pygame.draw.rect(screen, (95, 215, 120) if on else (90, 65, 65), row_r, 1, border_radius=4)
+            self.toggle_rects = {}
+            cur_y = 40
+            for key, label in items:
+                local_r = pygame.Rect(16, cur_y, pw - 32, 32)
+                screen_r = local_r.move(px, py)
+                self.toggle_rects[key] = screen_r
+                hov = screen_r.collidepoint(mouse_pos)
+                on = self.flags[key]
+                bg = (38, 52, 42) if on else (32, 24, 30)
+                if hov:
+                    bg = (52, 70, 56) if on else (46, 34, 42)
+                pygame.draw.rect(surf, bg, local_r, border_radius=4)
+                pygame.draw.rect(surf, (95, 215, 120) if on else (90, 65, 65), local_r, 1, border_radius=4)
 
-            mark = "[✓]" if on else "[ ]"
-            m_col = (125, 250, 150) if on else (220, 110, 110)
-            screen.blit(r.font_small.render(f"{mark} {label}", True, m_col if on else UI_TEXT_DIM), (row_r.x + 10, row_r.y + 8))
-            cur_y += 36
+                mark = "[✓]" if on else "[ ]"
+                m_col = (125, 250, 150) if on else (220, 110, 110)
+                surf.blit(self._panel_label(r.font_small, f"{mark} {label}", m_col if on else UI_TEXT_DIM), (local_r.x + 10, local_r.y + 8))
+                cur_y += 36
 
-        cur_y += 6
-        pygame.draw.line(screen, UI_BORDER_WOOD, (px + 16, cur_y), (px + pw - 16, cur_y), 1)
-        cur_y += 8
+            cur_y += 6
+            pygame.draw.line(surf, UI_BORDER_WOOD, (16, cur_y), (pw - 16, cur_y), 1)
+            cur_y += 8
 
-        self.action_rects = {}
-        buttons = [
-            ("tp_lab",       "★ ТЕЛЕПОРТ В FX-ПОЛИГОН (ТЕСТ-ЗАЛ)", (42, 82, 52)),
-            ("tp_floor1",    "Вернуться в Таверну Гуго (Этаж 1)",  (48, 38, 54)),
-            ("spawn_poison", "+ Ядовитое облако",                  (32, 65, 38)),
-            ("spawn_mist",   "+ Густой туман",                     UI_SLOT_BG),
-            ("splat_blood",  "+ Кровь и копоть",                   UI_SLOT_BG),
-            ("clear_decals", "Очистить всё",                       UI_SLOT_BG),
-        ]
+            self.action_rects = {}
+            buttons = [
+                ("tp_lab",       "★ ТЕЛЕПОРТ В FX-ПОЛИГОН (ТЕСТ-ЗАЛ)", (42, 82, 52)),
+                ("tp_floor1",    "Вернуться в Таверну Гуго (Этаж 1)",  (48, 38, 54)),
+                ("spawn_poison", "+ Ядовитое облако",                  (32, 65, 38)),
+                ("spawn_mist",   "+ Густой туман",                     UI_SLOT_BG),
+                ("splat_blood",  "+ Кровь и копоть",                   UI_SLOT_BG),
+                ("clear_decals", "Очистить всё",                       UI_SLOT_BG),
+            ]
 
-        for b_key, b_txt, b_col in buttons[:2]:
-            br = pygame.Rect(px + 16, cur_y, pw - 32, 33)
-            self.action_rects[b_key] = br
-            hov = br.collidepoint(mouse_pos)
-            r.draw_pixel_frame(screen, br, (62, 105, 72) if (hov and b_key == "tp_lab") else b_col, UI_BORDER_GOLD if b_key == "tp_lab" else UI_BORDER_WOOD, hov, 1.0)
-            ts = r.font_small.render(b_txt, True, (255, 240, 180) if b_key == "tp_lab" else UI_TEXT_MAIN)
-            screen.blit(ts, (br.centerx - ts.get_width() // 2, br.centery - ts.get_height() // 2))
-            cur_y += 37
+            for b_key, b_txt, b_col in buttons[:2]:
+                local_br = pygame.Rect(16, cur_y, pw - 32, 33)
+                screen_br = local_br.move(px, py)
+                self.action_rects[b_key] = screen_br
+                hov = screen_br.collidepoint(mouse_pos)
+                r.draw_pixel_frame(surf, local_br, (62, 105, 72) if (hov and b_key == "tp_lab") else b_col, UI_BORDER_GOLD if b_key == "tp_lab" else UI_BORDER_WOOD, hov, 1.0)
+                ts = self._panel_label(r.font_small, b_txt, (255, 240, 180) if b_key == "tp_lab" else UI_TEXT_MAIN)
+                surf.blit(ts, (local_br.centerx - ts.get_width() // 2, local_br.centery - ts.get_height() // 2))
+                cur_y += 37
 
-        half_w = (pw - 38) // 2
-        for idx, (b_key, b_txt, b_col) in enumerate(buttons[2:]):
-            col_i = idx % 2
-            row_i = idx // 2
-            br = pygame.Rect(px + 16 + col_i * (half_w + 6), cur_y + row_i * 35, half_w, 31)
-            self.action_rects[b_key] = br
-            hov = br.collidepoint(mouse_pos)
-            r.draw_pixel_frame(screen, br, (48, 40, 52) if hov else b_col, UI_BORDER_WOOD, hov, 1.0)
-            ts = r.font_small.render(b_txt, True, UI_TEXT_MAIN)
-            screen.blit(ts, (br.centerx - ts.get_width() // 2, br.centery - ts.get_height() // 2))
+            half_w = (pw - 38) // 2
+            for idx, (b_key, b_txt, b_col) in enumerate(buttons[2:]):
+                col_i = idx % 2
+                row_i = idx // 2
+                local_br = pygame.Rect(16 + col_i * (half_w + 6), cur_y + row_i * 35, half_w, 31)
+                screen_br = local_br.move(px, py)
+                self.action_rects[b_key] = screen_br
+                hov = screen_br.collidepoint(mouse_pos)
+                r.draw_pixel_frame(surf, local_br, (48, 40, 52) if hov else b_col, UI_BORDER_WOOD, hov, 1.0)
+                ts = self._panel_label(r.font_small, b_txt, UI_TEXT_MAIN)
+                surf.blit(ts, (local_br.centerx - ts.get_width() // 2, local_br.centery - ts.get_height() // 2))
 
-    def _render_f3_telemetry(self, screen, mouse_pos):
+            hov_after = next((k for k, rect in self.toggle_rects.items() if rect.collidepoint(mouse_pos)), None)
+            if hov_after is None:
+                hov_after = next((k for k, rect in self.action_rects.items() if rect.collidepoint(mouse_pos)), None)
+            self._f2_key = (tuple(self.flags.items()), hov_after, True)
+
+        if window is not None:
+            window.set_dev_panel("fx_f2", panel_rect, self._f2_key, self._f2_surf)
+        else:
+            screen.blit(self._f2_surf, (px, py))
+
+    def _render_f3_telemetry(self, screen, mouse_pos, window=None):
         """Отрисовывает панель [F3] с детальным раскладом Вектора Билда (Силач/Ловкач/Маг) и внутренних переменных."""
         from elenor.config import get_rarity_weights
         r = self.game.renderer
@@ -678,117 +719,142 @@ class FXManager:
         pw, ph = 450, 520
         px, py = 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
-        r.draw_pixel_frame(screen, panel_rect, (18, 16, 26), UI_BORDER_GOLD, False, 1.0)
+        hov_b = next((k for k, rect in self.f3_btn_rects.items() if rect.collidepoint(mouse_pos)), None)
+        tick_4hz = pygame.time.get_ticks() // 250
+        f3_key = (
+            tick_4hz, hov_b, p.luck,
+            round(p.action_affinity["body"], 2),
+            round(p.action_affinity["cunning"], 2),
+            round(p.action_affinity["mind"], 2),
+            len(p.perks), bool(self.f3_btn_rects),
+        )
+        if f3_key != self._f3_key or self._f3_surf is None:
+            if self._f3_surf is None or self._f3_surf.get_size() != (pw, ph):
+                self._f3_surf = pygame.Surface((pw, ph), pygame.SRCALPHA)
+            surf = self._f3_surf
+            surf.fill((0, 0, 0, 0))
+            r.draw_pixel_frame(surf, (0, 0, pw, ph), (18, 16, 26), UI_BORDER_GOLD, False, 1.0)
 
-        hdr = r.font_ui.render("📊 [F3] ОТЛАДКА ВЕКТОРА БИЛДА И ПЕРЕМЕННЫХ", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(hdr, (px + (pw - hdr.get_width()) // 2, py + 12))
+            hdr = self._panel_label(r.font_ui, "📊 [F3] ОТЛАДКА ВЕКТОРА БИЛДА И ПЕРЕМЕННЫХ", UI_BORDER_HIGHLIGHT)
+            surf.blit(hdr, ((pw - hdr.get_width()) // 2, 12))
 
-        # Считаем покомпонентный вклад в каждую ветку (Статы / Экипировка / Перки / Боевые действия)
-        stat_part = {
-            "body": max(0.0, (p.body - 1) * 1.5),
-            "cunning": max(0.0, (p.cunning - 1) * 1.5),
-            "mind": max(0.0, (p.mind - 1) * 1.5),
-        }
-        equip_part = {"body": 0.0, "cunning": 0.0, "mind": 0.0}
-        for itm in p.equipment.values():
-            if not itm or itm.is_torch:
-                continue
-            if itm.armor_class == "plate" or itm.two_handed or itm.weap_style in ("mace", "cleaver", "axe"):
-                equip_part["body"] += 2.5
-            if itm.armor_class == "leather" or itm.weap_style in ("dagger", "spear") or itm.noise_mod < 0:
-                equip_part["cunning"] += 2.5
-            if itm.armor_class == "cloth" or itm.mag_bonus > 0 or itm.mp_regen > 0:
-                equip_part["mind"] += 2.8
-            equip_part["body"] += itm.phys_bonus * 0.7 + itm.phys_def * 0.5
-            equip_part["mind"] += itm.mag_bonus * 1.1 + itm.mag_def * 0.6
+            stat_part = {
+                "body": max(0.0, (p.body - 1) * 1.5),
+                "cunning": max(0.0, (p.cunning - 1) * 1.5),
+                "mind": max(0.0, (p.mind - 1) * 1.5),
+            }
+            equip_part = {"body": 0.0, "cunning": 0.0, "mind": 0.0}
+            for itm in p.equipment.values():
+                if not itm or itm.is_torch:
+                    continue
+                if itm.armor_class == "plate" or itm.two_handed or itm.weap_style in ("mace", "cleaver", "axe"):
+                    equip_part["body"] += 2.5
+                if itm.armor_class == "leather" or itm.weap_style in ("dagger", "spear") or itm.noise_mod < 0:
+                    equip_part["cunning"] += 2.5
+                if itm.armor_class == "cloth" or itm.mag_bonus > 0 or itm.mp_regen > 0:
+                    equip_part["mind"] += 2.8
+                equip_part["body"] += itm.phys_bonus * 0.7 + itm.phys_def * 0.5
+                equip_part["mind"] += itm.mag_bonus * 1.1 + itm.mag_def * 0.6
 
-        perk_tags = {
-            "tough_skin": "body", "iron_grip": "body", "stone_ribs": "body",
-            "titan_blood": "body", "blood_hunger": "body", "whirlwind": "body", "earth_slam": "body",
-            "cat_step": "cunning", "keen_edge": "cunning", "throw_knife": "cunning", "poison_flask": "cunning",
-            "clear_mind": "mind", "storm_aura": "mind",
-            "pyro_firebolt": "mind", "pyro_ignite": "mind",
-            "stratos_frost_nova": "mind", "stratos_chain_lightning": "mind",
-            "persephone_rejuvenation": "mind", "persephone_entangle": "mind"
-        }
-        perk_part = {"body": 0.0, "cunning": 0.0, "mind": 0.0}
-        for pid, lvl in p.perks.items():
-            perk_part[perk_tags.get(pid, "body")] += lvl * 3.0
+            perk_tags = {
+                "tough_skin": "body", "iron_grip": "body", "stone_ribs": "body",
+                "titan_blood": "body", "blood_hunger": "body", "whirlwind": "body", "earth_slam": "body",
+                "cat_step": "cunning", "keen_edge": "cunning", "throw_knife": "cunning", "poison_flask": "cunning",
+                "clear_mind": "mind", "storm_aura": "mind",
+                "pyro_firebolt": "mind", "pyro_ignite": "mind",
+                "stratos_frost_nova": "mind", "stratos_chain_lightning": "mind",
+                "persephone_rejuvenation": "mind", "persephone_entangle": "mind"
+            }
+            perk_part = {"body": 0.0, "cunning": 0.0, "mind": 0.0}
+            for pid, lvl in p.perks.items():
+                perk_part[perk_tags.get(pid, "body")] += lvl * 3.0
 
-        total_scores = p.get_build_affinities()
-        total_sum = sum(total_scores.values()) + 1.0
+            total_scores = p.get_build_affinities()
+            total_sum = sum(total_scores.values()) + 1.0
 
-        branches = [
-            ("body",    "СИЛАЧ (Тело)",     (235, 115, 105)),
-            ("cunning", "ЛОВКАЧ (Ловк.)",   (115, 235, 150)),
-            ("mind",    "МАГ (Разум)",      (120, 195, 255)),
-        ]
+            branches = [
+                ("body",    "СИЛАЧ (Тело)",     (235, 115, 105)),
+                ("cunning", "ЛОВКАЧ (Ловк.)",   (115, 235, 150)),
+                ("mind",    "МАГ (Разум)",      (120, 195, 255)),
+            ]
 
-        cur_y = py + 40
-        for b_key, b_title, b_col in branches:
-            tot = total_scores[b_key]
-            share = tot / total_sum
-            mult = 1.0 + 1.45 * share
+            cur_y = 40
+            for b_key, b_title, b_col in branches:
+                tot = total_scores[b_key]
+                share = tot / total_sum
+                mult = 1.0 + 1.45 * share
 
-            box_b = pygame.Rect(px + 14, cur_y, pw - 28, 66)
-            pygame.draw.rect(screen, (26, 22, 34), box_b, border_radius=4)
-            pygame.draw.rect(screen, b_col, box_b, 1, border_radius=4)
+                box_b = pygame.Rect(14, cur_y, pw - 28, 66)
+                pygame.draw.rect(surf, (26, 22, 34), box_b, border_radius=4)
+                pygame.draw.rect(surf, b_col, box_b, 1, border_radius=4)
 
-            top_line = f"{b_title}: {tot:.2f} очк. | Доля: {int(round(share * 100))}% -> Шанс перков: x{mult:.2f}"
-            screen.blit(r.font_small.render(top_line, True, b_col), (box_b.x + 8, box_b.y + 6))
+                top_line = f"{b_title}: {tot:.2f} очк. | Доля: {int(round(share * 100))}% -> Шанс перков: x{mult:.2f}"
+                surf.blit(r.font_small.render(top_line, True, b_col), (box_b.x + 8, box_b.y + 6))
 
-            sub_line = (
-                f"Статы: {stat_part[b_key]:.1f}  |  Шмот: {equip_part[b_key]:.1f}  |  "
-                f"Перки: {perk_part[b_key]:.1f}  |  Действия: {p.action_affinity[b_key]:.2f}"
+                sub_line = (
+                    f"Статы: {stat_part[b_key]:.1f}  |  Шмот: {equip_part[b_key]:.1f}  |  "
+                    f"Перки: {perk_part[b_key]:.1f}  |  Действия: {p.action_affinity[b_key]:.2f}"
+                )
+                surf.blit(r.font_small.render(sub_line, True, UI_TEXT_MAIN), (box_b.x + 8, box_b.y + 25))
+
+                bar_w = box_b.width - 16
+                pygame.draw.rect(surf, (14, 12, 18), (box_b.x + 8, box_b.y + 46, bar_w, 12))
+                pygame.draw.rect(surf, b_col, (box_b.x + 9, box_b.y + 47, int((bar_w - 2) * share), 10))
+                cur_y += 72
+
+            self.f3_btn_rects = {}
+            btn_specs = [
+                ("add_body",    "+2 Силач"),
+                ("add_cunning", "+2 Ловкач"),
+                ("add_mind",    "+2 Маг"),
+                ("reset_aff",   "Сброс действ."),
+                ("add_luck",    f"Удача: {p.luck} (+1)"),
+                ("test_roll",   "🎲 Тест Перков"),
+            ]
+            bw = (pw - 40) // 3
+            for idx, (bk, bt) in enumerate(btn_specs):
+                ci = idx % 3
+                ri = idx // 3
+                local_br = pygame.Rect(14 + ci * (bw + 6), cur_y + ri * 32, bw, 28)
+                screen_br = local_br.move(px, py)
+                self.f3_btn_rects[bk] = screen_br
+                hov = screen_br.collidepoint(mouse_pos)
+                pygame.draw.rect(surf, (52, 44, 62) if hov else (34, 28, 44), local_br, border_radius=4)
+                pygame.draw.rect(surf, UI_BORDER_GOLD if bk == "test_roll" else UI_BORDER_WOOD, local_br, 1, border_radius=4)
+                ts = self._panel_label(r.font_small, bt, (255, 230, 110) if bk == "test_roll" else UI_TEXT_MAIN)
+                surf.blit(ts, (local_br.centerx - ts.get_width() // 2, local_br.centery - ts.get_height() // 2))
+            cur_y += 70
+
+            pygame.draw.line(surf, UI_BORDER_WOOD, (14, cur_y), (pw - 14, cur_y), 1)
+            cur_y += 8
+
+            rw = get_rarity_weights(p.luck)
+            rw_str = f"Веса редкости (Удача {p.luck}): Белые {rw[0]:.0f}% | Зел {rw[1]:.1f}% | Син {rw[2]:.1f}% | Эпик {rw[3]:.1f}% | Лег {rw[4]:.1f}%"
+            surf.blit(r.font_small.render(rw_str, True, (255, 215, 110)), (14, cur_y))
+            cur_y += 22
+
+            win_res = g.display_surface.get_size() if hasattr(g, "display_surface") and g.display_surface else (SCREEN_W, SCREEN_H)
+            vars_lines = [
+                f"Характер: {p.full_name}  |  Причуда (Quirk): {getattr(p, 'quirk', 'none')}",
+                f"Освещённость героя: {p.illumination:.2f}  |  Шум шагов: {int(p.noise_factor * 100)}%  |  Мана за удар: +{p.mp_on_hit:.1f}",
+                f"Таймер фоновых мыслей: {g.bg_thought_cd:.1f}с  |  Блок важной мысли: {g.important_thought_lock:.1f}с",
+                f"Очередь важных мыслей: {len(g.important_thought_queue)} шт.  |  Записей в журнале: {len(g.journal_logs)}/100",
+                f"Окно: {win_res[0]}x{win_res[1]} (Внутренний рендер: {SCREEN_W}x{SCREEN_H} Nearest-Neighbor)",
+            ]
+            for v_ln in vars_lines:
+                surf.blit(r.font_small.render(v_ln, True, UI_TEXT_DIM), (14, cur_y))
+                cur_y += 19
+
+            hov_after = next((k for k, rect in self.f3_btn_rects.items() if rect.collidepoint(mouse_pos)), None)
+            self._f3_key = (
+                tick_4hz, hov_after, p.luck,
+                round(p.action_affinity["body"], 2),
+                round(p.action_affinity["cunning"], 2),
+                round(p.action_affinity["mind"], 2),
+                len(p.perks), True,
             )
-            screen.blit(r.font_small.render(sub_line, True, UI_TEXT_MAIN), (box_b.x + 8, box_b.y + 25))
 
-            # Полоска доли ветки
-            bar_w = box_b.width - 16
-            pygame.draw.rect(screen, (14, 12, 18), (box_b.x + 8, box_b.y + 46, bar_w, 12))
-            pygame.draw.rect(screen, b_col, (box_b.x + 9, box_b.y + 47, int((bar_w - 2) * share), 10))
-            cur_y += 72
-
-        # Кнопки живого тестирования притяжки перков
-        self.f3_btn_rects = {}
-        btn_specs = [
-            ("add_body",    "+2 Силач"),
-            ("add_cunning", "+2 Ловкач"),
-            ("add_mind",    "+2 Маг"),
-            ("reset_aff",   "Сброс действ."),
-            ("add_luck",    f"Удача: {p.luck} (+1)"),
-            ("test_roll",   "🎲 Тест Перков"),
-        ]
-        bw = (pw - 40) // 3
-        for idx, (bk, bt) in enumerate(btn_specs):
-            ci = idx % 3
-            ri = idx // 3
-            br = pygame.Rect(px + 14 + ci * (bw + 6), cur_y + ri * 32, bw, 28)
-            self.f3_btn_rects[bk] = br
-            hov = br.collidepoint(mouse_pos)
-            pygame.draw.rect(screen, (52, 44, 62) if hov else (34, 28, 44), br, border_radius=4)
-            pygame.draw.rect(screen, UI_BORDER_GOLD if bk == "test_roll" else UI_BORDER_WOOD, br, 1, border_radius=4)
-            ts = r.font_small.render(bt, True, (255, 230, 110) if bk == "test_roll" else UI_TEXT_MAIN)
-            screen.blit(ts, (br.centerx - ts.get_width() // 2, br.centery - ts.get_height() // 2))
-        cur_y += 70
-
-        pygame.draw.line(screen, UI_BORDER_WOOD, (px + 14, cur_y), (px + pw - 14, cur_y), 1)
-        cur_y += 8
-
-        # Блок 2: Веса редкости (с учётом текущей Удачи) и внутренние переменные движка
-        rw = get_rarity_weights(p.luck)
-        rw_str = f"Веса редкости (Удача {p.luck}): Белые {rw[0]:.0f}% | Зел {rw[1]:.1f}% | Син {rw[2]:.1f}% | Эпик {rw[3]:.1f}% | Лег {rw[4]:.1f}%"
-        screen.blit(r.font_small.render(rw_str, True, (255, 215, 110)), (px + 14, cur_y))
-        cur_y += 22
-
-        win_res = g.display_surface.get_size() if hasattr(g, "display_surface") and g.display_surface else (SCREEN_W, SCREEN_H)
-        vars_lines = [
-            f"Характер: {p.full_name}  |  Причуда (Quirk): {getattr(p, 'quirk', 'none')}",
-            f"Освещённость героя: {p.illumination:.2f}  |  Шум шагов: {int(p.noise_factor * 100)}%  |  Мана за удар: +{p.mp_on_hit:.1f}",
-            f"Таймер фоновых мыслей: {g.bg_thought_cd:.1f}с  |  Блок важной мысли: {g.important_thought_lock:.1f}с",
-            f"Очередь важных мыслей: {len(g.important_thought_queue)} шт.  |  Записей в журнале: {len(g.journal_logs)}/100",
-            f"Окно: {win_res[0]}x{win_res[1]} (Внутренний рендер: {SCREEN_W}x{SCREEN_H} Nearest-Neighbor)",
-        ]
-        for v_ln in vars_lines:
-            screen.blit(r.font_small.render(v_ln, True, UI_TEXT_DIM), (px + 14, cur_y))
-            cur_y += 19
+        if window is not None:
+            window.set_dev_panel("fx_f3", panel_rect, self._f3_key, self._f3_surf)
+        else:
+            screen.blit(self._f3_surf, (px, py))

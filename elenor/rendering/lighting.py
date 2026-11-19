@@ -93,6 +93,8 @@ class GPULightShader:
             uniform bool u_reflected_light;
             uniform vec3 u_bounce_color;
             uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
+            uniform bool u_enable_specular;
+            uniform float u_time;
             uniform int u_num_lights;
             uniform vec4 u_light_pos_rad[{self.MAX_LIGHTS}];
             uniform vec4 u_light_col_foot[{self.MAX_LIGHTS}];
@@ -228,6 +230,18 @@ class GPULightShader:
 
                     float is_wall_tile = texelFetch(u_walls, ivec2(tx, ty), 0).r;
 
+                    vec3 mat_px = texelFetch(u_emissive, p, 0).rgb;
+                    float self_em = mat_px.r;
+                    float gloss = mat_px.g;
+                    float water_mask = mat_px.b;
+                    if (u_enable_specular && water_mask > 0.1 && ent_y <= -9000.0) {{
+                        float wx_w = wx_px * 0.18;
+                        float wy_w = wy_px * 0.28;
+                        float rip1 = sin(wx_w + u_time * 2.6 + cos(wy_w * 0.8 - u_time * 1.7));
+                        float rip2 = cos(wy_w * 1.3 - u_time * 3.1 + sin(wx_w * 0.7 + u_time * 1.2));
+                        N = normalize(N + vec3(rip1 * 0.22, rip2 * 0.24, 0.0) * water_mask);
+                    }}
+
                     // 1. FAKE AMBIENT OCCLUSION
                     float ao_mult = 1.0;
                     if (u_fx_flags.x > 0.5 && ent_y <= -9000.0 && is_wall_tile < 0.5) {{
@@ -258,6 +272,7 @@ class GPULightShader:
                     vec3 mult = vec3(0.0);
                     vec3 rim_add = vec3(0.0);
                     float ov_lum = 0.0;
+                    vec3 spec_add = vec3(0.0);
 
                     for (int i = 0; i < u_num_lights; ++i) {{
                         vec4 pos_rad = u_light_pos_rad[i];
@@ -301,6 +316,13 @@ class GPULightShader:
                         mult += intensity * col_foot.rgb;
                         if (u_reflected_light && flags.w > 0.5)
                             mult += u_bounce_color * (atten * max(1.0 - ndotl, 0.0)) * col_foot.rgb;
+                        if (u_enable_specular && gloss > 0.04 && flags.w > 0.5) {{
+                         vec3 H = normalize(vec3(dx, dy, lz) * inv_dist + vec3(0.0, -0.32, 0.947));
+                         float ndoth = max(0.0, dot(N, H));
+                         float shininess = mix(12.0, 68.0, gloss);
+                         float spec = pow(ndoth, shininess) * gloss * atten * front_shade * (0.45 + 0.65 * gloss);
+                         spec_add += spec * col_foot.rgb;
+                     }}
 
                         if (flags.x < 0.5 && sub_rim > 0.5 && behind_ratio > 0.01) {{
                             float dist_2d = sqrt(dx * dx + dy * dy);
@@ -313,11 +335,10 @@ class GPULightShader:
                     // 2. СТРОГИЙ EMISSIVE BLOOM (свечение ТОЛЬКО там, где стоит метка в u_emissive: глаза мобов и огонь!)
                     vec3 bloom_add = vec3(0.0);
                     if (u_fx_flags.y > 0.5 && fov > 0.05) {{
-                        float self_em = texelFetch(u_emissive, p, 0).r;
                         if (self_em > 0.1) {{
                             mult = max(mult, vec3(1.35 * self_em));
                         }}
-                        if (p.x > 2 && p.x < {VIEW_W - 3} && p.y > 2 && p.y < {VIEW_H - 3}) {{
+                        if (u_fx_flags.y > 1.5 && p.x > 2 && p.x < {VIEW_W - 3} && p.y > 2 && p.y < {VIEW_H - 3}) {{
                             vec3 glow_sum = vec3(0.0);
                             for (int oy = -2; oy <= 2; oy += 1) {{
                                 for (int ox = -2; ox <= 2; ox += 1) {{
@@ -334,8 +355,9 @@ class GPULightShader:
                     }}
 
                     mult *= fov * ao_mult;
+                    spec_add *= fov * ao_mult;
                     rim_add *= fov;
-                    vec3 base_c = diff * mult + bloom_add;
+                    vec3 base_c = diff * mult + spec_add + bloom_add;
                     vec3 lit_out = vec3(
                         rim_add.r > (0.5 / 255.0) ? min(228.0 / 255.0, base_c.r * 1.25 + rim_add.r) : base_c.r,
                         rim_add.g > (0.5 / 255.0) ? min(222.0 / 255.0, base_c.g * 1.25 + rim_add.g) : base_c.g,
@@ -400,6 +422,8 @@ class GPULightShader:
         self._u_num_hud_lights = self.prog["u_num_hud_lights"]
         self._u_hud_pos_rad = self.prog["u_hud_pos_rad"]
         self._u_hud_col = self.prog["u_hud_col"]
+        self._u_enable_specular = self.prog["u_enable_specular"]
+        self._u_time = self.prog["u_time"]
 
         quad = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self.vbo = self.ctx.buffer(quad.tobytes())
@@ -475,6 +499,12 @@ class GPULightShader:
         except Exception as exc:
             print(f"[GL] FOV использует CPU ({exc})")
             self.fov = None
+        try:
+            from elenor.rendering.gpu_postfx import GPUPostFX
+            self.postfx = GPUPostFX(self)
+        except Exception as exc:
+            print(f"[GL] PostFX отключён ({exc})")
+            self.postfx = None
 
     def _render_shadows(self, occlusion, lights, cam_x, cam_y, radius_scale):
         geometry = occlusion, occlusion.version
@@ -512,7 +542,8 @@ class GPULightShader:
             self.uploaded_fov = None if fov_mask.flags.writeable else fov_mask
 
     def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
-                           timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None, fov_on_gpu=False):
+                           timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None, fov_on_gpu=False,
+                           time_sec=0.0, enable_specular=True, enable_reflections=True):
         self.survey_brightness = None
         if timings is not None and self.timers is None:
             self.timers = tuple(self.ctx.query(time=True) for _ in range(3))
@@ -588,7 +619,10 @@ class GPULightShader:
         self._u_bounce_color.value = bounce_color
         self._u_reflected_light.value = any(bounce_color)
         self._u_tonemap.value = tonemap
-        self._u_fx_flags.value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
+        bloom_mode = 1.0 if (enable_bloom and self.postfx is not None) else (2.0 if enable_bloom else 0.0)
+        self._u_fx_flags.value = (1.0 if enable_ao else 0.0, bloom_mode)
+        self._u_enable_specular.value = bool(enable_specular)
+        self._u_time.value = float(time_sec)
         self._u_num_lights.value = n_lgt
         self._u_light_pos_rad.write(self.pos_rad_buf)
         self._u_light_col_foot.write(self.col_foot_buf)
@@ -625,15 +659,26 @@ class GPULightShader:
                 fog_timer = timers[2]
                 with fog_timer:
                     self.fog.render(*args)
+        src_tex = self.fog.composite if fog is not None else self.tex_out
+        src_fbo = self.fog.fbo if fog is not None else self.fbo
+        if self.postfx is not None and (enable_reflections or enable_bloom):
+            fov_for_post = gpu_scene_fov if gpu_scene_fov is not None else self.tex_fov
+            out_tex, out_fbo = self.postfx.render(
+                src_tex, src_fbo, self.tex_emissive, self.tex_ent_y, fov_for_post, self.tex_walls,
+                (float(cam_x), float(cam_y)), float(time_sec),
+                enable_reflections=enable_reflections, enable_bloom=enable_bloom,
+            )
+        else:
+            out_tex, out_fbo = src_tex, src_fbo
         if not readback:
-            return self.fog.composite if fog is not None else self.tex_out
+            return out_tex
 
         read_start = perf_counter() if timings is not None else 0.0
         if fog is None:
-            raw = self.fbo.read(components=3, alignment=1)
+            raw = out_fbo.read(components=3, alignment=1)
             pixel_format = "RGB"
         else:
-            raw = self.fog.fbo.read(components=4, alignment=1)
+            raw = out_fbo.read(components=4, alignment=1)
             self.survey_brightness = np.frombuffer(raw, dtype=np.uint8).reshape(CANVAS_H, VIEW_W, 4)[..., 3].T
             pixel_format = "RGBX"
         if timings is not None:

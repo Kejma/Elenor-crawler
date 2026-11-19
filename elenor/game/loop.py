@@ -1030,8 +1030,7 @@ def main():
         if game.gl_window is not None:
             ui_bundle["_gl_window"] = game.gl_window
             need_full_ui = bool(
-                game.inv_open or game.levelup_choices or dev_open
-                or game.fx.panel_open or game.fx.f3_open
+                game.inv_open or game.levelup_choices
                 or game.fishing_cast or game.catch_display
             )
             game.gl_window.begin_ui_frame(full_clear=need_full_ui)
@@ -1063,8 +1062,7 @@ def main():
             overlay_start = perf_counter()
 
         window = game.gl_window
-        if window is not None and (dev_open or game.fx.panel_open or game.fx.f3_open
-                                   or game.catch_display or game.fishing_cast):
+        if window is not None and (game.catch_display or game.fishing_cast):
             window.hud_surface = None
             window.full_dirty = True
 

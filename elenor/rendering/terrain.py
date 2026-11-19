@@ -82,6 +82,52 @@ TALL_TREE_MAP = {
     57: ("floor_blood_marsh", "tall_dead_mangrove", "tree_dead_mangrove"),
 }
 
+# (emissive, gloss, water) — по умолчанию (0, 28, 0)
+TILE_MATERIAL_MAP = {
+    0: (0, 52, 0),
+    1: (0, 46, 0),
+    2: (0, 235, 185),
+    3: (0, 18, 0),
+    4: (0, 34, 0),
+    5: (0, 18, 0),
+    6: (0, 24, 0),
+    7: (0, 48, 0),
+    8: (0, 26, 0),
+    9: (0, 24, 0),
+    10: (0, 22, 0),
+    11: (0, 95, 0),
+    12: (0, 25, 0),
+    13: (0, 30, 0),
+    14: (0, 160, 0),
+    15: (0, 165, 0),
+    16: (0, 155, 0),
+    19: (0, 130, 0),
+    20: (0, 110, 0),
+    23: (0, 185, 135),
+    24: (0, 62, 0),
+    25: (0, 32, 0),
+    26: (0, 68, 0),
+    28: (0, 160, 0),
+    29: (0, 160, 0),
+    30: (0, 175, 0),
+    31: (0, 225, 0),
+    32: (0, 245, 235),
+    34: (24, 215, 0),
+    35: (0, 195, 0),
+    36: (0, 135, 0),
+    SHALLOW_WATER: (0, 235, 195),
+    DEEP_WATER: (0, 250, 255),
+    PIER: (0, 34, 0),
+    PEBBLE_SHORE: (0, 88, 0),
+    41: (0, 130, 0),
+    42: (0, 105, 0),
+    43: (0, 215, 140),
+    44: (85, 230, 185),
+    47: (0, 195, 145),
+    49: (28, 45, 0),
+    50: (0, 195, 0),
+    55: (125, 90, 0),
+}
 
 @dataclass(slots=True)
 class _Chunk:
@@ -89,6 +135,7 @@ class _Chunk:
     pixels: pygame.Rect
     diffuse: pygame.Surface
     normals: pygame.Surface
+    material: pygame.Surface
     trees: list
     animated_tiles: list
     roles: tuple
@@ -101,6 +148,7 @@ class TerrainCache:
         self.log_sections = log_sections
         self.anim_bank = anim_bank
         self.rotations = {}
+        self._mat_stamps = {}
         self.animations = {key: entry["frames"] for key, entry in anim_bank.items() if len(entry["frames"]) > 1}
         self.chunks = OrderedDict()
         self.maps = WeakKeyDictionary()
@@ -201,6 +249,51 @@ class TerrainCache:
                 layers.append(key if key in self.animations else self.assets[key])
         return layers, tree
 
+    def _mat_stamp(self, surf, em, gloss, water):
+        key = (id(surf), em, gloss, water)
+        stamp = self._mat_stamps.get(key)
+        if stamp is None:
+            if surf.get_flags() & pygame.SRCALPHA:
+                stamp = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+                stamp.fill((em, gloss, water, 255))
+                alpha = pygame.surfarray.pixels_alpha(stamp)
+                alpha[:] = pygame.surfarray.array_alpha(surf)
+                del alpha
+            else:
+                stamp = pygame.Surface(surf.get_size(), depth=32)
+                stamp.fill((em, gloss, water, 255))
+            self._mat_stamps[key] = stamp
+        return stamp
+
+    def _tile_mat_spec(self, dungeon, x, y, width):
+        row = dungeon.grid[y]
+        tile = row[x]
+        if tile == FALLEN_LOG:
+            left = x > 0 and row[x - 1] == FALLEN_LOG
+            right = x + 1 < width and row[x + 1] == FALLEN_LOG
+            base_mat = (0, 88, 0) if left != right else (0, 250, 255)
+        else:
+            base_mat = TILE_MATERIAL_MAP.get(tile, (0, 28, 0))
+        overlay_mats = []
+        if tile == FALLEN_LOG:
+            overlay_mats.append((self.log_sections[left, right][0], (0, 26, 0)))
+        point = (x, y)
+        if point in dungeon.moss_tiles:
+            m_key = get_moss_autotile_key(dungeon.moss_tiles, x, y)
+            if m_key in self.assets:
+                overlay_mats.append((self.assets[m_key][0], (0, 14, 0)))
+        ov = dungeon.overlays.get(point)
+        if ov and ov in self.assets:
+            ov_pair = self._layer(ov, x, y, salt=77)
+            ov_surf = self.assets[ov_pair][0] if isinstance(ov_pair, str) else ov_pair[0]
+            ov_gloss = 14 if "moss" in ov else (42 if "pebbles" in ov or "cracks" in ov else 20)
+            overlay_mats.append((ov_surf, (0, ov_gloss, 0)))
+        if point in dungeon.carpets:
+            c_key = get_carpet_autotile_key(dungeon.carpets, x, y)
+            if c_key in self.assets:
+                overlay_mats.append((self.assets[c_key][0], (0, 12, 0)))
+        return base_mat, overlay_mats
+
     def _paint(self, diffuse, normals, position, layers):
         for layer in layers:
             color, normal = self.assets[layer] if isinstance(layer, str) else layer
@@ -212,10 +305,12 @@ class TerrainCache:
         pixels = pygame.Rect(tiles.x * TILE_W, tiles.y * TILE_H, tiles.width * TILE_W, tiles.height * TILE_H)
         diffuse = pygame.Surface(pixels.size, depth=32)
         normals = pygame.Surface(pixels.size, depth=32)
+        material = pygame.Surface(pixels.size, depth=32)
         diffuse.fill(DIFFUSE_CLEAR)
         normals.fill(NORMAL_CLEAR)
+        material.fill((0, 0, 0, 255))
         trees, animated = [], []
-        color_blits, normal_blits = [], []
+        color_blits, normal_blits, mat_blits = [], [], []
         animation_roles = set()
         for y in range(tiles.top, tiles.bottom):
             for x in range(tiles.left, tiles.right):
@@ -231,15 +326,21 @@ class TerrainCache:
                         pair = layer
                     color_blits.append((pair[0], position))
                     normal_blits.append((pair[1], position))
+                base_mat, ov_mats = self._tile_mat_spec(dungeon, x, y, width)
+                material.fill((*base_mat, 255), (*position, TILE_W, TILE_H))
+                for ov_surf, (em, gls, wat) in ov_mats:
+                    mat_blits.append((self._mat_stamp(ov_surf, em, gls, wat), position))
                 if tree is not None:
                     trees.append(tree)
                 if is_animated:
                     animated.append((pygame.Rect(*position, TILE_W, TILE_H), layers))
         diffuse.blits(color_blits, doreturn=False)
         normals.blits(normal_blits, doreturn=False)
+        if mat_blits:
+            material.blits(mat_blits, doreturn=False)
         roles = tuple(sorted(animation_roles))
         frames = tuple(self.assets[key] for key in roles)
-        return _Chunk(tiles, pixels, diffuse, normals, trees, animated, roles, frames)
+        return _Chunk(tiles, pixels, diffuse, normals, material, trees, animated, roles, frames)
 
     def _animate(self, chunk):
         if not chunk.roles:
