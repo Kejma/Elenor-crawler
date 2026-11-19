@@ -4,7 +4,7 @@ from functools import lru_cache
 
 import pygame
 
-from elenor.config import SCREEN_H, SCREEN_W, THOUGHT_BOX_BG
+from elenor.config import SCREEN_H, SCREEN_W, THOUGHT_BOX_BG, UI_BORDER_GOLD
 
 PAPER = (20, 29, 26)
 INK = (11, 17, 17)
@@ -157,7 +157,7 @@ def draw_map_hud(screen, game, background=THOUGHT_BOX_BG):
     if renderer.minimap_panel is None or renderer.minimap_panel[0] != panel_key:
         panel = pygame.Surface((viewport.width + 20, viewport.height + 41), pygame.SRCALPHA)
         pygame.draw.rect(panel, background, panel.get_rect(), border_radius=5)
-        pygame.draw.rect(panel, BORDER, panel.get_rect(), width=1, border_radius=5)
+        pygame.draw.rect(panel, UI_BORDER_GOLD, panel.get_rect(), width=1, border_radius=5)
         panel.blit(hint, hint.get_rect(midleft=(viewport.left, 16)))
         panel.blit(north, north.get_rect(midright=(viewport.right, 16)))
         panel.blit(cached[2], viewport)

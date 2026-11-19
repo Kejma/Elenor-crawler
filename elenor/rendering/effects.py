@@ -18,16 +18,6 @@ class FXManager:
         self.flags = {
             "tonemap": True,
             "reflected_light": True,
-            "ao": True,             # 1. Fake Ambient Occlusion (угловые тени у стен и объектов в шейдере)
-            "bloom": True,          # 2. Shader Bloom / Emissive (свечение огня, магии и глаз в темноте)
-            "gpu_fog": True,
-            "volumetric_fog": True, # 3. 2.5D Объёмный туман и Ядовитые облака
-            "drop_shadows": True,   # 4. Мягкие падающие тени под ногами существ
-            "battle_memory": True,  # 5. Память поля боя (вечная кровь, обломки бочек, вино, копоть)
-            "dust_motes": True,     # 6. Пылинки и споры (только в тематических зонах и на улице!)
-            "water_ripples": True,  # 7. Круги по воде строго под подошвами сапог
-            "hit_flash": True,      # 8. Hit-Flash (красный при обычном ударе, бело-золотой при крите)
-            "screenshake": True,    # 9. Мягкая микро-тряска камеры при критах и взрывах
         }
 
         self.decal_surf = pygame.Surface((MAP_COLS * TILE_W, MAP_ROWS * TILE_H), pygame.SRCALPHA)
@@ -177,8 +167,6 @@ class FXManager:
 
     # --- ПАМЯТЬ ПОЛЯ БОЯ (ВЕЧНЫЕ ДЕКАЛИ НА ПОЛУ) ---
     def add_blood_splatter(self, wx, wy, count=5, is_kill=False):
-        if not self.flags["battle_memory"]:
-            return
         self.has_decals = True
         self.decal_revision += 1
         cx = int(wx * TILE_W)
@@ -197,8 +185,6 @@ class FXManager:
             pygame.draw.rect(self.decal_surf, col, (ox, oy, sz, sz))
 
     def add_barrel_debris(self, tx, ty):
-        if not self.flags["battle_memory"]:
-            return
         self.has_decals = True
         self.decal_revision += 1
         cx = int((tx + 0.5) * TILE_W)
@@ -212,8 +198,6 @@ class FXManager:
         pygame.draw.rect(self.decal_surf, (78, 84, 96, 225), (cx - 2, cy - 5, 5, 1))
 
     def add_scorch_mark(self, wx, wy, radius_tiles=0.55):
-        if not self.flags["battle_memory"]:
-            return
         self.has_decals = True
         self.decal_revision += 1
         cx = int(wx * TILE_W)
@@ -229,8 +213,6 @@ class FXManager:
 
     # --- КРУГИ НА ВОДЕ (СТРОГО ПОД ПОДОШВАМИ САПОГ: wy + 0.36!) ---
     def add_water_ripple(self, wx, wy, *, green=False):
-        if not self.flags["water_ripples"]:
-            return
         self.ripples.append({
             "wx": float(wx),
             "wy": float(wy) + 0.36,
@@ -240,8 +222,6 @@ class FXManager:
         })
 
     def trigger_shake(self, amplitude=1.8, duration=0.14):
-        if not self.flags["screenshake"]:
-            return
         self.shake_amp = max(self.shake_amp, float(amplitude))
         self.shake_max_timer = max(0.01, float(duration))
         self.shake_timer = max(self.shake_timer, float(duration))
@@ -249,7 +229,7 @@ class FXManager:
     def update(self, dt, player, dungeon, mobs=None, add_popup=None):
         if dt <= 0:
             return
-        if self.shake_timer > 0.0 and self.flags["screenshake"]:
+        if self.shake_timer > 0.0:
             self.shake_timer = max(0.0, self.shake_timer - dt)
             fade = self.shake_timer / self.shake_max_timer
             cur_a = self.shake_amp * fade
@@ -290,7 +270,7 @@ class FXManager:
                             self.game._check_mob_death(m)
 
         # Пылинки и споры летают ТОЛЬКО внутри разрешённых тематических зон (`zone_rect`)!
-        if self.flags["dust_motes"] and self.dust_motes:
+        if self.dust_motes:
             for dm in self.motes_in_view(getattr(self.game, "cam_x", 0.0), getattr(self.game, "cam_y", 0.0)):
                 if "anchor" in dm:
                     x, y = dm["anchor"]
@@ -593,7 +573,7 @@ class FXManager:
         if not self.panel_open:
             return
 
-        pw, ph = 376, 664
+        pw, ph = 376, 302
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
         r.draw_pixel_frame(screen, panel_rect, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
@@ -604,16 +584,6 @@ class FXManager:
         items = [
             ("tonemap", "Тонмаппинг"),
             ("reflected_light", "Отражённый свет"),
-            ("gpu_fog", "Расчёт тумана на GPU"),
-            ("ao",             "1. Ambient Occlusion (Угловые тени)"),
-            ("bloom",          "2. Shader Bloom (Свечение огня/магии)"),
-            ("volumetric_fog", "3. 2.5D Объёмный туман / Ядовитый газ"),
-            ("drop_shadows",   "4. Падающие тени существ (Drop Shadows)"),
-            ("battle_memory",  "5. Память боя (Кровь / Обломки / Копоть)"),
-            ("dust_motes",     "6. Пыль/Споры (Только лес и спец-залы)"),
-            ("water_ripples",  "7. Круги по воде под сапогами"),
-            ("hit_flash",      "8. Hit-Flash (Красный / Бело-золотой)"),
-            ("screenshake",    "9. Мягкая микро-тряска камеры"),
         ]
 
         self.toggle_rects = {}

@@ -180,7 +180,7 @@ def main():
                     continue
 
             if hasattr(game, "dev_panel") and game.dev_panel:
-                if game.dev_panel.handle_event(event, game, world_mx, world_my):
+                if game.dev_panel.handle_event(event, game, world_mx, world_my, mouse_pos):
                     continue
 
             if game.inv_open and game.journal_open and not game.levelup_choices:
