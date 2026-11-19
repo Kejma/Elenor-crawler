@@ -19,6 +19,7 @@ SCALES = {
     "D Minor (Ритуал / Босс)":    ["D2", "E2", "F2", "G2", "A2", "A#2", "C3", "D3", "E3", "F3", "G3", "A3", "A#3", "C4", "D4", "E4", "F4", "G4", "A4", "A#4", "D5"],
     "D Blues / Гранж-Рок":        ["D2", "F2", "G2", "G#2", "A2", "C3", "D3", "F3", "G3", "G#3", "A3", "C4", "D4", "F4", "G4", "G#4", "A4", "C5", "D5"],
     "Кельтская Пентатоника":      ["D2", "F2", "G2", "A2", "C3", "D3", "F3", "G3", "A3", "C4", "D4", "F4", "G4", "A4", "C5", "D5"],
+    "D Phrygian (Джунгли / Храм)": ["D2", "D#2", "F2", "G2", "A2", "A#2", "C3", "D3", "D#3", "F3", "G3", "A3", "A#3", "C4", "D4", "D#4", "F4", "G4", "A4", "A#4", "C5", "D5"],
     "Chromatic (Все 12 нот)":     NOTE_LIST,
 }
 
@@ -27,6 +28,7 @@ INSTRUMENT_CATEGORIES = [
     ("acoustic", "Акустика"),
     ("medieval", "Медивал"),
     ("drive",    "16-Бит Рок"),
+    ("tribal",   "Джунгли"),
 ]
 
 INSTRUMENT_CATALOG = {
@@ -56,6 +58,14 @@ INSTRUMENT_CATALOG = {
     "dist_guitar":    {"name": "Ритм-Гитара",     "cat": "drive",    "type": "synth", "color": (230, 75, 165),  "def_note": "D3"},
     "screamer_lead":  {"name": "Соло-Запил",      "cat": "drive",    "type": "synth", "color": (80, 240, 165),  "def_note": "D4"},
     "grunge_organ":   {"name": "Гранж-Орган",     "cat": "drive",    "type": "synth", "color": (160, 115, 255), "def_note": "D3"},
+
+    # --- 5. ПЕРВОБЫТНЫЕ И ДЖУНГЛЕВЫЕ ИНСТРУМЕНТЫ ---
+    "djembe":         {"name": "Джембе / Конга",  "cat": "tribal",   "type": "drum",  "color": (235, 130, 55),  "def_note": "G2"},
+    "shaker":         {"name": "Шейкер / Маракас","cat": "tribal",   "type": "drum",  "color": (220, 200, 110), "def_note": "A4"},
+    "marimba":        {"name": "Маримба / Кость", "cat": "tribal",   "type": "synth", "color": (195, 155, 85),  "def_note": "D3"},
+    "pan_flute":      {"name": "Флейта Пана",     "cat": "tribal",   "type": "synth", "color": (95, 220, 145),  "def_note": "D4"},
+    "didgeridoo":     {"name": "Диджериду",       "cat": "tribal",   "type": "synth", "color": (175, 110, 65),  "def_note": "D2"},
+    "tribal_gong":    {"name": "Тотем / Гонг",    "cat": "tribal",   "type": "synth", "color": (110, 195, 175), "def_note": "D2"},
 }
 
 DEFAULT_CHANNEL_INSTS = [
@@ -86,6 +96,13 @@ DEFAULT_SYNTH_PARAMS = {
     "dist_guitar":    {"drive": 0.82, "cutoff": 0.62, "punch": 0.75, "detune": 0.45, "decay": 0.85, "fifth": 0.75},
     "screamer_lead":  {"drive": 0.75, "cutoff": 0.78, "punch": 0.65, "detune": 0.55, "decay": 0.90, "fifth": 0.25},
     "grunge_organ":   {"drive": 0.40, "cutoff": 0.70, "punch": 0.40, "detune": 0.60, "decay": 0.85, "fifth": 0.45},
+
+    "djembe":         {"drive": 0.30, "cutoff": 0.65, "punch": 0.85, "detune": 0.25, "decay": 0.55, "fifth": 0.00},
+    "shaker":         {"drive": 0.15, "cutoff": 0.82, "punch": 0.55, "detune": 0.45, "decay": 0.32, "fifth": 0.00},
+    "marimba":        {"drive": 0.14, "cutoff": 0.72, "punch": 0.75, "detune": 0.20, "decay": 0.62, "fifth": 0.15},
+    "pan_flute":      {"drive": 0.16, "cutoff": 0.66, "punch": 0.70, "detune": 0.38, "decay": 0.82, "fifth": 0.00},
+    "didgeridoo":     {"drive": 0.58, "cutoff": 0.56, "punch": 0.50, "detune": 0.55, "decay": 0.90, "fifth": 0.35},
+    "tribal_gong":    {"drive": 0.24, "cutoff": 0.74, "punch": 0.45, "detune": 0.60, "decay": 0.94, "fifth": 0.30},
 }
 
 
@@ -349,7 +366,7 @@ class SongData:
 
 
 class SynthVoiceEngine:
-    """Процедурный синтезатор: Ударные, Акустические струнные, Средневековье и 16-бит Рок."""
+    """Процедурный синтезатор: Ударные, Акустические струнные, Средневековье, 16-бит Рок и Джунгли."""
     def __init__(self, sample_rate=44100):
         self.sr = sample_rate
         self._voice_cache = {}
@@ -482,6 +499,178 @@ class SynthVoiceEngine:
             noise_hiss = np.diff(np.random.uniform(-1.0, 1.0, n), prepend=0.0)
             raw = slap + (jingles * 0.65 + noise_hiss * 0.35) * burst_env
             out = self._apply_smooth_tail(np.tanh(raw * (1.2 + drive * 1.6)) * 0.65, 0.020)
+
+        elif inst_id == "djembe":
+            dur = max(0.16, 0.12 + decay * 0.28)
+            n = int(self.sr * dur)
+            t = np.linspace(0, dur, n, False)
+            f_base = max(75.0, min(380.0, f0 * 1.25))
+            f_drop = f_base * (0.90 + (0.45 + 0.45 * punch) * np.exp(-t * 36.0))
+            ph = 2.0 * np.pi * np.cumsum(f_drop) / self.sr
+            rate = 14.5 - decay * 7.5
+            body = (
+                np.sin(ph) * 0.72
+                + np.sin(ph * 1.58) * (0.34 * cutoff) * np.exp(-t * (rate * 1.8))
+                + np.sin(ph * 2.29) * (0.18 * cutoff) * np.exp(-t * (rate * 3.0))
+            ) * np.exp(-t * rate)
+            # Высокие ноты дают более хлесткий слэп ладонью по краю джембе
+            slap_scale = 0.35 + 0.65 * np.clip((f0 - 90.0) / 140.0, 0.0, 1.0)
+            slap_len = min(n, int(self.sr * 0.016))
+            slap_noise = self._cabinet_filter(np.random.uniform(-1.0, 1.0, slap_len), min(1.0, cutoff + 0.2))
+            body[:slap_len] += slap_noise * np.exp(-np.linspace(0.0, 5.0, slap_len)) * punch * slap_scale * 0.55
+            att = min(n, int(self.sr * 0.002))
+            if att > 1:
+                body[:att] *= np.linspace(0.0, 1.0, att)
+            out = self._apply_smooth_tail(np.tanh(self._cabinet_filter(body, cutoff) * (1.25 + drive * 2.0)) * 0.84, 0.025)
+
+        elif inst_id == "shaker":
+            dur = max(0.06, 0.055 + decay * 0.15)
+            n = int(self.sr * dur)
+            t = np.linspace(0, dur, n, False)
+            noise = np.random.uniform(-1.0, 1.0, n)
+            hp = np.diff(noise, prepend=0.0)
+            bp = self._cabinet_filter(hp, min(1.0, 0.45 + cutoff * 0.50))
+            peak_t = 0.012 + (1.0 - punch) * 0.016
+            rise = np.clip(t / max(0.004, peak_t), 0.0, 1.0) ** 1.3
+            fall = np.exp(-np.maximum(0.0, t - peak_t) * (34.0 - decay * 22.0))
+            grain2 = 0.35 * detune * np.exp(-((t - (peak_t + 0.028)) ** 2) * 2600.0)
+            env = rise * fall + grain2
+            out = self._apply_smooth_tail(np.tanh(bp * env * (1.3 + drive * 1.5)) * 0.48, 0.015)
+
+        elif inst_id == "marimba":
+            dur = max(0.18, dur_sec * (1.05 + decay * 0.45))
+            n = int(self.sr * dur)
+            t = np.linspace(0, dur, n, False)
+            freq_curve = np.ones(n, dtype=np.float32) * f0
+            if f1 != f0:
+                slide_start = int(n * 0.45)
+                freq_curve[slide_start:] = np.linspace(f0, f1, n - slide_start)
+            ph = 2.0 * np.pi * np.cumsum(freq_curve) / self.sr
+            ph_det = 2.0 * np.pi * np.cumsum(freq_curve * (1.0 + detune * 0.004)) / self.sr
+
+            rate = 7.8 - decay * 5.0
+            bar = (
+                (np.sin(ph) * 0.65 + np.sin(ph_det) * 0.25) * np.exp(-t * rate)
+                + np.sin(ph * 2.0) * 0.14 * np.exp(-t * rate * 2.2)
+                + np.sin(ph * 3.98) * (0.36 * cutoff) * np.exp(-t * rate * 4.2)
+                + np.sin(ph * 9.20) * (0.14 * punch) * np.exp(-t * rate * 11.0)
+            )
+            if fifth_lvl > 0.02:
+                bar += np.sin(ph * 1.4983) * (fifth_lvl * 0.32) * np.exp(-t * rate * 1.5)
+            m_len = min(n, int(self.sr * 0.009))
+            if m_len > 2:
+                mallet = np.sin(2.0 * np.pi * min(1200.0, f0 * 2.5) * t[:m_len]) * np.exp(-np.linspace(0.0, 5.5, m_len)) * punch * 0.28
+                bar[:m_len] += mallet
+            att = min(n, int(self.sr * 0.004))
+            if att > 1:
+                bar[:att] *= np.linspace(0.0, 1.0, att)
+            out = self._apply_smooth_tail(np.tanh(self._cabinet_filter(bar, min(1.0, cutoff + 0.1)) * (1.15 + drive * 1.8)) * 0.78, 0.030)
+
+        elif inst_id == "pan_flute":
+            dur = max(0.16, dur_sec * 1.08)
+            n = int(self.sr * dur)
+            t = np.linspace(0, dur, n, False)
+            freq_curve = np.ones(n, dtype=np.float32) * f0
+            scoop_len = min(n, int(self.sr * 0.024))
+            if scoop_len > 3 and punch > 0.15:
+                freq_curve[:scoop_len] = np.linspace(f0 * 0.965, f0, scoop_len)
+            if f1 != f0:
+                slide_start = int(n * 0.42)
+                freq_curve[slide_start:] = np.linspace(f0, f1, n - slide_start)
+
+            vib = 1.0 + np.clip((t - 0.09) / 0.14, 0.0, 1.0) * np.sin(2.0 * np.pi * 5.2 * t) * (0.008 + detune * 0.015)
+            ph = 2.0 * np.pi * np.cumsum(freq_curve * vib) / self.sr
+
+            breath_noise = np.random.uniform(-0.42, 0.42, n)
+            breath_bp = self._cabinet_filter(np.diff(breath_noise, prepend=0.0), 0.55)
+            chiff = breath_bp * (np.exp(-t * 28.0) * punch * 0.75 + 0.14)
+
+            reed = (
+                np.sin(ph) * 0.74
+                + np.sin(ph * 2.0) * (0.12 * cutoff)
+                + np.sin(ph * 3.0) * (0.34 * cutoff)
+                + np.sin(ph * 5.0) * (0.12 * cutoff)
+                + chiff
+            )
+            if fifth_lvl > 0.02:
+                reed += np.sin(ph * 1.4983) * (0.28 * fifth_lvl)
+
+            att = min(n // 2, int(self.sr * 0.028))
+            rel = min(n // 2, int(self.sr * 0.055))
+            env = np.ones(n, dtype=np.float32) * (0.55 + decay * 0.45)
+            if att > 1:
+                env[:att] = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, att))
+            if rel > 1:
+                env[-rel:] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, rel))
+            out = self._apply_smooth_tail(np.tanh(reed * env * (1.15 + drive * 1.6)) * 0.72, 0.030)
+
+        elif inst_id == "didgeridoo":
+            dur = max(0.18, dur_sec * 1.06)
+            n = int(self.sr * dur)
+            t = np.linspace(0, dur, n, False)
+            freq_curve = np.ones(n, dtype=np.float32) * f0
+            if f1 != f0:
+                slide_start = int(n * 0.40)
+                freq_curve[slide_start:] = np.linspace(f0, f1, n - slide_start)
+
+            ph = 2.0 * np.pi * np.cumsum(freq_curve) / self.sr
+            # Горловой формантный LFO для характерного «дышащего» пульса диджериду
+            lfo_hz = 3.2 + detune * 4.8
+            formant_lfo = 0.50 + 0.50 * np.sin(2.0 * np.pi * lfo_hz * t)
+            buzz = (
+                np.sin(ph) * 0.58
+                + self._saw(ph) * 0.36
+                + self._pulse(ph * 1.003, duty=0.32) * 0.22
+                + (np.sin(ph * 3.0) * 0.42 + np.sin(ph * 4.0) * 0.34 + np.sin(ph * 5.0) * 0.22) * (0.35 + 0.65 * formant_lfo) * cutoff
+            )
+            if fifth_lvl > 0.02:
+                buzz += np.sin(ph * 1.4983) * (0.30 * fifth_lvl)
+
+            att = min(n // 2, int(self.sr * (0.045 - punch * 0.025)))
+            rel = min(n // 2, int(self.sr * 0.060))
+            env = np.ones(n, dtype=np.float32) * (0.60 + decay * 0.40)
+            if att > 1:
+                env[:att] = np.linspace(0.0, 1.0, att)
+            if rel > 1:
+                env[-rel:] = np.linspace(1.0, 0.0, rel)
+            raw = self._cabinet_filter(buzz, min(1.0, 0.25 + cutoff * 0.65))
+            out = self._apply_smooth_tail(np.tanh(raw * env * (1.3 + drive * 2.4)) * 0.74, 0.035)
+
+        elif inst_id == "tribal_gong":
+            dur = max(0.35, dur_sec * (1.45 + decay * 0.85))
+            n = int(self.sr * dur)
+            t = np.linspace(0, dur, n, False)
+            ph = 2.0 * np.pi * f0 * t
+            rate = 3.8 - decay * 2.8
+
+            if f0 < 220.0:
+                shimmer = 0.72 + 0.28 * np.sin(2.0 * np.pi * (2.6 + detune * 3.4) * t)
+                gong = (
+                    np.sin(ph) * 0.62 * np.exp(-t * rate * 0.85)
+                    + np.sin(ph * 1.414) * (0.38 * cutoff) * shimmer * np.exp(-t * rate * 1.15)
+                    + np.sin(ph * 1.732) * (0.30 * cutoff) * np.exp(-t * rate * 1.45)
+                    + np.sin(ph * 2.236) * (0.24 * cutoff) * shimmer * np.exp(-t * rate * 1.90)
+                    + np.sin(ph * 2.828) * (0.18 * cutoff) * np.exp(-t * rate * 2.50)
+                    + np.sin(ph * 3.610) * (0.12 * punch) * np.exp(-t * rate * 3.50)
+                )
+                if fifth_lvl > 0.02:
+                    gong += np.sin(ph * 1.4983) * (0.25 * fifth_lvl) * np.exp(-t * rate)
+                att = min(n // 2, int(self.sr * (0.055 - punch * 0.030)))
+                if att > 1:
+                    gong[:att] *= 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, att))
+                out = self._apply_smooth_tail(np.tanh(gong * (1.15 + drive * 2.0)) * 0.74, 0.050)
+            else:
+                # Высокий регистр звучит как каменный/хрустальный храмовый колокольчик
+                chime = (
+                    np.sin(ph) * 0.65 * np.exp(-t * rate * 1.2)
+                    + np.sin(ph * 2.0) * (0.30 * cutoff) * np.exp(-t * rate * 1.8)
+                    + np.sin(ph * 2.76) * (0.34 * cutoff) * np.exp(-t * rate * 2.4)
+                    + np.sin(ph * 4.12) * (0.18 * punch) * np.exp(-t * rate * 3.6)
+                )
+                att = min(n, int(self.sr * 0.005))
+                if att > 1:
+                    chime[:att] *= np.linspace(0.0, 1.0, att)
+                out = self._apply_smooth_tail(np.tanh(chime * (1.1 + drive * 1.6)) * 0.68, 0.040)
 
         elif inst_id in ("acoustic_steel", "acoustic_nylon", "bard_lute"):
             dur = max(0.16, dur_sec * (1.0 + decay * 0.35))

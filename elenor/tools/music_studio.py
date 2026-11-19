@@ -290,11 +290,15 @@ class MusicStudioApp:
             self.audio_dirty = True
             self.audio_rebuild_timer = 0.08
 
+    def _default_music_dir(self):
+        music_dir = os.path.join(str(PROJECT_ROOT), "music")
+        return music_dir if os.path.isdir(music_dir) else str(PROJECT_ROOT)
+
     def save_song_dialog(self):
         """Открывает диалоговое окно сохранения файла Windows."""
         self.dragging_step = None
         self.dragging_slider = None
-        initial_dir = str(PROJECT_ROOT)
+        initial_dir = os.path.dirname(self.current_file_path) if self.current_file_path else self._default_music_dir()
         initial_file = os.path.basename(self.current_file_path) if self.current_file_path else "custom_track.json"
         try:
             root = tk.Tk()
@@ -324,7 +328,7 @@ class MusicStudioApp:
         """Открывает диалоговое окно выбора любого .json файла."""
         self.dragging_step = None
         self.dragging_slider = None
-        initial_dir = str(PROJECT_ROOT)
+        initial_dir = os.path.dirname(self.current_file_path) if self.current_file_path else self._default_music_dir()
         try:
             root = tk.Tk()
             root.withdraw()
@@ -1249,7 +1253,10 @@ class MusicStudioApp:
         ov.fill((10, 8, 16, 185))
         self.screen.blit(ov, (0, 0))
 
-        mw, mh = 680, 390
+        cat_insts = [(k, v) for k, v in INSTRUMENT_CATALOG.items() if v["cat"] == self.picker_cat]
+        rows_cnt = max(3, math.ceil(len(cat_insts) / 2.0))
+        mw = 760
+        mh = max(390, 168 + rows_cnt * 68)
         mx0, my0 = (WIN_W - mw) // 2, (WIN_H - mh) // 2
         m_rect = pygame.Rect(mx0, my0, mw, mh)
         pygame.draw.rect(self.screen, PANEL_BG, m_rect, border_radius=8)
@@ -1261,18 +1268,23 @@ class MusicStudioApp:
         self.ui_hitboxes.append(("picker_close", close_r))
 
         self.screen.blit(self.font_small.render("1. ВЫБЕРИ ТИП ИНСТРУМЕНТА:", True, TEXT_DIM), (mx0 + 24, my0 + 56))
+        n_cats = max(1, len(INSTRUMENT_CATEGORIES))
+        cat_gap = 8
+        cat_w = (mw - 48 - (n_cats - 1) * cat_gap) // n_cats
+        cat_font = self.font_small if cat_w < 130 else self.font_ui
         for c_i, (cat_id, cat_name) in enumerate(INSTRUMENT_CATEGORIES):
-            cr = self.draw_button(pygame.Rect(mx0 + 24 + c_i * 158, my0 + 76, 150, 36), cat_name, self.picker_cat == cat_id)
+            cr = self.draw_button(pygame.Rect(mx0 + 24 + c_i * (cat_w + cat_gap), my0 + 76, cat_w, 36), cat_name, self.picker_cat == cat_id, font=cat_font)
             self.ui_hitboxes.append(("picker_cat", cat_id, cr))
 
         self.screen.blit(self.font_small.render("2. ВЫБЕРИ ТЕМБР:", True, TEXT_DIM), (mx0 + 24, my0 + 128))
-        cat_insts = [(k, v) for k, v in INSTRUMENT_CATALOG.items() if v["cat"] == self.picker_cat]
         cur_iid = self.cur_pattern.channels[self.picker_ch_idx]["inst_id"]
+        col_gap = 12
+        col_w = (mw - 48 - col_gap) // 2
 
         for idx, (iid, idef) in enumerate(cat_insts):
             col = idx % 2
             row = idx // 2
-            ir = pygame.Rect(mx0 + 24 + col * 318, my0 + 152 + row * 68, 306, 56)
+            ir = pygame.Rect(mx0 + 24 + col * (col_w + col_gap), my0 + 152 + row * 68, col_w, 56)
             r_btn = self.draw_button(ir, idef["name"], cur_iid == iid, idef["color"])
             pygame.draw.rect(self.screen, idef["color"], (ir.x + 6, ir.y + 6, 8, ir.height - 12), border_radius=3)
             self.ui_hitboxes.append(("picker_inst", iid, r_btn))
@@ -1359,15 +1371,22 @@ class MusicStudioApp:
     def _render_synth_tab(self):
         # Начинается строго на y = 176 (под полкой паттернов!)
         self.screen.blit(self.font_small.render("ТИП ИНСТРУМЕНТА:", True, TEXT_DIM), (16, 184))
+        n_cats = max(1, len(INSTRUMENT_CATEGORIES))
+        cat_gap = 8
+        cat_w = min(148, (WIN_W - 165 - (n_cats - 1) * cat_gap) // n_cats)
         for c_i, (cat_id, cat_name) in enumerate(INSTRUMENT_CATEGORIES):
-            cr = self.draw_button(pygame.Rect(145 + c_i * 158, 176, 148, 28), cat_name, self.selected_synth_cat == cat_id)
+            cr = self.draw_button(pygame.Rect(145 + c_i * (cat_w + cat_gap), 176, cat_w, 28), cat_name, self.selected_synth_cat == cat_id)
             self.ui_hitboxes.append(("synth_cat", cat_id, cr))
 
         cat_insts = [(k, v) for k, v in INSTRUMENT_CATALOG.items() if v["cat"] == self.selected_synth_cat]
+        n_inst = max(1, len(cat_insts))
+        inst_gap = 8
+        inst_w = min(200, (WIN_W - 24 - (n_inst - 1) * inst_gap) // n_inst)
+        inst_font = self.font_small if inst_w < 170 else self.font_ui
         for idx, (iid, idef) in enumerate(cat_insts):
             ir = self.draw_button(
-                pygame.Rect(12 + idx * 208, 210, 200, 30),
-                idef["name"], self.selected_synth_inst == iid, idef["color"]
+                pygame.Rect(12 + idx * (inst_w + inst_gap), 210, inst_w, 30),
+                idef["name"], self.selected_synth_inst == iid, idef["color"], inst_font
             )
             self.ui_hitboxes.append(("synth_inst", iid, ir))
 
