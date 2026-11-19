@@ -57,6 +57,7 @@ DEFAULT_PROFILE = {
     "typewriter_mode": 1,
     "thought_freq_mode": 2,
     "show_minimap": True,
+    "show_performance": False,
     "window_mode": "windowed",
     "resolution_idx": 0,
     "fullscreen": False,
@@ -97,7 +98,7 @@ def save_profile(prof):
 
 def reset_profile_progress(prof):
     keep_keys = (
-        "volume", "typewriter_mode", "thought_freq_mode", "show_minimap",
+        "volume", "typewriter_mode", "thought_freq_mode", "show_minimap", "show_performance",
         "window_mode", "resolution_idx", "fullscreen",
     )
     saved_settings = {k: prof.get(k, DEFAULT_PROFILE[k]) for k in keep_keys}

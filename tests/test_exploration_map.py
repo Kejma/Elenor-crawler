@@ -1,11 +1,12 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import pygame
 
 from elenor.config import TILE_H, TILE_W, VIEW_H, VIEW_W
 from elenor.entities import Interactable
-from elenor.rendering.visibility import canopy_visibility, visible_lit_tiles
+from elenor.rendering.visibility import CanopyVisibility, canopy_visibility, visible_lit_tiles
 from elenor.ui.exploration_map import INK, TERRAIN, chart_surface, discovered_landmarks
 from elenor.world.dungeon import Door, Dungeon
 from elenor.world.exploration import remember_tiles
@@ -37,6 +38,25 @@ class ExplorationMapTests(unittest.TestCase):
             dungeon.thickets.add((x, 9))
         self.assertEqual(canopy_visibility(dungeon, 9.5, 7.5, 9, 11), 0.0)
         self.assertEqual(canopy_visibility(dungeon, 9.5, 7.5, 9, 9), 1.0)
+
+    def test_canopy_cache_refreshes_when_viewer_moves_or_geometry_changes(self):
+        dungeon = Dungeon()
+        cache = CanopyVisibility()
+        tree = (9, 11)
+        with patch("elenor.rendering.visibility.canopy_visibility", side_effect=(1.0, .32, 0.0)) as trace:
+            cache.begin_frame(dungeon.grid, 1.0)
+            cache.set_view(dungeon, 9.5, 7.5)
+            self.assertEqual(cache.target(tree), 1.0)
+            cache.begin_frame(dungeon.grid, 1.1)
+            cache.set_view(dungeon, 9.5, 7.5)
+            self.assertEqual(cache.target(tree), 1.0)
+            self.assertEqual(trace.call_count, 1)
+
+            cache.set_view(dungeon, 9.6, 7.5)
+            self.assertEqual(cache.target(tree), .32)
+            dungeon.invalidate_light_cache()
+            cache.set_view(dungeon, 9.6, 7.5)
+            self.assertEqual(cache.target(tree), 0.0)
 
     def test_survey_requires_both_light_and_line_of_sight(self):
         scene = pygame.Surface((VIEW_W, VIEW_H))

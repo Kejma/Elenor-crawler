@@ -13,7 +13,7 @@ from elenor.rendering.occlusion import LightOcclusion
 from elenor.rendering.lighting import GPULightShader
 from elenor.rendering.pixel_fx import PixelLayer
 from elenor.rendering.physical import render_ground_traps, render_physical
-from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, canopy_visibility, misted_actor
+from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, misted_actor
 from elenor.ui.renderer import UIRendererMixin
 
 class Renderer(UIRendererMixin):
@@ -532,6 +532,8 @@ class Renderer(UIRendererMixin):
 
         now_sec = pygame.time.get_ticks() * 0.001
         self.canopy_visibility.begin_frame(dungeon.grid, now_sec)
+        self.canopy_visibility.set_view(dungeon, player.x, player.y)
+        reveal_map = ui_texts.get("_reveal_map", False)
         for role_id, anim_info in self.anim_bank.items():
             fr_list = anim_info["frames"]
             if len(fr_list) > 1:
@@ -627,10 +629,9 @@ class Renderer(UIRendererMixin):
                 elif t_val in TALL_TREE_MAP:
                     key, tree_asset_key = TALL_TREE_MAP[t_val]
                     # Hidden ground within the tree's own footprint is not a visibility test for its crown.
-                    target = canopy_visibility(dungeon, player.x, player.y, c, r)
-                    if ui_texts.get("_reveal_map", False):
-                        target = 1.0
-                    visible_base = self.canopy_visibility.sample((c, r), target)
+                    tile = (c, r)
+                    target = 1.0 if reveal_map else self.canopy_visibility.target(tile)
+                    visible_base = self.canopy_visibility.sample(tile, target)
                     if visible_base > 0.006:
                         if t_val != 5 and (c*17 + r*23) % 9 == 0:
                             tree_asset_key = {21:"tree_jungle",22:"tree_palm",56:"tree_bone",57:"tree_dead_mangrove"}[t_val]

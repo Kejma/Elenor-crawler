@@ -626,20 +626,26 @@ class Dungeon:
         if dist > max_dist:
             return False
         steps = int(dist * (8.0 if self.thickets else 3.0)) + 1
-        previous = (math.floor(x0), math.floor(y0))
+        previous = None
+        start_tile = (math.floor(x0), math.floor(y0))
+        thickets = self.thickets
         for i in range(1, steps + (target_thicket is not None)):
             t = i / steps
             x, y = x0 + dx * t, y0 + dy * t
             cx, cy = math.floor(x), math.floor(y)
-            if self.is_blocking_sight(cx, cy, include_thickets=False):
-                return False
-            if target_thicket is not None:
-                px, py = previous
-                if (px != cx and py != cy
-                        and self.is_blocking_sight(cx, py) and self.is_blocking_sight(px, cy)):
+            tile = cx, cy
+            if tile != previous:
+                # Walls and doors occupy their entire tile. Only roots need sub-tile checks.
+                if self.is_blocking_sight(cx, cy, include_thickets=False):
                     return False
-                previous = (cx, cy)
-            if (cx, cy) != target_thicket and (cx, cy) in self.thickets:
+                if target_thicket is not None:
+                    px, py = previous if previous is not None else start_tile
+                    if (px != cx and py != cy
+                            and self.is_blocking_sight(cx, py) and self.is_blocking_sight(px, cy)):
+                        return False
+                inside_root = tile != target_thicket and tile in thickets
+                previous = tile
+            if inside_root:
                 ox, oy = x - cx - 0.5, y - cy - 0.5
                 if (ox * ox + oy * oy <= 0.22 ** 2
                         or abs(oy) <= 0.15 and (cx + (1 if ox > 0 else -1), cy) in self.thickets
