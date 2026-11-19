@@ -1002,7 +1002,7 @@ class Renderer(UIRendererMixin):
                 if not lgt.get("ambient", False):
                     shadow = self.light_occlusion.surface_visibility(
                         dx, -dy, self.px[x0:x1, :] + cam_x, self.py[:, y0:y1] + cam_y,
-                        lx + cam_x, ly + cam_y, radius, viewer,
+                        lx + cam_x, ly + cam_y, radius, viewer, light_z=lz,
                     )
                     atten *= shadow
 

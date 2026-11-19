@@ -1,7 +1,7 @@
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS
-from elenor.rendering.occlusion import SHADOW_RAYS
+from elenor.rendering.occlusion import PROP_SAMPLE_STEPS, SHADOW_RAYS
 
 
 class GPULightShader:
@@ -49,6 +49,8 @@ class GPULightShader:
             uniform vec2 u_cam;
             uniform vec2 u_viewer;
             uniform sampler2D u_shadows;
+            uniform sampler2D u_props;
+            uniform bool u_has_props;
             uniform bool u_temple_exposure;
             uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
             uniform int u_num_lights;
@@ -88,26 +90,68 @@ class GPULightShader:
                            smoothstep(-1.8, 1.8, next - distance), fract(ray));
             }}
 
-            float surface_shadow(int index, vec2 pixel, vec2 world, vec2 to_light, bool wall) {{
+            bool open_wall_face(vec2 point) {{
+                ivec2 cell = ivec2(floor(point / vec2({float(TILE_W)}, {float(TILE_H)})));
+                cell = clamp(cell, ivec2(0), textureSize(u_walls, 0) - 1);
+                return texelFetch(u_walls, cell, 0).r < .5;
+            }}
+
+            float wall_face_distance(vec2 pixel, vec2 world, vec2 to_light, float distance) {{
+                vec2 tile_size = vec2({float(TILE_W)}, {float(TILE_H)});
+                vec2 local = mod(world, tile_size);
+                bvec2 positive = greaterThan(to_light, vec2(0.0));
+                vec2 side = mix(vec2(-1.0), vec2(1.0), positive);
+                vec2 edge = world - local + mix(vec2(0.0), tile_size, positive);
+                vec2 exits = abs(edge - world) * distance / max(abs(to_light), vec2(.001));
+                vec2 viewer_world = u_viewer + world - pixel;
+                vec2 direction = to_light / distance;
+
+                // Internal tile seams have no exposed face and cannot terminate a ray.
+                bool face_x = exits.x <= distance && (viewer_world.x - edge.x) * side.x > 0.0
+                    && open_wall_face(vec2(edge.x + side.x * .75, world.y))
+                    && open_wall_face(vec2(edge.x + side.x * .75, world.y + direction.y * (exits.x + .75)));
+                bool face_y = exits.y <= distance && (viewer_world.y - edge.y) * side.y > 0.0
+                    && open_wall_face(vec2(world.x, edge.y + side.y * .75))
+                    && open_wall_face(vec2(world.x + direction.x * (exits.y + .75), edge.y + side.y * .75));
+                exits += 2.4 * distance / max(abs(to_light), vec2(.001));
+                if (face_x && face_y) return min(exits.x, exits.y);
+                if (face_x) return exits.x;
+                if (face_y) return exits.y;
+                return 0.0;
+            }}
+
+            float prop_visibility(vec2 world, vec2 to_light, float distance, float light_height) {{
+                const float steps[{len(PROP_SAMPLE_STEPS)}] =
+                    float[]({", ".join(str(step) for step in PROP_SAMPLE_STEPS)});
+                vec2 direction = to_light / distance;
+                ivec2 size = textureSize(u_props, 0);
+                float shade = 0.0;
+                for (int i = 0; i < {len(PROP_SAMPLE_STEPS)}; ++i) {{
+                    float step_px = steps[i];
+                    if (distance <= step_px + 4.0) break;
+                    ivec2 sample_px = ivec2(floor(world + direction * step_px));
+                    if (any(lessThan(sample_px, ivec2(0))) || any(greaterThanEqual(sample_px, size))) continue;
+                    float height = texelFetch(u_props, sample_px, 0).r * 25.5;
+                    float depth = clamp((height - light_height * step_px / distance) * .34, 0.0, 1.0);
+                    float reach = clamp((distance - step_px - 4.0) / 6.0, 0.0, 1.0);
+                    shade = max(shade, depth * min(.55, height * .045) * (1.0 - step_px / 22.0) * reach);
+                }}
+                return 1.0 - shade;
+            }}
+
+            float surface_shadow(int index, vec2 pixel, vec2 world, vec2 to_light, bool wall, float light_height) {{
                 float distance = length(to_light);
                 if (distance < 0.5) return 1.0;
                 float angle = atan(-to_light.y, -to_light.x) * {SHADOW_RAYS / (2 * np.pi)};
                 float receiver = distance - 1.0;
-                if (wall) {{
-                    // Light the side of a wall facing the source and the viewer.
-                    vec2 tile_size = vec2({float(TILE_W)}, {float(TILE_H)});
-                    vec2 local = mod(world, tile_size);
-                    vec2 exits = mix(local, tile_size - local, greaterThan(to_light, vec2(0.0)));
-                    exits *= distance / max(abs(to_light), vec2(.001));
-                    vec2 normal = exits.x < exits.y ? vec2(sign(to_light.x), 0.0) : vec2(0.0, sign(to_light.y));
-                    vec2 center = pixel - local + tile_size * .5;
-                    if (dot(u_viewer - center, normal) > 0.0)
-                        receiver -= min(exits.x, exits.y);
-                }}
+                if (wall) receiver -= wall_face_distance(pixel, world, to_light, distance);
                 float spread = (.60 + min(distance * .013, 1.50)) * {SHADOW_RAYS / (2 * np.pi)} / max(distance, 7.0);
-                return .58 * shadow_coverage(index, angle, receiver)
-                     + .21 * (shadow_coverage(index, angle - spread, receiver)
-                            + shadow_coverage(index, angle + spread, receiver));
+                float visibility = .58 * shadow_coverage(index, angle, receiver)
+                    + .21 * (shadow_coverage(index, angle - spread, receiver)
+                           + shadow_coverage(index, angle + spread, receiver));
+                if (u_has_props && !wall && visibility > .008)
+                    visibility *= prop_visibility(world, to_light, distance, light_height);
+                return visibility;
             }}
 
             void main() {{
@@ -188,7 +232,7 @@ class GPULightShader:
                         float dist = sqrt(dx * dx + dy * dy + lz * lz);
                         if (dist >= rad) continue;
                         if (flags.z > .5) {{
-                            mask_w *= surface_shadow(i, vec2(p), vec2(wx_px, wy_px), vec2(dx, -dy), is_wall_tile > .5);
+                            mask_w *= surface_shadow(i, vec2(p), vec2(wx_px, wy_px), vec2(dx, -dy), is_wall_tile > .5, lz);
                             if (mask_w < .008) continue;
                         }}
 
@@ -289,6 +333,7 @@ class GPULightShader:
         self.prog["u_walls"].value = 5
         self.prog["u_emissive"].value = 6
         self.prog["u_shadows"].value = 7
+        self.prog["u_props"].value = 8
 
         quad = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self.vbo = self.ctx.buffer(quad.tobytes())
@@ -335,6 +380,7 @@ class GPULightShader:
         self.shadow_positions = [None] * self.MAX_LIGHTS
         self.shadow_geometry = None
         self.tex_blockers = None
+        self.tex_props = None
 
         self.pos_rad_buf = np.zeros((self.MAX_LIGHTS, 4), dtype=np.float32)
         self.col_foot_buf = np.zeros((self.MAX_LIGHTS, 4), dtype=np.float32)
@@ -354,8 +400,12 @@ class GPULightShader:
             if self.tex_blockers is None or self.tex_blockers.size != size:
                 if self.tex_blockers is not None:
                     self.tex_blockers.release()
+                    self.tex_props.release()
                 self.tex_blockers = self.ctx.texture(size, 1, dtype="f1")
+                self.tex_props = self.ctx.texture(size, 1, dtype="f1")
             self.tex_blockers.write(np.ascontiguousarray(occlusion.blockers.T, dtype=np.uint8) * 255)
+            if occlusion.has_props:
+                self.tex_props.write(np.ascontiguousarray(occlusion.prop_heights.T))
         self.shadow_fbo.use()
         self.tex_blockers.use(0)
         for row, light in enumerate(lights[:self.MAX_LIGHTS]):
@@ -424,6 +474,7 @@ class GPULightShader:
 
         self.prog["u_cam"].value = (float(cam_x), float(cam_y))
         self.prog["u_viewer"].value = viewer
+        self.prog["u_has_props"].value = occlusion is not None and occlusion.has_props
         self.prog["u_temple_exposure"].value = temple_exposure
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
         self.prog["u_num_lights"].value = n_lgt
@@ -446,6 +497,8 @@ class GPULightShader:
         self.tex_walls.use(5)
         self.tex_emissive.use(6)
         self.tex_shadows.use(7)
+        if self.tex_props is not None:
+            self.tex_props.use(8)
         self.vao.render(self.moderngl.TRIANGLE_STRIP)
 
         raw_rgb = self.fbo.read(components=3, alignment=1)
