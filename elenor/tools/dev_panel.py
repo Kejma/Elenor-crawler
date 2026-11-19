@@ -22,6 +22,8 @@ class DevPanel:
         self.font_ui = pygame.font.SysFont("consolas", 13, bold=True)
         self.font_small = pygame.font.SysFont("consolas", 12, bold=True)
         self.buttons = []
+        self.scroll = dict.fromkeys(("items", "perks", "spawner"), 0)
+        self.scroll_max = 0
         self._panel_surf = None
         self._panel_layout_key = None
         self._panel_key = None
@@ -189,11 +191,24 @@ class DevPanel:
         if not self.is_open:
             return
 
-        win_rect = pygame.Rect(80, 36, SCREEN_W - 160, 560)
-        ox, oy = win_rect.x, win_rect.y
+        win_rect = _PANEL
+        ox, oy = win_rect.topleft
         p = game.player
+        items_db = game.loc.get("items", {})
+        perks_db = game.loc.get("perks", {})
+        if self.active_tab == "items":
+            height = (len(items_db) + 6) // 7 * 31
+        elif self.active_tab == "perks":
+            height = (len(perks_db) + 2) // 3 * 54
+        else:
+            height = 90 + (len(_SPAWN_OBJECTS) + 3) // 4 * 44
+        self.scroll_max = max(0, height - _CONTENT.height)
+        offset = min(self.scroll[self.active_tab], self.scroll_max)
+        self.scroll[self.active_tab] = offset
         layout_key = (
             self.active_tab,
+            offset,
+            height,
             self.click_mode,
             self.reveal_map,
             getattr(p, "god_mode", False),
@@ -259,7 +274,7 @@ class DevPanel:
                 surf.blit(ts, (ltr.x + (ltr.width - ts.get_width()) // 2, ltr.y + 6))
                 self.buttons.append((tid, str_r))
 
-            content_y = 164
+            content_y = _CONTENT.y - oy - offset
 
             if self.active_tab == "items":
                 cur_rar = self.spawn_rarities[self.spawn_rarity_idx]
@@ -272,12 +287,14 @@ class DevPanel:
                 surf.blit(rt_s, (l_rar.x + (l_rar.width - rt_s.get_width()) // 2, l_rar.y + 6))
                 self.buttons.append(("act_cycle_rarity", l_rar.move(ox, oy)))
 
-                items_db = game.loc.get("items", {})
+                surf.set_clip(_CONTENT.move(-ox, -oy))
                 for idx, (item_id, idata) in enumerate(items_db.items()):
                     col = idx % 7
                     row = idx // 7
                     lir = pygame.Rect(16 + col * 246, content_y + row * 31, 240, 27)
-                    sir = lir.move(ox, oy)
+                    sir = lir.move(ox, oy).clip(_CONTENT)
+                    if not sir:
+                        continue
                     hov = sir.collidepoint(mouse_pos)
                     is_weap = (idata.get("type") == "equipment" and idata.get("slot") == "right_hand" and not idata.get("is_torch", False))
                     r_col = rar_col_btn if is_weap else RARITY_COLORS.get(idata.get("rarity", "common"), UI_TEXT_MAIN)
@@ -289,12 +306,14 @@ class DevPanel:
                     self.buttons.append((f"give_item:{item_id}", sir))
 
             elif self.active_tab == "perks":
-                perks_db = game.loc.get("perks", {})
+                surf.set_clip(_CONTENT.move(-ox, -oy))
                 for idx, (pid, pdata) in enumerate(perks_db.items()):
                     col = idx % 3
                     row = idx // 3
                     lpr = pygame.Rect(20 + col * 316, content_y + row * 54, 304, 46)
-                    spr = lpr.move(ox, oy)
+                    spr = lpr.move(ox, oy).clip(_CONTENT)
+                    if not spr:
+                        continue
                     hov = spr.collidepoint(mouse_pos)
                     r_col = RARITY_COLORS.get(pdata.get("rarity", "common"), UI_TEXT_MAIN)
                     cur_lvl = p.perks.get(pid, 0)
@@ -308,28 +327,39 @@ class DevPanel:
                     self.buttons.append((f"perk:{pid}", spr))
 
             elif self.active_tab == "spawner":
-                mobs_list = [("rat", "Погребная крыса"), ("rat_cultist", "Крыса-сектант"), ("rat_king", "Крысиный Король"), ("skeleton", "Скелет-воин"), ("cultist", "Культист")]
-                objs_list = [("barrel", "Винная бочка"), ("ritual_altar", "Кровавый алтарь"), ("chest", "Сундук"), ("campfire", "Костёр"), ("alchemy", "Алхимия"), ("rack", "Оружейная стойка"), ("stairs", "Лестница вниз")]
+                surf.set_clip(_CONTENT.move(-ox, -oy))
                 surf.blit(self._label(self.font_ui, "Выбери кого спавнить, затем кликай ЛКМ по карте вокруг окна:", UI_BORDER_HIGHLIGHT), (24, content_y))
-                for i, (mk, mname) in enumerate(mobs_list):
+                for i, (mk, mname) in enumerate(_SPAWN_MOBS):
                     lmr = pygame.Rect(24 + i * 186, content_y + 30, 176, 36)
-                    smr = lmr.move(ox, oy)
+                    smr = lmr.move(ox, oy).clip(_CONTENT)
+                    if not smr:
+                        continue
                     act = (self.click_mode == ("spawn_mob", mk))
                     pygame.draw.rect(surf, (75, 40, 48) if act else UI_SLOT_BG, lmr, border_radius=4)
                     pygame.draw.rect(surf, (255, 110, 110) if act else UI_BORDER_WOOD, lmr, 2 if act else 1, border_radius=4)
                     surf.blit(self._label(self.font_small, f"Моб: {mname}", UI_TEXT_MAIN), (lmr.x + 12, lmr.y + 11))
                     self.buttons.append((f"spawn_mob:{mk}", smr))
 
-                for i, (ok, oname) in enumerate(objs_list):
+                for i, (ok, oname) in enumerate(_SPAWN_OBJECTS):
                     col = i % 4
                     row = i // 4
                     lor = pygame.Rect(24 + col * 230, content_y + 90 + row * 44, 218, 36)
-                    sor = lor.move(ox, oy)
+                    sor = lor.move(ox, oy).clip(_CONTENT)
+                    if not sor:
+                        continue
                     act = (self.click_mode == ("spawn_obj", ok))
                     pygame.draw.rect(surf, (45, 65, 50) if act else UI_SLOT_BG, lor, border_radius=4)
                     pygame.draw.rect(surf, (120, 240, 150) if act else UI_BORDER_WOOD, lor, 2 if act else 1, border_radius=4)
                     surf.blit(self._label(self.font_small, f"Объект: {oname}", UI_TEXT_MAIN), (lor.x + 12, lor.y + 11))
                     self.buttons.append((f"spawn_obj:{ok}", sor))
+
+            surf.set_clip(None)
+            if self.scroll_max:
+                track = pygame.Rect(_CONTENT.right - ox + 4, _CONTENT.y - oy, 5, _CONTENT.height)
+                thumb_height = max(18, track.height * track.height // height)
+                thumb_y = track.y + offset * (track.height - thumb_height) // self.scroll_max
+                pygame.draw.rect(surf, UI_BORDER_WOOD, track, border_radius=2)
+                pygame.draw.rect(surf, UI_BORDER_GOLD, (track.x, thumb_y, track.width, thumb_height), border_radius=2)
 
             self._panel_layout_key = layout_key
             hov_after = next((bid for bid, r in self.buttons if r.collidepoint(mouse_pos)), None)

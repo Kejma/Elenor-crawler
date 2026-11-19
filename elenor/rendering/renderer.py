@@ -937,10 +937,8 @@ class Renderer(UIRendererMixin):
             profile_key = (gpu_fog, tuple(flags.items())) if timings is not None else None
             slot = window.begin_world(dungeon, timings, profile_key)
         if self.gpu_shader is not None:
-            en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
-            en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
-            en_spec = fx_mgr.flags.get("specular", True) if fx_mgr else True
-            en_refl = fx_mgr.flags.get("water_reflections", True) if fx_mgr else True
+            en_spec = flags.get("specular", True)
+            en_refl = flags.get("water_reflections", True)
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             extra_gl = {}
             if scene_on_gpu:
@@ -951,7 +949,6 @@ class Renderer(UIRendererMixin):
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
                 scene_fov, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
-                enable_bloom=self._emissive_dirty,
                 temple_exposure=temple_exposure, bounce_color=bounce_color,
                 tonemap=tonemap, timings=timings if window is None else None,
                 fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,

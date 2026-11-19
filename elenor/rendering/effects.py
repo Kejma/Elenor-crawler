@@ -23,18 +23,8 @@ class FXManager:
         self.flags = {
             "tonemap": True,
             "reflected_light": True,
-            "ao": True,             # 1. Fake Ambient Occlusion (угловые тени у стен и объектов в шейдере)
-            "bloom": True,          # 2. Shader Bloom / Emissive (свечение огня, магии и глаз в темноте)
             "specular": True,
             "water_reflections": True,
-            "gpu_fog": True,
-            "volumetric_fog": True, # 3. 2.5D Объёмный туман и Ядовитые облака
-            "drop_shadows": True,   # 4. Мягкие падающие тени под ногами существ
-            "battle_memory": True,  # 5. Память поля боя (вечная кровь, обломки бочек, вино, копоть)
-            "dust_motes": True,     # 6. Пылинки и споры (только в тематических зонах и на улице!)
-            "water_ripples": True,  # 7. Круги по воде строго под подошвами сапог
-            "hit_flash": True,      # 8. Hit-Flash (красный при обычном ударе, бело-золотой при крите)
-            "screenshake": True,    # 9. Мягкая микро-тряска камеры при критах и взрывах
         }
 
         self.decal_surf = pygame.Surface((MAP_COLS * TILE_W, MAP_ROWS * TILE_H), pygame.SRCALPHA)
@@ -600,7 +590,7 @@ class FXManager:
         if not self.panel_open:
             return
 
-        pw, ph = 376, 724
+        pw, ph = 376, 354
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
         hov_k = next((k for k, rect in self.toggle_rects.items() if rect.collidepoint(mouse_pos)), None)
@@ -620,18 +610,8 @@ class FXManager:
             items = [
                 ("tonemap", "Тонмаппинг"),
                 ("reflected_light", "Отражённый свет"),
-                ("gpu_fog", "Расчёт тумана на GPU"),
-                ("ao",             "1. Ambient Occlusion (Угловые тени)"),
-                ("bloom",          "2. Shader Bloom (Свечение огня/магии)"),
-                ("specular",          "2а. PBR Блики (Specular + рябь воды)"),
-                ("water_reflections", "2б. Отражения в воде (SSR)"),
-                ("volumetric_fog", "3. 2.5D Объёмный туман / Ядовитый газ"),
-                ("drop_shadows",   "4. Падающие тени существ (Drop Shadows)"),
-                ("battle_memory",  "5. Память боя (Кровь / Обломки / Копоть)"),
-                ("dust_motes",     "6. Пыль/Споры (Только лес и спец-залы)"),
-                ("water_ripples",  "7. Круги по воде под сапогами"),
-                ("hit_flash",      "8. Hit-Flash (Красный / Бело-золотой)"),
-                ("screenshake",    "9. Мягкая микро-тряска камеры"),
+                ("specular",          "PBR-блики и рябь воды"),
+                ("water_reflections", "Отражения в воде (SSR)"),
             ]
 
             self.toggle_rects = {}
