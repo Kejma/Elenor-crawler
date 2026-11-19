@@ -805,51 +805,65 @@ class Dungeon:
             self._sight_doors = closed_doors
         return self._closed_sight_grid, self._fov_roots
 
-    def _trace_floor_rays(self, world_x, world_y, walls, root_grid):
+    def _trace_floor_rays(self, world_x, world_y, walls, root_grid, x0, y0):
         """Trace the existing samples in bands, retiring rays at their first hit."""
         width, height = walls.shape
         step_count = self._ray_steps.size
-        has_roots = bool(self.thickets)
+        has_roots = bool(root_grid.any())
+        packed_flags = (root_grid | (walls.astype(np.uint8) << 5)).ravel() if has_roots else None
+        wall_flags = walls.ravel()
         band_size = 48 if has_roots else step_count
         active = self._ray_indices
         endpoints = np.empty(len(active), np.intp)
         open_grid = np.zeros_like(walls)
+        open_flags = open_grid.ravel()
         hit_grid = np.zeros_like(walls)
         last_x = last_y = None
         for begin in range(0, step_count, band_size):
             end = min(begin + band_size, step_count)
             count = end - begin
-            wx = world_x + self._ray_dx[active, begin:end]
-            wy = world_y + self._ray_dy[active, begin:end]
-            # Negative samples clamp to tile zero in either case.
-            tx = (wx.astype(np.int32) // TILE_W).clip(0, width - 1)
-            ty = (wy.astype(np.int32) // TILE_H).clip(0, height - 1)
-            blocked = walls[tx, ty]
+            if begin == 0:
+                wx = world_x + self._ray_dx[:, :end]
+                wy = world_y + self._ray_dy[:, :end]
+            else:
+                wx = world_x + self._ray_dx[active, begin:end]
+                wy = world_y + self._ray_dy[active, begin:end]
+            # Convert to world tiles before clamping to the local footprint.
+            tx = (wx.astype(np.int32) // TILE_W - x0).clip(0, width - 1)
+            ty = (wy.astype(np.int32) // TILE_H - y0).clip(0, height - 1)
+            tile_indices = tx * height + ty
+            flags = packed_flags[tile_indices] if packed_flags is not None else None
+            blocked = (flags & 32) != 0 if flags is not None else wall_flags[tile_indices]
             if last_x is not None:
                 x, y = tx[:, 0], ty[:, 0]
                 blocked[:, 0] |= (x != last_x) & (y != last_y) & walls[x, last_y] & walls[last_x, y]
 
             # A diagonal step between two closed side tiles cannot transmit sight.
-            ray, step = np.nonzero((tx[:, 1:] != tx[:, :-1]) & (ty[:, 1:] != ty[:, :-1]))
+            changed_x = tx[:, 1:] != tx[:, :-1]
+            changed_y = ty[:, 1:] != ty[:, :-1]
+            ray, step = np.nonzero(changed_x & changed_y)
             blocked[ray, step + 1] |= walls[tx[ray, step + 1], ty[ray, step]] & walls[tx[ray, step], ty[ray, step + 1]]
 
-            if has_roots:
-                roots = root_grid[tx, ty]
-                root_ray, root_step = np.nonzero((roots != 0) & ~blocked)
-                roots = roots[root_ray, root_step]
-                ox = wx[root_ray, root_step] / TILE_W - tx[root_ray, root_step] - .5
-                oy = wy[root_ray, root_step] / TILE_H - ty[root_ray, root_step] - .5
+            if flags is not None:
+                root_ray, root_step = np.nonzero((flags != 0) & ~blocked)
+                roots = flags[root_ray, root_step]
+                ox = wx[root_ray, root_step] / TILE_W - (tx[root_ray, root_step] + x0) - .5
+                oy = wy[root_ray, root_step] / TILE_H - (ty[root_ray, root_step] + y0) - .5
                 trunks = ox * ox + oy * oy <= .22 ** 2
                 branch_x = (np.abs(oy) <= .15) & ((np.where(ox > 0, 2, 4) & roots) != 0)
                 branch_y = (np.abs(ox) <= .15) & ((np.where(oy > 0, 8, 16) & roots) != 0)
                 blocked[root_ray, root_step] = trunks | branch_x | branch_y
 
-            hit = blocked.any(axis=1)
+            # argmax also returns zero for a ray with no hits.
+            first_hit = blocked.argmax(axis=1)
+            hit = (first_hit != 0) | blocked[:, 0]
             final_band = end == step_count
             # An unobstructed ray ends at the same last sample as the original fan.
-            limit = np.where(hit, blocked.argmax(axis=1), count - int(final_band))
+            limit = np.where(hit, first_hit, count - int(final_band))
             open_samples = self._ray_steps[:, :count] < limit[:, None]
-            open_grid[tx[open_samples], ty[open_samples]] = True
+            # Only the first unobstructed sample in a tile can add it to the set.
+            open_samples[:, 1:] &= changed_x | changed_y
+            open_flags[tile_indices[open_samples]] = True
             hit_rows = np.flatnonzero(hit)
             hit_grid[tx[hit_rows, limit[hit_rows]], ty[hit_rows, limit[hit_rows]]] = True
             done = hit | final_band
@@ -863,14 +877,22 @@ class Dungeon:
 
     def _world_floor_visibility(self, world_x, world_y, closed_doors):
         terrain, root_grid = self.sight_geometry(closed_doors)
-        walls = terrain.copy()
-        width, height = walls.shape
+        width, height = terrain.shape
         start_x = max(0, min(width - 1, int(world_x) // TILE_W))
         start_y = max(0, min(height - 1, int(world_y) // TILE_H))
-        walls[start_x, start_y] = False
+        # Only tiles within the fan and the extra ring of adjacent wall faces
+        # can contribute to this frame's visibility.
+        radius_x = math.ceil(LOS_MAX_RADIUS / TILE_W) + 1
+        radius_y = math.ceil(LOS_MAX_RADIUS / TILE_H) + 1
+        x0, x1 = max(0, start_x - radius_x), min(width, start_x + radius_x + 1)
+        y0, y1 = max(0, start_y - radius_y), min(height, start_y + radius_y + 1)
+        walls = terrain[x0:x1, y0:y1].copy()
+        roots = root_grid[x0:x1, y0:y1]
+        width, height = walls.shape
+        walls[start_x - x0, start_y - y0] = False
 
-        endpoints, open_grid, hit_grid = self._trace_floor_rays(world_x, world_y, walls, root_grid)
-        open_grid[start_x, start_y] = True
+        endpoints, open_grid, hit_grid = self._trace_floor_rays(world_x, world_y, walls, roots, x0, y0)
+        open_grid[start_x - x0, start_y - y0] = True
         nearby = np.zeros_like(open_grid)
         padded = np.pad(open_grid, 1)
         for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
@@ -882,9 +904,9 @@ class Dungeon:
         end_x = world_x + self._ray_dx[self._ray_indices, endpoints]
         end_y = world_y + self._ray_dy[self._ray_indices, endpoints]
         return (
-            end_x, end_y, tuple(zip(wall_x.tolist(), wall_y.tolist())),
-            frozenset(zip(visible_x.tolist(), visible_y.tolist())),
-            frozenset(zip(open_x.tolist(), open_y.tolist())),
+            end_x, end_y, tuple(zip((wall_x + x0).tolist(), (wall_y + y0).tolist())),
+            frozenset(zip((visible_x + x0).tolist(), (visible_y + y0).tolist())),
+            frozenset(zip((open_x + x0).tolist(), (open_y + y0).tolist())),
         )
 
     def compute_nox_fov(self, world_ox, world_oy, cam_x, cam_y):

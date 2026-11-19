@@ -103,6 +103,23 @@ class ExplorationMapTests(unittest.TestCase):
         dungeon.invalidate_light_cache()
         self.assertNotIn((8, 5), dungeon.compute_nox_fov(*viewer, TILE_W, 0)[2])
 
+    def test_floor_fan_keeps_distant_wall_faces_in_world_coordinates(self):
+        dungeon = Dungeon()
+        dungeon.grid = [[1] * 96 for _ in range(80)]
+        dungeon.thickets.clear()
+        dungeon.doors.clear()
+        dungeon._carve_rect(pygame.Rect(54, 43, 18, 1), 4)
+        dungeon.invalidate_light_cache()
+
+        cam_x, cam_y = 46 * TILE_W, 40 * TILE_H
+        mask, visible, opened = dungeon.compute_nox_fov(55 * TILE_W, 43.5 * TILE_H, cam_x, cam_y)
+
+        self.assertIn((71, 43), opened)
+        self.assertIn((72, 43), visible)
+        self.assertNotIn((72, 43), opened)
+        self.assertNotIn((73, 43), visible)
+        self.assertEqual(mask[72 * TILE_W - cam_x + 8, 43 * TILE_H - cam_y + 8], 1)
+
     def test_survey_requires_both_light_and_line_of_sight(self):
         scene = pygame.Surface((VIEW_W, VIEW_H))
         scene.fill((0, 0, 0))

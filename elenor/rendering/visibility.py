@@ -23,6 +23,18 @@ class _CanopyOcclusion:
         self.rows = tuple(row.tobytes() for row in (roots | (walls.astype(np.uint8) << 5)).T)
         self.width, self.height = walls.shape
         self.rate = 8 if dungeon.thickets else 3
+        self.exposed_sides = {}
+
+    def exposed(self, tile):
+        sides = self.exposed_sides.get(tile)
+        if sides is None:
+            x, y = tile
+            sides = tuple(
+                (dx, dy) for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1))
+                if not self.blocked(x + dx, y + dy)
+            )
+            self.exposed_sides[tile] = sides
+        return sides
 
     def blocked(self, x, y):
         return not (0 <= x < self.width and 0 <= y < self.height) or self.rows[y][x] != 0
@@ -36,6 +48,7 @@ class _CanopyOcclusion:
         rows, width, height = self.rows, self.width, self.height
         floor = math.floor
         target_x, target_y = target_thicket
+        endpoint_in_target = target_x <= x1 < target_x + 1 and target_y <= y1 < target_y + 1
         previous_x, previous_y = floor(x0), floor(y0)
         row = None
         flag = 0
@@ -56,6 +69,8 @@ class _CanopyOcclusion:
                 ):
                     return False
                 previous_x, previous_y = cx, cy
+                if endpoint_in_target and cx == target_x and cy == target_y:
+                    return True
                 check_root = flag and (cx != target_x or cy != target_y)
             if check_root:
                 ox, oy = x - cx - .5, y - cy - .5
@@ -77,24 +92,26 @@ def canopy_visibility(dungeon, player_x, player_y, x, y, *, obstacles=None):
     horizontal = (1 if dx > 0 else -1, 0)
     vertical = (0, 1 if dy > 0 else -1)
     faces = (horizontal, vertical) if abs(dx) > abs(dy) else (vertical, horizontal)
-    blocked = obstacles.blocked if obstacles is not None else dungeon.is_blocking_sight
-    trace = obstacles.trace if obstacles is not None else dungeon.has_line_of_sight
     target_tile = x, y
+    if obstacles is not None:
+        exposed = obstacles.exposed(target_tile)
+        trace = obstacles.trace
+    else:
+        exposed = tuple((fx, fy) for fx, fy in faces if not dungeon.is_blocking_sight(x + fx, y + fy))
+        trace = dungeon.has_line_of_sight
     grazing = 0
+    max_dist = LOS_MAX_RADIUS / TILE_W
     for fx, fy in faces:
-        if blocked(x + fx, y + fy):
+        if (fx, fy) not in exposed:
             continue
         face_x, face_y = cx + fx * .42, cy + fy * .42
-
-        def visible(offset):
-            return trace(
-                player_x, player_y, face_x + fy * offset, face_y + fx * offset,
-                LOS_MAX_RADIUS / TILE_W, target_thicket=target_tile,
-            )
-
-        if visible(0):
+        if trace(player_x, player_y, face_x, face_y, max_dist, target_thicket=target_tile):
             return 1.0
-        grazing = max(grazing, visible(-.24) + visible(.24))
+        low = trace(player_x, player_y, face_x - fy * .24, face_y - fx * .24,
+                    max_dist, target_thicket=target_tile)
+        high = trace(player_x, player_y, face_x + fy * .24, face_y + fx * .24,
+                     max_dist, target_thicket=target_tile)
+        grazing = max(grazing, low + high)
     return .32 * grazing
 
 
