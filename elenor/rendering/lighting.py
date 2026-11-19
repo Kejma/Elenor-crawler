@@ -441,6 +441,11 @@ class GPULightShader:
 
         self.survey_brightness = None
         try:
+            self.fog = GPUFog(self.ctx, self.MAX_LIGHTS, self.vbo, moderngl.LINEAR, moderngl.NEAREST)
+        except moderngl.Error as exc:
+            print(f"[GL] Туман использует CPU ({exc})")
+            self.fog = None
+        try:
             from elenor.rendering.gpu_scene import GPUSceneRenderer
             self.scene = GPUSceneRenderer(self)
         except Exception as exc:

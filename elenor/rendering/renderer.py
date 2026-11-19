@@ -579,12 +579,14 @@ class Renderer(UIRendererMixin):
                 radius = cloud["radius"] * TILE_W
                 if -radius <= sx <= VIEW_W + radius and -radius <= sy <= VIEW_H + radius:
                     clouds.append(cloud)
+        shader_fog = getattr(self.gpu_shader, "fog", None)
         gpu_fog = (bool(clouds) and flags.get("gpu_fog", True)
-                   and self.gpu_shader is not None and self.gpu_shader.fog is not None
-                   and len(clouds) <= self.gpu_shader.fog.MAX_CLOUDS and len(lights) <= self.gpu_shader.MAX_LIGHTS)
+                   and shader_fog is not None
+                   and len(clouds) <= shader_fog.MAX_CLOUDS and len(lights) <= self.gpu_shader.MAX_LIGHTS)
 
-        gpu_scene = (self.gpu_shader.scene
-                     if (self.gpu_shader is not None and self.gpu_shader.scene is not None and not (clouds and not gpu_fog))
+        shader_scene = getattr(self.gpu_shader, "scene", None)
+        gpu_scene = (shader_scene
+                     if (shader_scene is not None and not (clouds and not gpu_fog))
                      else None)
         terrain_start = perf_counter() if timings is not None else 0.0
         terrain_pack = self.terrain.collect_visible(dungeon, c0, r0, c1, r1) if gpu_scene is not None else None
@@ -923,7 +925,7 @@ class Renderer(UIRendererMixin):
                 fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,
                 timer_queries=slot.timers if slot is not None and slot.timed else None,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
-                scene_on_gpu=scene_on_gpu, gpu_scene_fov=gpu_scene_fov,
+                **({"scene_on_gpu": True, "gpu_scene_fov": gpu_scene_fov} if scene_on_gpu else {}),
             )
             r_mult = g_mult = b_mult = None
         else:
