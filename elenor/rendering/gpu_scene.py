@@ -37,6 +37,7 @@ in vec4 in_src;
 in vec4 in_params;
 uniform vec2 u_canvas;
 uniform int u_require_flag;
+uniform bool u_enable_wind;
 out vec2 v_uv;
 flat out ivec4 v_bounds;
 flat out float v_opacity;
@@ -50,8 +51,14 @@ void main() {
         return;
     }
     vec2 px = in_dest.xy + in_corner * in_dest.zw;
+    vec2 uv = in_src.xy + in_corner * in_src.zw;
+    if (u_enable_wind && (flags & 8) != 0) {
+        float pad = (in_corner.x < 0.5) ? -2.0 : 2.0;
+        px.x += pad;
+        uv.x += pad;
+    }
     gl_Position = vec4((px / u_canvas) * 2.0 - 1.0, 0.0, 1.0);
-    v_uv = in_src.xy + in_corner * in_src.zw;
+    v_uv = uv;
     v_bounds = ivec4(int(in_src.x), int(in_src.y), int(in_src.x + in_src.z) - 1, int(in_src.y + in_src.w) - 1);
     v_opacity = in_params.x;
     v_sole_sy = in_params.y;
@@ -236,15 +243,33 @@ class GPUSceneRenderer:
                 uniform sampler2D u_atlas_diff;
                 uniform sampler2D u_atlas_norm;
                 uniform sampler2D u_atlas_em;
+                uniform bool u_enable_wind;
+                uniform float u_wind_time;
                 in vec2 v_uv;
                 flat in ivec4 v_bounds;
                 flat in float v_opacity;
+                flat in float v_sole_sy;
                 flat in int v_flags;
                 layout(location = 0) out vec4 out_diff;
                 layout(location = 1) out vec4 out_norm;
                 layout(location = 2) out vec4 out_em;
                 void main() {
-                    ivec2 uv = clamp(ivec2(v_uv), v_bounds.xy, v_bounds.zw);
+                    ivec2 uv = ivec2(floor(v_uv));
+                    if (u_enable_wind && (v_flags & 8) != 0) {
+                        float h_frac = clamp(float(v_bounds.w - uv.y) / max(float(v_bounds.w - v_bounds.y), 1.0), 0.0, 1.0);
+                        float sway_mask = smoothstep(0.28, 0.82, h_frac);
+                        if (sway_mask > 0.01) {
+                            float phase = v_sole_sy;
+                            float gust = 0.62 + 0.38 * sin(u_wind_time * 0.55 + phase * 0.35);
+                            float wave = sin(u_wind_time * 2.1 + phase + h_frac * 1.65)
+                                       + 0.35 * sin(u_wind_time * 3.7 + phase * 1.7 - h_frac * 2.4);
+                            int shift_x = clamp(int(round(wave * gust * sway_mask * 1.15)), -2, 2);
+                            uv.x -= shift_x;
+                        }
+                        if (uv.x < v_bounds.x || uv.x > v_bounds.z || uv.y < v_bounds.y || uv.y > v_bounds.w) discard;
+                    } else {
+                        uv = clamp(uv, v_bounds.xy, v_bounds.zw);
+                    }
                     vec4 d = texelFetch(u_atlas_diff, uv, 0);
                     d.a *= v_opacity;
                     out_diff = d;
@@ -270,6 +295,8 @@ class GPUSceneRenderer:
         self.sprite_color_prog["u_atlas_em"].value = 2
         self.sprite_color_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
         self.sprite_color_prog["u_require_flag"].value = 0
+        self.sprite_color_prog["u_enable_wind"].value = False
+        self.sprite_color_prog["u_wind_time"].value = 0.0
 
         self.sprite_ent_y_prog = ctx.program(
             vertex_shader=_SPRITE_VERT,
@@ -289,20 +316,39 @@ class GPUSceneRenderer:
         self.sprite_ent_y_prog["u_atlas_diff"].value = 0
         self.sprite_ent_y_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
         self.sprite_ent_y_prog["u_require_flag"].value = 4
+        self.sprite_ent_y_prog["u_enable_wind"].value = False
 
         self.sprite_fov_prog = ctx.program(
             vertex_shader=_SPRITE_VERT,
             fragment_shader="""#version 330 core
                 uniform sampler2D u_atlas_diff;
                 uniform sampler2D u_floor_fov;
+                uniform bool u_enable_wind;
+                uniform float u_wind_time;
                 in vec2 v_uv;
                 flat in ivec4 v_bounds;
                 flat in float v_opacity;
+                flat in float v_sole_sy;
                 flat in float v_canopy_vis;
                 flat in int v_flags;
                 layout(location = 0) out vec4 out_fov;
                 void main() {
-                    ivec2 uv = clamp(ivec2(v_uv), v_bounds.xy, v_bounds.zw);
+                    ivec2 uv = ivec2(floor(v_uv));
+                    if (u_enable_wind && (v_flags & 8) != 0) {
+                        float h_frac = clamp(float(v_bounds.w - uv.y) / max(float(v_bounds.w - v_bounds.y), 1.0), 0.0, 1.0);
+                        float sway_mask = smoothstep(0.28, 0.82, h_frac);
+                        if (sway_mask > 0.01) {
+                            float phase = v_sole_sy;
+                            float gust = 0.62 + 0.38 * sin(u_wind_time * 0.55 + phase * 0.35);
+                            float wave = sin(u_wind_time * 2.1 + phase + h_frac * 1.65)
+                                       + 0.35 * sin(u_wind_time * 3.7 + phase * 1.7 - h_frac * 2.4);
+                            int shift_x = clamp(int(round(wave * gust * sway_mask * 1.15)), -2, 2);
+                            uv.x -= shift_x;
+                        }
+                        if (uv.x < v_bounds.x || uv.x > v_bounds.z || uv.y < v_bounds.y || uv.y > v_bounds.w) discard;
+                    } else {
+                        uv = clamp(uv, v_bounds.xy, v_bounds.zw);
+                    }
                     float a = texelFetch(u_atlas_diff, uv, 0).a;
                     if ((v_flags & 8) != 0) {
                         if (a <= 220.0 / 255.0) discard;
@@ -319,6 +365,8 @@ class GPUSceneRenderer:
         self.sprite_fov_prog["u_floor_fov"].value = 1
         self.sprite_fov_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
         self.sprite_fov_prog["u_require_flag"].value = 16
+        self.sprite_fov_prog["u_enable_wind"].value = False
+        self.sprite_fov_prog["u_wind_time"].value = 0.0
 
         self._bind_inst_vaos()
 
@@ -485,7 +533,7 @@ class GPUSceneRenderer:
         hero_pair = renderer.get_hero_pair(player)
         misted = player.stealth_timer > 0
         if misted:
-            hero_pair = (misted_actor(hero_pair[0], now_sec, min(float(1 | (28 << 8)), player.stealth_timer / .24)), hero_pair[1])
+            hero_pair = (misted_actor(hero_pair[0], now_sec, min(1.0, player.stealth_timer / .24)), hero_pair[1])
         render_list = [{
             "wx": player.x - 0.5 + player.bump_x,
             "wy": player.y - 0.5 + player.bump_y,
@@ -494,6 +542,7 @@ class GPUSceneRenderer:
             "is_player": True,
             "is_actor": True,
             "emissive_role": "hero" if player.has_lit_torch and not misted else None,
+            "gloss": 88,
             "pair": hero_pair,
             "misted": misted,
             "alpha": 255,
@@ -603,7 +652,7 @@ class GPUSceneRenderer:
             pack(buf, count * _INST_STRIDE,
                  float(gx), float(gy), float(aw), float(ah),
                  float(ax), float(ay), float(aw), float(ah),
-                 1.0, -9999.0, 0.0, 1.0)
+                 1.0, -9999.0, 0.0, float(1 | (28 << 8)))
             count += 1
 
         shadow_small_rect = atlas.get(renderer._shadow_small)
@@ -662,10 +711,11 @@ class GPUSceneRenderer:
             if ent.get("is_tree", False):
                 ax, ay, aw, ah = atlas.get(d_surf, n_surf)
                 opacity = ent["alpha"] / 255.0
+                tree_phase = float(ent["wx"] * 0.45 + ent["wy"] * 0.25)
                 pack(buf, count * _INST_STRIDE,
                      float(draw_x), float(draw_y), float(ew), float(eh),
                      float(ax), float(ay), float(aw), float(ah),
-                     opacity, -9999.0, float(ent["canopy_visibility"]), float(25 | (18 << 8)))
+                     opacity, tree_phase, float(ent["canopy_visibility"]), float(25 | (18 << 8)))
                 count += 1
                 continue
 
@@ -691,7 +741,7 @@ class GPUSceneRenderer:
                 fl |= 4
             if has_trees:
                 fl |= 16
-                fl |= (int(ent.get("gloss", 45)) & 255) << 8
+            fl |= (int(ent.get("gloss", 45)) & 255) << 8
             pack(buf, count * _INST_STRIDE,
                  float(draw_x), float(draw_y), float(ew), float(eh),
                  float(ax), float(ay), float(aw), float(ah),
@@ -791,6 +841,12 @@ class GPUSceneRenderer:
                     from elenor.rendering.physical import render_ground_traps
                     render_ground_traps(self._dyn_diff_surf, self._dyn_norm_surf, physical_states, cam_x, cam_y)
                 self._draw_dyn_layer(draw_norm=has_traps)
+
+            wind_on = bool((fx_mgr.flags.get("canopy_wind", True) if fx_mgr else True) and not getattr(dungeon, "interior", None))
+            self.sprite_color_prog["u_enable_wind"].value = wind_on
+            self.sprite_color_prog["u_wind_time"].value = float(now_sec)
+            self.sprite_fov_prog["u_enable_wind"].value = wind_on
+            self.sprite_fov_prog["u_wind_time"].value = float(now_sec)
 
             # 6. Инстанс-батч всех спрайтов, теней, деревьев и свечения
             if count > 0 or misted_draw is not None:

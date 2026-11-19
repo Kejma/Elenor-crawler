@@ -925,7 +925,8 @@ class Renderer(UIRendererMixin):
 
         self.light_occlusion.update(dungeon, objects)
         viewer = (player.x * TILE_W, player.y * TILE_H)
-        bounce_color = bounce_color_for(dungeon) if flags.get("reflected_light", True) else (0.0, 0.0, 0.0)
+        has_gpu_gi = isinstance(self.gpu_shader, GPULightShader) and self.gpu_shader.gi is not None
+        bounce_color = (0.0, 0.0, 0.0) if has_gpu_gi else bounce_color_for(dungeon)
         tonemap = flags.get("tonemap", True)
         if timings is not None:
             light_start = perf_counter()
@@ -937,14 +938,19 @@ class Renderer(UIRendererMixin):
             profile_key = (gpu_fog, tuple(flags.items())) if timings is not None else None
             slot = window.begin_world(dungeon, timings, profile_key)
         if self.gpu_shader is not None:
+            en_gi = flags.get("gi", True)
             en_spec = flags.get("specular", True)
             en_refl = flags.get("water_reflections", True)
+            en_adapt = flags.get("eye_adaptation", True)
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             extra_gl = {}
             if scene_on_gpu:
                 extra_gl.update(scene_on_gpu=True, gpu_scene_fov=gpu_scene_fov, fov_on_gpu=fov_on_gpu)
             if isinstance(self.gpu_shader, GPULightShader):
-                extra_gl.update(time_sec=now_sec, enable_specular=en_spec, enable_reflections=en_refl)
+                extra_gl.update(
+                    time_sec=now_sec, enable_specular=en_spec, enable_reflections=en_refl,
+                    enable_gi=en_gi, enable_eye_adaptation=en_adapt,
+                )
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
                 scene_fov, cam_x, cam_y, lights, self.current_hud_lights,

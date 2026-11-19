@@ -1,4 +1,6 @@
-"""GPU post-processing: planar water reflections and wide multi-pass bloom."""
+"""GPU post-processing: planar water reflections, wide multi-pass bloom, and GPU eye adaptation."""
+
+import struct
 
 from elenor.config import CANVAS_H, TILE_H, TILE_W, VIEW_H, VIEW_W
 
@@ -29,6 +31,17 @@ class GPUPostFX:
         self.half_b_fbo = ctx.framebuffer([self.half_b])
         self.quarter_a_fbo = ctx.framebuffer([self.quarter_a])
         self.quarter_b_fbo = ctx.framebuffer([self.quarter_b])
+
+        init_exp = struct.pack("4f", 1.0, 0.16, 1.0, 1.0)
+        self.tex_exp = (
+            ctx.texture((1, 1), 4, data=init_exp, dtype="f4"),
+            ctx.texture((1, 1), 4, data=init_exp, dtype="f4"),
+        )
+        for tex in self.tex_exp:
+            tex.filter = (gl.NEAREST, gl.NEAREST)
+        self.exp_fbo = (ctx.framebuffer([self.tex_exp[0]]), ctx.framebuffer([self.tex_exp[1]]))
+        self._exp_idx = 0
+        self._last_time = None
 
         self.tex_final = ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
         self.tex_final.filter = (gl.NEAREST, gl.NEAREST)
@@ -123,6 +136,59 @@ class GPUPostFX:
         self._u_refl_time = self.reflect_prog["u_time"]
         self.reflect_vao = ctx.simple_vertex_array(self.reflect_prog, shader.vbo, "in_vert")
 
+        self.adapt_prog = ctx.program(
+            vertex_shader=vert,
+            fragment_shader=f"""#version 330 core
+                uniform sampler2D u_scene;
+                uniform sampler2D u_fov;
+                uniform sampler2D u_prev_exp;
+                uniform vec2 u_viewer;
+                uniform float u_dt;
+                out vec4 fragColor;
+
+                void main() {{
+                    float rad = {float(4.0 * TILE_W)};
+                    float step_px = rad / 3.0;
+                    float r2_max = rad * rad;
+                    float sigma2 = r2_max * 0.56;
+                    float log_sum = 0.0;
+                    float w_sum = 0.0;
+                    for (int iy = -3; iy <= 3; ++iy) {{
+                        for (int ix = -3; ix <= 3; ++ix) {{
+                            vec2 off = vec2(float(ix), float(iy)) * step_px;
+                            float r2 = dot(off, off);
+                            if (r2 > r2_max) continue;
+                            ivec2 sp = ivec2(round(u_viewer + off));
+                            if (sp.x < 0 || sp.y < 0 || sp.x >= {VIEW_W} || sp.y >= {VIEW_H}) continue;
+                            float f = texelFetch(u_fov, sp, 0).r;
+                            if (f <= 0.05) continue;
+                            vec3 c = texelFetch(u_scene, sp, 0).rgb;
+                            float luma = dot(c, vec3(0.299, 0.587, 0.114));
+                            float peak = max(c.r, max(c.g, c.b));
+                            float perceived = mix(luma, peak, 0.35);
+                            float cw = exp(-r2 / sigma2);
+                            float w = f * cw;
+                            log_sum += log(max(perceived, 0.02)) * w;
+                            w_sum += w;
+                        }}
+                    }}
+                    float avg_lum = (w_sum > 0.01) ? exp(log_sum / w_sum) : 0.16;
+                    float target_exp = clamp(pow(0.16 / max(avg_lum, 0.025), 0.47), 0.85, 1.67);
+                    float prev_exp = texelFetch(u_prev_exp, ivec2(0, 0), 0).r;
+                    if (prev_exp < 0.2 || prev_exp > 3.5) prev_exp = 1.0;
+                    float speed = (target_exp < prev_exp) ? 3.43 : 1.45;
+                    float blend = 1.0 - exp(-clamp(u_dt, 0.0, 0.1) * speed);
+                    float next_exp = mix(prev_exp, target_exp, blend);
+                    fragColor = vec4(next_exp, avg_lum, target_exp, 1.0);
+                }}
+            """,
+        )
+        for unit, name in enumerate(("u_scene", "u_fov", "u_prev_exp")):
+            self.adapt_prog[name].value = unit
+        self._u_adapt_viewer = self.adapt_prog["u_viewer"]
+        self._u_adapt_dt = self.adapt_prog["u_dt"]
+        self.adapt_vao = ctx.simple_vertex_array(self.adapt_prog, shader.vbo, "in_vert")
+
         self.extract_prog = ctx.program(
             vertex_shader=vert,
             fragment_shader=f"""#version 330 core
@@ -184,6 +250,9 @@ class GPUPostFX:
                 uniform sampler2D u_bloom_half;
                 uniform sampler2D u_bloom_quarter;
                 uniform sampler2D u_fov;
+                uniform sampler2D u_exp;
+                uniform bool u_use_bloom;
+                uniform bool u_use_adapt;
                 out vec4 fragColor;
 
                 void main() {{
@@ -193,23 +262,43 @@ class GPUPostFX:
                         fragColor = base;
                         return;
                     }}
-                    float fov = texelFetch(u_fov, p, 0).r;
-                    vec2 uv = (vec2(p) + 0.5) / vec2({float(VIEW_W)}, {float(VIEW_H)});
-                    vec3 tight = texture(u_bloom_half, uv).rgb;
-                    vec3 wide = texture(u_bloom_quarter, uv).rgb;
-                    vec3 bloom = (tight * 0.50 + wide * 0.45) * fov;
-                    vec3 col = base.rgb + bloom * (1.0 - base.rgb * 0.45);
+                    vec3 col = base.rgb;
+                    if (u_use_bloom) {{
+                        float fov = texelFetch(u_fov, p, 0).r;
+                        vec2 uv = (vec2(p) + 0.5) / vec2({float(VIEW_W)}, {float(VIEW_H)});
+                        vec3 tight = texture(u_bloom_half, uv).rgb;
+                        vec3 wide = texture(u_bloom_quarter, uv).rgb;
+                        vec3 bloom = (tight * 0.50 + wide * 0.45) * fov;
+                        col = col + bloom * (1.0 - col * 0.45);
+                    }}
+                    if (u_use_adapt) {{
+                        float exp_val = texelFetch(u_exp, ivec2(0, 0), 0).r;
+                        col *= exp_val;
+                    }}
                     fragColor = vec4(clamp(col, 0.0, 1.0), base.a);
                 }}
             """,
         )
-        for unit, name in enumerate(("u_src", "u_bloom_half", "u_bloom_quarter", "u_fov")):
+        for unit, name in enumerate(("u_src", "u_bloom_half", "u_bloom_quarter", "u_fov", "u_exp")):
             self.composite_prog[name].value = unit
+        self._u_comp_bloom = self.composite_prog["u_use_bloom"]
+        self._u_comp_adapt = self.composite_prog["u_use_adapt"]
         self.composite_vao = ctx.simple_vertex_array(self.composite_prog, shader.vbo, "in_vert")
+
+    def read_exposure(self):
+        prev_idx = 1 - self._exp_idx
+        try:
+            raw = self.tex_exp[prev_idx].read()
+            if len(raw) >= 12:
+                return struct.unpack_from("3f", raw)
+        except Exception:
+            pass
+        return None
 
     def render(
         self, src_tex, src_fbo, mat_tex, ent_y_tex, fov_tex, walls_tex,
-        cam, time_sec, *, enable_reflections=True, enable_bloom=True,
+        cam, time_sec, *, viewer=(VIEW_W * 0.5, VIEW_H * 0.5),
+        enable_reflections=True, enable_bloom=True, enable_eye_adaptation=True,
     ):
         ctx, gl = self.ctx, self.gl
         ctx.disable(gl.BLEND)
@@ -229,6 +318,25 @@ class GPUPostFX:
             walls_tex.use(4)
             self.reflect_vao.render(gl.TRIANGLE_STRIP)
             cur_tex, cur_fbo = self.tex_refl, self.reflect_fbo
+
+        exp_tex = self.tex_exp[self._exp_idx]
+        if enable_eye_adaptation:
+            dt = 0.0 if self._last_time is None else max(0.0, time_sec - self._last_time)
+            self._last_time = time_sec
+            next_idx = 1 - self._exp_idx
+            self.exp_fbo[next_idx].use()
+            ctx.viewport = (0, 0, 1, 1)
+            vx, vy = viewer if viewer is not None else (VIEW_W * 0.5, VIEW_H * 0.5)
+            self._u_adapt_viewer.value = (float(vx), float(vy))
+            self._u_adapt_dt.value = float(dt)
+            cur_tex.use(0)
+            fov_tex.use(1)
+            exp_tex.use(2)
+            self.adapt_vao.render(gl.TRIANGLE_STRIP)
+            self._exp_idx = next_idx
+            exp_tex = self.tex_exp[self._exp_idx]
+        else:
+            self._last_time = None
 
         if enable_bloom:
             self.half_a_fbo.use()
@@ -259,12 +367,16 @@ class GPUPostFX:
             self.quarter_b.use(0)
             self.blur_vao.render(gl.TRIANGLE_STRIP)
 
+        if enable_bloom or enable_eye_adaptation:
             self.final_fbo.use()
             ctx.viewport = (0, 0, VIEW_W, CANVAS_H)
+            self._u_comp_bloom.value = bool(enable_bloom)
+            self._u_comp_adapt.value = bool(enable_eye_adaptation)
             cur_tex.use(0)
             self.half_a.use(1)
             self.quarter_a.use(2)
             fov_tex.use(3)
+            exp_tex.use(4)
             self.composite_vao.render(gl.TRIANGLE_STRIP)
             cur_tex, cur_fbo = self.tex_final, self.final_fbo
 

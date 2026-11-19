@@ -505,6 +505,12 @@ class GPULightShader:
         except Exception as exc:
             print(f"[GL] PostFX отключён ({exc})")
             self.postfx = None
+        try:
+            from elenor.rendering.gpu_gi import GPUGlobalIllumination
+            self.gi = GPUGlobalIllumination(self)
+        except Exception as exc:
+            print(f"[GL] GI отключён ({exc})")
+            self.gi = None
 
     def _render_shadows(self, occlusion, lights, cam_x, cam_y, radius_scale):
         geometry = occlusion, occlusion.version
@@ -543,7 +549,7 @@ class GPULightShader:
 
     def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
                            timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None, fov_on_gpu=False,
-                           time_sec=0.0, enable_specular=True, enable_reflections=True):
+                           time_sec=0.0, enable_specular=True, enable_reflections=True, enable_gi=True, enable_eye_adaptation=True):
         self.survey_brightness = None
         if timings is not None and self.timers is None:
             self.timers = tuple(self.ctx.query(time=True) for _ in range(3))
@@ -661,12 +667,20 @@ class GPULightShader:
                     self.fog.render(*args)
         src_tex = self.fog.composite if fog is not None else self.tex_out
         src_fbo = self.fog.fbo if fog is not None else self.fbo
-        if self.postfx is not None and (enable_reflections or enable_bloom):
-            fov_for_post = gpu_scene_fov if gpu_scene_fov is not None else self.tex_fov
+        fov_for_post = gpu_scene_fov if gpu_scene_fov is not None else self.tex_fov
+        if self.gi is not None and enable_gi:
+            src_tex, src_fbo = self.gi.render(
+                src_tex, self.tex_diff, self.tex_norm, self.tex_emissive,
+                fov_for_post, self.tex_walls, self.tex_blockers,
+                (float(cam_x), float(cam_y)),
+            )
+        if self.postfx is not None and (enable_reflections or enable_bloom or enable_eye_adaptation):
             out_tex, out_fbo = self.postfx.render(
                 src_tex, src_fbo, self.tex_emissive, self.tex_ent_y, fov_for_post, self.tex_walls,
                 (float(cam_x), float(cam_y)), float(time_sec),
+                viewer=viewer,
                 enable_reflections=enable_reflections, enable_bloom=enable_bloom,
+                enable_eye_adaptation=enable_eye_adaptation,
             )
         else:
             out_tex, out_fbo = src_tex, src_fbo

@@ -4,7 +4,6 @@ import pygame
 import numpy as np
 from elenor.config import OPAQUE_WALL_TILES, MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
 
-
 class FXManager:
     """Управляет всеми графическими эффектами, объёмным туманом, вечными декалями и панелями [F2] / [F3]."""
     def __init__(self, game):
@@ -22,10 +21,25 @@ class FXManager:
         # Тумблеры графических улучшений
         self.flags = {
             "tonemap": True,
-            "reflected_light": True,
+            "gi": True,
             "specular": True,
             "water_reflections": True,
+            "eye_adaptation": True,
+            "canopy_wind": True,
         }
+
+        self.eye_adapt_params = {
+            "key": 0.30,
+            "strength": 0.35,
+            "min_exp": 0.76,
+            "max_exp": 1.32,
+            "speed_bright": 3.50,
+            "speed_dark": 0.75,
+            "radius": 2.50,
+        }
+        self._eye_adapt_defaults = dict(self.eye_adapt_params)
+        self.slider_rects = {}
+        self._dragging_slider = None
 
         self.decal_surf = pygame.Surface((MAP_COLS * TILE_W, MAP_ROWS * TILE_H), pygame.SRCALPHA)
         self.decal_revision = 0
@@ -558,7 +572,7 @@ class FXManager:
                         self.active_clouds = [c for c in self.active_clouds if c["timer"] is None]
                     return True
         return False
-
+    
     def _panel_label(self, font, text, color):
         key = (id(font), text, color)
         surf = self._lbl_cache.get(key)
@@ -590,7 +604,7 @@ class FXManager:
         if not self.panel_open:
             return
 
-        pw, ph = 376, 354
+        pw, ph = 376, 426
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
         hov_k = next((k for k, rect in self.toggle_rects.items() if rect.collidepoint(mouse_pos)), None)
@@ -608,10 +622,12 @@ class FXManager:
             surf.blit(title, ((pw - title.get_width()) // 2, 12))
 
             items = [
-                ("tonemap", "Тонмаппинг"),
-                ("reflected_light", "Отражённый свет"),
+                ("tonemap",           "Тонмаппинг"),
+                ("gi",                "2D Global Illumination (GI)"),
                 ("specular",          "PBR-блики и рябь воды"),
                 ("water_reflections", "Отражения в воде (SSR)"),
+                ("eye_adaptation",    "Адаптация глаз (Eye Adaptation)"),
+                ("canopy_wind",       "Ветер в кронах деревьев"),
             ]
 
             self.toggle_rects = {}
@@ -686,8 +702,8 @@ class FXManager:
         g = self.game
         p = g.player
 
-        pw, ph = 450, 520
-        px, py = 16, 36
+        pw, ph = 690, 550
+        px, py = 16, 218
         panel_rect = pygame.Rect(px, py, pw, ph)
         hov_b = next((k for k, rect in self.f3_btn_rects.items() if rect.collidepoint(mouse_pos)), None)
         tick_4hz = pygame.time.get_ticks() // 250
@@ -697,6 +713,7 @@ class FXManager:
             round(p.action_affinity["cunning"], 2),
             round(p.action_affinity["mind"], 2),
             len(p.perks), bool(self.f3_btn_rects),
+            self.flags.get("eye_adaptation", True),
         )
         if f3_key != self._f3_key or self._f3_surf is None:
             if self._f3_surf is None or self._f3_surf.get_size() != (pw, ph):
@@ -799,8 +816,27 @@ class FXManager:
             cur_y += 8
 
             rw = get_rarity_weights(p.luck)
-            rw_str = f"Веса редкости (Удача {p.luck}): Белые {rw[0]:.0f}% | Зел {rw[1]:.1f}% | Син {rw[2]:.1f}% | Эпик {rw[3]:.1f}% | Лег {rw[4]:.1f}%"
+            rw_str = f"Редкость (Удача {p.luck}): Бел {rw[0]:.0f}% | Зел {rw[1]:.1f}% | Син {rw[2]:.1f}% | Эпик {rw[3]:.1f}% | Лег {rw[4]:.1f}%"
             surf.blit(r.font_small.render(rw_str, True, (255, 215, 110)), (14, cur_y))
+            cur_y += 22
+
+            postfx = getattr(r.gpu_shader, "postfx", None)
+            if not self.flags.get("eye_adaptation", True):
+                exp_line = "Адаптация глаз: ВЫКЛ (Эксп. x1.00)"
+                exp_col = UI_TEXT_DIM
+            elif postfx is not None:
+                exp_info = postfx.read_exposure()
+                if exp_info is not None:
+                    cur_e, avg_l, tgt_e = exp_info
+                    exp_line = f"Адаптация глаз: Эксп. x{cur_e:.2f} -> цель x{tgt_e:.2f}  |  Яркость у героя: {avg_l:.3f}"
+                    exp_col = (130, 235, 255)
+                else:
+                    exp_line = "Адаптация глаз: чтение недоступно"
+                    exp_col = UI_TEXT_DIM
+            else:
+                exp_line = "Адаптация глаз: недоступна (CPU-рендер)"
+                exp_col = UI_TEXT_DIM
+            surf.blit(r.font_small.render(exp_line, True, exp_col), (14, cur_y))
             cur_y += 22
 
             win_res = g.display_surface.get_size() if hasattr(g, "display_surface") and g.display_surface else (SCREEN_W, SCREEN_H)
@@ -822,6 +858,7 @@ class FXManager:
                 round(p.action_affinity["cunning"], 2),
                 round(p.action_affinity["mind"], 2),
                 len(p.perks), True,
+                self.flags.get("eye_adaptation", True),
             )
 
         if window is not None:
