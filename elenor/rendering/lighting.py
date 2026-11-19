@@ -37,6 +37,56 @@ def bounce_color_for(dungeon):
         return .095, .13, .095
     return .11, .115, .125
 
+def _scale_grade(preset, strength):
+    name, sh, mid, hi, (con, sat, vig) = preset
+    return (
+        name,
+        tuple(1.0 + (c - 1.0) * strength for c in sh),
+        tuple(1.0 + (c - 1.0) * strength for c in mid),
+        tuple(1.0 + (c - 1.0) * strength for c in hi),
+        (1.0 + (con - 1.0) * strength, 1.0 + (sat - 1.0) * strength, vig * strength),
+    )
+
+
+def color_grade_for(dungeon, player=None, mobs=()):
+    """(label, shadows_rgb, midtones_rgb, highlights_rgb, (contrast, saturation, vignette))"""
+    if dungeon.floor_num == 99:
+        preset = ("Полигон (нейтр.)", (0.98, 0.99, 1.03), (1.00, 1.00, 1.00), (1.02, 1.01, 0.99), (1.06, 1.02, 0.12))
+    elif dungeon.campaign == "jungle":
+        interior = getattr(dungeon, "interior", None)
+        if not interior:
+            preset = ("Джунгли (ночь)", (0.76, 1.04, 1.14), (0.91, 1.06, 0.97), (1.10, 1.02, 0.86), (1.10, 1.08, 0.22))
+        elif interior == "temple":
+            preset = ("Храм (мистика)", (0.84, 0.90, 1.24), (0.94, 0.98, 1.12), (1.08, 1.02, 0.92), (1.12, 0.98, 0.24))
+        elif "cave" in str(interior):
+            preset = ("Пещера (сырость)", (0.76, 0.96, 1.18), (0.88, 0.99, 1.06), (1.02, 0.99, 0.94), (1.14, 0.92, 0.26))
+        else:
+            preset = ("Хижина (тёплый)", (1.06, 0.95, 0.84), (1.08, 1.00, 0.88), (1.06, 1.01, 0.90), (1.07, 1.05, 0.18))
+    elif dungeon.floor_num == 1:
+        is_outdoor = False
+        if player is not None:
+            px, py = int(player.x), int(player.y)
+            if 0 <= py < dungeon.height and 0 <= px < dungeon.width:
+                is_outdoor = dungeon.grid[py][px] in (2, 3, 5, 9)
+        if is_outdoor:
+            preset = ("Двор (ночь)", (0.84, 0.94, 1.18), (0.92, 0.98, 1.08), (1.04, 1.00, 0.95), (1.08, 1.02, 0.20))
+        else:
+            preset = ("Таверна (тёплый)", (1.06, 0.95, 0.83), (1.09, 1.01, 0.88), (1.07, 1.02, 0.90), (1.06, 1.07, 0.18))
+    elif dungeon.floor_num == 2:
+        preset = ("Погреб (тёплый)", (1.04, 0.94, 0.84), (1.06, 0.99, 0.89), (1.05, 1.00, 0.91), (1.09, 1.03, 0.20))
+    elif dungeon.floor_num == 3:
+        preset = ("Подвал (холод)", (0.80, 0.95, 1.22), (0.90, 0.98, 1.08), (1.04, 0.99, 0.93), (1.12, 0.94, 0.22))
+    else:
+        preset = ("Логово босса (кровь)", (1.16, 0.78, 1.14), (1.13, 0.88, 0.95), (1.10, 0.94, 0.90), (1.15, 1.08, 0.28))
+
+    boss_combat = any(
+        getattr(m, "is_boss", False) and m.hp > 0 and getattr(m, "state", None) == "combat"
+        for m in mobs
+    )
+    scaled = _scale_grade(preset, 1.0 if boss_combat else 0.5)
+    if boss_combat:
+        return (f"{scaled[0]} [БОСС]", *scaled[1:])
+    return scaled
 
 class GPULightShader:
     """Аппаратный 2.5D-шейдер освещения, нормалей, AO и точечного Emissive Bloom."""
@@ -549,7 +599,8 @@ class GPULightShader:
 
     def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
                            timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None, fov_on_gpu=False,
-                           time_sec=0.0, enable_specular=True, enable_reflections=True, enable_gi=True, enable_eye_adaptation=True):
+                           time_sec=0.0, enable_specular=True, enable_reflections=True, enable_gi=True, enable_eye_adaptation=True,
+                           enable_color_grade=True, color_grade=None):
         self.survey_brightness = None
         if timings is not None and self.timers is None:
             self.timers = tuple(self.ctx.query(time=True) for _ in range(3))
@@ -674,13 +725,14 @@ class GPULightShader:
                 fov_for_post, self.tex_walls, self.tex_blockers,
                 (float(cam_x), float(cam_y)),
             )
-        if self.postfx is not None and (enable_reflections or enable_bloom or enable_eye_adaptation):
+        if self.postfx is not None and (enable_reflections or enable_bloom or enable_eye_adaptation or enable_color_grade):
             out_tex, out_fbo = self.postfx.render(
                 src_tex, src_fbo, self.tex_emissive, self.tex_ent_y, fov_for_post, self.tex_walls,
                 (float(cam_x), float(cam_y)), float(time_sec),
                 viewer=viewer,
                 enable_reflections=enable_reflections, enable_bloom=enable_bloom,
                 enable_eye_adaptation=enable_eye_adaptation,
+                enable_color_grade=enable_color_grade, color_grade=color_grade,
             )
         else:
             out_tex, out_fbo = src_tex, src_fbo

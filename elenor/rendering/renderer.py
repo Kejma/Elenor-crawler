@@ -10,7 +10,7 @@ from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, create
 from elenor.rendering.fog import FogRenderer
 from elenor.rendering.terrain import DIFFUSE_CLEAR, NORMAL_CLEAR, TerrainCache
 from elenor.rendering.occlusion import LightOcclusion
-from elenor.rendering.lighting import GPULightShader, bounce_color_for, tone_map_world
+from elenor.rendering.lighting import GPULightShader, bounce_color_for, color_grade_for, tone_map_world
 from elenor.rendering.pixel_fx import PixelLayer
 from elenor.rendering.physical import render_ground_traps, render_physical
 from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, misted_actor
@@ -942,6 +942,7 @@ class Renderer(UIRendererMixin):
             en_spec = flags.get("specular", True)
             en_refl = flags.get("water_reflections", True)
             en_adapt = flags.get("eye_adaptation", True)
+            en_grade = flags.get("color_grade", True)
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             extra_gl = {}
             if scene_on_gpu:
@@ -950,6 +951,8 @@ class Renderer(UIRendererMixin):
                 extra_gl.update(
                     time_sec=now_sec, enable_specular=en_spec, enable_reflections=en_refl,
                     enable_gi=en_gi, enable_eye_adaptation=en_adapt,
+                    enable_color_grade=en_grade,
+                    color_grade=color_grade_for(dungeon, player, mobs) if en_grade else None,
                 )
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,

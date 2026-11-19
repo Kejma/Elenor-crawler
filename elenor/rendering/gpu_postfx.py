@@ -1,5 +1,6 @@
 """GPU post-processing: planar water reflections, wide multi-pass bloom, and GPU eye adaptation."""
 
+import math
 import struct
 
 from elenor.config import CANVAS_H, TILE_H, TILE_W, VIEW_H, VIEW_W
@@ -42,6 +43,8 @@ class GPUPostFX:
         self.exp_fbo = (ctx.framebuffer([self.tex_exp[0]]), ctx.framebuffer([self.tex_exp[1]]))
         self._exp_idx = 0
         self._last_time = None
+        self._grade_cur = None
+        self.active_grade_name = ""
 
         self.tex_final = ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
         self.tex_final.filter = (gl.NEAREST, gl.NEAREST)
@@ -253,6 +256,11 @@ class GPUPostFX:
                 uniform sampler2D u_exp;
                 uniform bool u_use_bloom;
                 uniform bool u_use_adapt;
+                uniform bool u_use_grade;
+                uniform vec3 u_grade_sh;
+                uniform vec3 u_grade_mid;
+                uniform vec3 u_grade_hi;
+                uniform vec3 u_grade_params;
                 out vec4 fragColor;
 
                 void main() {{
@@ -275,6 +283,29 @@ class GPUPostFX:
                         float exp_val = texelFetch(u_exp, ivec2(0, 0), 0).r;
                         col *= exp_val;
                     }}
+                    if (u_use_grade) {{
+                        float luma = dot(col, vec3(0.299, 0.587, 0.114));
+                        float w_sh = smoothstep(0.008, 0.06, luma) * (1.0 - smoothstep(0.16, 0.48, luma));
+                        float w_hi = smoothstep(0.45, 0.88, luma);
+                        float w_mid = smoothstep(0.08, 0.36, luma) * (1.0 - smoothstep(0.55, 0.88, luma));
+                        vec3 tint = vec3(1.0)
+                                  + (u_grade_sh - vec3(1.0)) * w_sh
+                                  + (u_grade_mid - vec3(1.0)) * w_mid
+                                  + (u_grade_hi - vec3(1.0)) * w_hi;
+                        vec3 sh_lift = (u_grade_sh - vec3(1.0)) * (0.045 * smoothstep(0.01, 0.14, luma) * (1.0 - smoothstep(0.14, 0.42, luma)));
+                        col = max(col * tint + sh_lift, vec3(0.0));
+                        float c_amt = u_grade_params.x - 1.0;
+                        if (abs(c_amt) > 0.001) {{
+                            col = max(col + (col - 0.36) * c_amt * smoothstep(0.0, 0.16, luma), vec3(0.0));
+                        }}
+                        float l2 = dot(col, vec3(0.299, 0.587, 0.114));
+                        col = max(mix(vec3(l2), col, u_grade_params.y), vec3(0.0));
+                        if (u_grade_params.z > 0.001) {{
+                            vec2 vp = ((vec2(p) + 0.5) / vec2({float(VIEW_W)}, {float(VIEW_H)})) * 2.0 - 1.0;
+                            float vr2 = dot(vp * vec2(0.88, 1.0), vp * vec2(0.88, 1.0));
+                            col *= 1.0 - smoothstep(0.42, 1.65, vr2) * u_grade_params.z;
+                        }}
+                    }}
                     fragColor = vec4(clamp(col, 0.0, 1.0), base.a);
                 }}
             """,
@@ -283,6 +314,11 @@ class GPUPostFX:
             self.composite_prog[name].value = unit
         self._u_comp_bloom = self.composite_prog["u_use_bloom"]
         self._u_comp_adapt = self.composite_prog["u_use_adapt"]
+        self._u_comp_grade = self.composite_prog["u_use_grade"]
+        self._u_grade_sh = self.composite_prog["u_grade_sh"]
+        self._u_grade_mid = self.composite_prog["u_grade_mid"]
+        self._u_grade_hi = self.composite_prog["u_grade_hi"]
+        self._u_grade_params = self.composite_prog["u_grade_params"]
         self.composite_vao = ctx.simple_vertex_array(self.composite_prog, shader.vbo, "in_vert")
 
     def read_exposure(self):
@@ -299,11 +335,14 @@ class GPUPostFX:
         self, src_tex, src_fbo, mat_tex, ent_y_tex, fov_tex, walls_tex,
         cam, time_sec, *, viewer=(VIEW_W * 0.5, VIEW_H * 0.5),
         enable_reflections=True, enable_bloom=True, enable_eye_adaptation=True,
+        enable_color_grade=True, color_grade=None,
     ):
         ctx, gl = self.ctx, self.gl
         ctx.disable(gl.BLEND)
         ctx.scissor = None
 
+        dt = 0.0 if self._last_time is None else max(0.0, time_sec - self._last_time)
+        self._last_time = time_sec
         cur_tex, cur_fbo = src_tex, src_fbo
 
         if enable_reflections:
@@ -321,8 +360,6 @@ class GPUPostFX:
 
         exp_tex = self.tex_exp[self._exp_idx]
         if enable_eye_adaptation:
-            dt = 0.0 if self._last_time is None else max(0.0, time_sec - self._last_time)
-            self._last_time = time_sec
             next_idx = 1 - self._exp_idx
             self.exp_fbo[next_idx].use()
             ctx.viewport = (0, 0, 1, 1)
@@ -335,8 +372,22 @@ class GPUPostFX:
             self.adapt_vao.render(gl.TRIANGLE_STRIP)
             self._exp_idx = next_idx
             exp_tex = self.tex_exp[self._exp_idx]
-        else:
-            self._last_time = None
+
+        if enable_color_grade:
+            if color_grade is not None:
+                g_name, sh, mid, hi, prm = color_grade
+                self.active_grade_name = g_name
+                target = (*sh, *mid, *hi, *prm)
+            else:
+                self.active_grade_name = "Нейтральный"
+                target = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0)
+            if self._grade_cur is None:
+                self._grade_cur = list(target)
+            else:
+                k = 1.0 - math.exp(-min(dt, 0.1) * 2.8)
+                cur = self._grade_cur
+                for i in range(12):
+                    cur[i] += (target[i] - cur[i]) * k
 
         if enable_bloom:
             self.half_a_fbo.use()
@@ -367,11 +418,18 @@ class GPUPostFX:
             self.quarter_b.use(0)
             self.blur_vao.render(gl.TRIANGLE_STRIP)
 
-        if enable_bloom or enable_eye_adaptation:
+        if enable_bloom or enable_eye_adaptation or enable_color_grade:
             self.final_fbo.use()
             ctx.viewport = (0, 0, VIEW_W, CANVAS_H)
             self._u_comp_bloom.value = bool(enable_bloom)
             self._u_comp_adapt.value = bool(enable_eye_adaptation)
+            self._u_comp_grade.value = bool(enable_color_grade)
+            if enable_color_grade and self._grade_cur is not None:
+                g = self._grade_cur
+                self._u_grade_sh.value = (g[0], g[1], g[2])
+                self._u_grade_mid.value = (g[3], g[4], g[5])
+                self._u_grade_hi.value = (g[6], g[7], g[8])
+                self._u_grade_params.value = (g[9], g[10], g[11])
             cur_tex.use(0)
             self.half_a.use(1)
             self.quarter_a.use(2)

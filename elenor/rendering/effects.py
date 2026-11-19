@@ -26,6 +26,7 @@ class FXManager:
             "water_reflections": True,
             "eye_adaptation": True,
             "canopy_wind": True,
+            "color_grade": True,
         }
 
         self.eye_adapt_params = {
@@ -604,7 +605,7 @@ class FXManager:
         if not self.panel_open:
             return
 
-        pw, ph = 376, 426
+        pw, ph = 376, 462
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
         hov_k = next((k for k, rect in self.toggle_rects.items() if rect.collidepoint(mouse_pos)), None)
@@ -628,6 +629,7 @@ class FXManager:
                 ("water_reflections", "Отражения в воде (SSR)"),
                 ("eye_adaptation",    "Адаптация глаз (Eye Adaptation)"),
                 ("canopy_wind",       "Ветер в кронах деревьев"),
+                ("color_grade",       "Биомный цветокор (Cinematic)"),
             ]
 
             self.toggle_rects = {}
@@ -714,6 +716,7 @@ class FXManager:
             round(p.action_affinity["mind"], 2),
             len(p.perks), bool(self.f3_btn_rects),
             self.flags.get("eye_adaptation", True),
+            self.flags.get("color_grade", True),
         )
         if f3_key != self._f3_key or self._f3_surf is None:
             if self._f3_surf is None or self._f3_surf.get_size() != (pw, ph):
@@ -821,20 +824,21 @@ class FXManager:
             cur_y += 22
 
             postfx = getattr(r.gpu_shader, "postfx", None)
+            grade_lbl = (postfx.active_grade_name if (postfx and self.flags.get("color_grade", True)) else "ВЫКЛ")
             if not self.flags.get("eye_adaptation", True):
-                exp_line = "Адаптация глаз: ВЫКЛ (Эксп. x1.00)"
+                exp_line = f"Адаптация: ВЫКЛ (x1.00)  |  Цветокор: {grade_lbl}"
                 exp_col = UI_TEXT_DIM
             elif postfx is not None:
                 exp_info = postfx.read_exposure()
                 if exp_info is not None:
                     cur_e, avg_l, tgt_e = exp_info
-                    exp_line = f"Адаптация глаз: Эксп. x{cur_e:.2f} -> цель x{tgt_e:.2f}  |  Яркость у героя: {avg_l:.3f}"
+                    exp_line = f"Эксп: x{cur_e:.2f}->x{tgt_e:.2f} (ярк {avg_l:.3f})  |  Грейд: {grade_lbl}"
                     exp_col = (130, 235, 255)
                 else:
-                    exp_line = "Адаптация глаз: чтение недоступно"
+                    exp_line = f"Адаптация: нет данных  |  Грейд: {grade_lbl}"
                     exp_col = UI_TEXT_DIM
             else:
-                exp_line = "Адаптация глаз: недоступна (CPU-рендер)"
+                exp_line = "Пост-эффекты: недоступны (CPU-рендер)"
                 exp_col = UI_TEXT_DIM
             surf.blit(r.font_small.render(exp_line, True, exp_col), (14, cur_y))
             cur_y += 22
