@@ -18,6 +18,7 @@ from elenor.minigames.fishing import press_fishing, start_fishing, update_fishin
 from elenor.ui.fishing import draw_fishing
 from elenor.ui.exploration_map import chart_surface, draw_map
 from elenor.ui.clipboard import copy_text
+from elenor.ui.hud import hud_label
 
 
 def _copy_journal_seed(game):
@@ -1039,6 +1040,11 @@ def main():
         if profile.active:
             overlay_start = perf_counter()
 
+        window = game.gl_window
+        if window is not None and (dev_open or game.fx.panel_open or game.fx.f3_open
+                                   or game.catch_display or game.fishing_cast):
+            window.hud_surface = None
+
         if game.campaign == "jungle" and not game.inv_open:
             draw_fishing(screen, game, (world_mx, world_my), fov_mask)
 
@@ -1046,7 +1052,7 @@ def main():
             passage = game.nearby_passage()
             if passage:
                 _, action = passage
-                label = game.renderer.font_ui.render(game.loc["jungle_passages"][action], True, (246, 225, 178))
+                label = hud_label(game.renderer.font_ui, game.loc["jungle_passages"][action], (246, 225, 178))
                 rect = label.get_rect(midbottom=(VIEW_W * SCALE // 2, VIEW_H * SCALE - 16))
                 pygame.draw.rect(screen, (23, 32, 27), rect.inflate(18, 8), border_radius=4)
                 screen.blit(label, rect)

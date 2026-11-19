@@ -5,14 +5,14 @@ import pkgutil
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import numpy as np
 import pygame
 import elenor
-from elenor.config import VIEW_W, VIEW_H, CANVAS_H, SCALE
+from elenor.config import VIEW_W, VIEW_H, CANVAS_H, SCALE, SCREEN_H, SCREEN_W
 from elenor.rendering.visibility import overlay_visibility, mask_overlay
 from elenor.rendering.mirrors import render_mirror_puzzles_beams
 from elenor.profile import apply_display_mode, present_logical_canvas, reset_profile_progress, resolution_index
@@ -109,6 +109,32 @@ class RenderingTests(unittest.TestCase):
             remember.assert_called_once_with(dungeon, {(5, 7)}, ())
         self.assertEqual(presenter.thought_color, (24, 42, 61))
         self.assertFalse(presenter.pending)
+
+    def test_ui_upload_retains_hud_until_a_menu_overwrites_it(self):
+        from elenor.rendering.window import GLWindow
+
+        presenter = GLWindow.__new__(GLWindow)
+        presenter.ctx = Mock()
+        presenter.gl = Mock()
+        presenter.probe = Mock()
+        presenter.present_program = {key: SimpleNamespace()
+                                     for key in ("viewport", "logical_scale", "has_scene", "has_fog")}
+        presenter.quad = Mock()
+        presenter.ui = Mock()
+        presenter.software_fog = Mock()
+        presenter.scene = presenter.upload_fog = None
+        presenter.ui_pixels = object()
+        presenter.ui_above_hud = object()
+        presenter.hud_surface = object()
+        presenter.uploaded_hud = None
+        presenter.drawable = (SCREEN_W, SCREEN_H)
+        viewport = (0, 0, *presenter.drawable)
+        for gameplay in (True, True, False, True, True):
+            presenter.present(viewport, presenter.drawable, gameplay)
+
+        full = call(presenter.ui_pixels)
+        above_hud = call(presenter.ui_above_hud, viewport=(0, 0, SCREEN_W, CANVAS_H * SCALE))
+        self.assertEqual(presenter.ui.write.call_args_list, [full, above_hud, full, full, above_hud])
 
     def test_visibility_masks_occlusion_and_soft_dark_edges(self):
         fov = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)

@@ -2,8 +2,8 @@ import math
 from time import perf_counter
 import pygame
 import numpy as np
-from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, COIN_TEXT_COLOR, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
-from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
+from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, UI_PANEL_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
+from elenor.data.abilities import PASSIVE_SLOT_LIMIT
 
 
 from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, create_placeholder_assets
@@ -14,6 +14,7 @@ from elenor.rendering.lighting import GPULightShader, bounce_color_for, tone_map
 from elenor.rendering.pixel_fx import PixelLayer
 from elenor.rendering.physical import render_ground_traps, render_physical
 from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, misted_actor
+from elenor.ui.hud import HudLayers, hud_label
 from elenor.ui.renderer import UIRendererMixin
 
 class Renderer(UIRendererMixin):
@@ -25,7 +26,9 @@ class Renderer(UIRendererMixin):
         self.hero_cache = {}
         self.mana_icons = {}
         self.mana_slot_overlays = {}
+        self.hud = HudLayers()
         self.minimap_cache = None
+        self.minimap_panel = None
         self.flip_cache = {}
         self.chill_cache = {}
         self.emissive_cache = {}
@@ -280,11 +283,11 @@ class Renderer(UIRendererMixin):
             self.world_item_cache[key] = enforce_crisp_rim_normals(d_surf, n_surf)
         return self.world_item_cache[key]
 
-    def _eval_hud_normal_light(self, nat_x, nat_y, nx, ny, nz):
+    def _eval_hud_normal_light(self, lights, nat_x, nat_y, nx, ny, nz):
         """Evaluates directional normal-mapped lighting on HUD elements from player-relative lights!"""
         # Solid readable baseline ambient (0.80) with soft, cozy directional tinting
         r_m, g_m, b_m = 0.80, 0.80, 0.85
-        for lgt in self.current_hud_lights:
+        for lgt in lights:
             lx, ly, lz = lgt["pos"]
             rad = lgt["radius"]
             cr, cg, cb = lgt["color"]
@@ -301,22 +304,24 @@ class Renderer(UIRendererMixin):
                 b_m += inten * cb
         return min(1.25, r_m), min(1.25, g_m), min(1.25, b_m)
 
-    def draw_pixel_frame(self, surface, rect, bg_col=UI_PANEL_BG, border_col=UI_BORDER_WOOD, highlight=False, illum=1.0):
+    def draw_pixel_frame(self, surface, rect, bg_col=UI_PANEL_BG, border_col=UI_BORDER_WOOD, highlight=False, illum=1.0, *, light_y_offset=0, lights=None):
         x, y, w, h = rect
+        light_y = y + light_y_offset
+        lights = self.current_hud_lights if lights is None else lights
         bd_base = UI_BORDER_HIGHLIGHT if highlight else border_col
 
         # If this frame is on the Bottom HUD and we have player-relative lights, shade all 4 bevels directionally!
-        if y >= VIEW_H * SCALE - 10 and self.current_hud_lights:
+        if light_y >= VIEW_H * SCALE - 10 and lights:
             cx_nat = (x + w * 0.5) / SCALE
-            cy_nat = (y + h * 0.5) / SCALE
+            cy_nat = (light_y + h * 0.5) / SCALE
             hw_nat = (w * 0.5) / SCALE
             hh_nat = (h * 0.5) / SCALE
 
-            rm_c, gm_c, bm_c = self._eval_hud_normal_light(cx_nat, cy_nat, 0.0, 0.0, 1.0)
-            rm_t, gm_t, bm_t = self._eval_hud_normal_light(cx_nat, cy_nat - hh_nat, 0.0, 0.85, 0.52)
-            rm_b, gm_b, bm_b = self._eval_hud_normal_light(cx_nat, cy_nat + hh_nat, 0.0, -0.85, 0.52)
-            rm_l, gm_l, bm_l = self._eval_hud_normal_light(cx_nat - hw_nat, cy_nat, -0.85, 0.0, 0.52)
-            rm_r, gm_r, bm_r = self._eval_hud_normal_light(cx_nat + hw_nat, cy_nat, 0.85, 0.0, 0.52)
+            rm_c, gm_c, bm_c = self._eval_hud_normal_light(lights, cx_nat, cy_nat, 0.0, 0.0, 1.0)
+            rm_t, gm_t, bm_t = self._eval_hud_normal_light(lights, cx_nat, cy_nat - hh_nat, 0.0, 0.85, 0.52)
+            rm_b, gm_b, bm_b = self._eval_hud_normal_light(lights, cx_nat, cy_nat + hh_nat, 0.0, -0.85, 0.52)
+            rm_l, gm_l, bm_l = self._eval_hud_normal_light(lights, cx_nat - hw_nat, cy_nat, -0.85, 0.0, 0.52)
+            rm_r, gm_r, bm_r = self._eval_hud_normal_light(lights, cx_nat + hw_nat, cy_nat, 0.85, 0.0, 0.52)
 
             def tint(col, rm, gm, bm):
                 return (min(255, int(col[0] * rm)), min(255, int(col[1] * gm)), min(255, int(col[2] * bm)))
@@ -332,17 +337,17 @@ class Renderer(UIRendererMixin):
             bd_lit = tuple(min(255, int(c * (0.7 + 0.3 * illum))) for c in bd_base)
             col_top = col_bot = col_left = col_right = bd_lit
 
-        pygame.draw.rect(surface, UI_BORDER_OUTER, (x, y, w, h))
+        surface.fill(UI_BORDER_OUTER, (x, y, w, h))
         # Draw 4 directional bevel edges (Top, Bottom, Left, Right)
-        pygame.draw.rect(surface, col_top, (x + 2, y + 2, w - 4, 3))
-        pygame.draw.rect(surface, col_bot, (x + 2, y + h - 5, w - 4, 3))
-        pygame.draw.rect(surface, col_left, (x + 2, y + 4, 3, h - 8))
-        pygame.draw.rect(surface, col_right, (x + w - 5, y + 4, 3, h - 8))
+        surface.fill(col_top, (x + 2, y + 2, w - 4, 3))
+        surface.fill(col_bot, (x + 2, y + h - 5, w - 4, 3))
+        surface.fill(col_left, (x + 2, y + 4, 3, h - 8))
+        surface.fill(col_right, (x + w - 5, y + 4, 3, h - 8))
 
-        pygame.draw.rect(surface, UI_BORDER_OUTER, (x + 5, y + 5, w - 10, h - 10))
-        pygame.draw.rect(surface, bg_lit, (x + 7, y + 7, w - 14, h - 14))
+        surface.fill(UI_BORDER_OUTER, (x + 5, y + 5, w - 10, h - 10))
+        surface.fill(bg_lit, (x + 7, y + 7, w - 14, h - 14))
         for rx, ry in ((x + 3, y + 3), (x + w - 6, y + 3), (x + 3, y + h - 6), (x + w - 6, y + h - 6)):
-            pygame.draw.rect(surface, UI_BORDER_GOLD, (rx, ry, 3, 3))
+            surface.fill(UI_BORDER_GOLD, (rx, ry, 3, 3))
 
     def _mana_icon(self, icon):
         tinted = self.mana_icons.get(icon)
@@ -534,7 +539,8 @@ class Renderer(UIRendererMixin):
         cam_x = float(round(cam_x))
         cam_y = float(round(cam_y))
 
-        now_sec = pygame.time.get_ticks() * 0.001
+        ticks = pygame.time.get_ticks()
+        now_sec = ticks * 0.001
         self.canopy_visibility.begin_frame(dungeon.grid, now_sec)
         self.canopy_visibility.set_view(dungeon, player.x, player.y)
         reveal_map = ui_texts.get("_reveal_map", False)
@@ -1559,154 +1565,21 @@ class Renderer(UIRendererMixin):
 
         self.combat_pixels.flush(screen, fov_mask)
 
-        # Typewriter Text in Dedicated Thought Box (адаптивно центрируется под SCALE = 4)
-        if shown_thought:
-            box_max_w = THOUGHT_BOX_W * SCALE - 68
-            lines = self.wrap_text(shown_thought, self.font_thought, box_max_w)[:2]
-            start_x = THOUGHT_BOX_X * SCALE + 34
-            box_px_h = THOUGHT_BOX_H * SCALE
-            line_step = 26
-            total_txt_h = len(lines) * line_step
-            start_y = THOUGHT_BOX_Y * SCALE + (box_px_h - total_txt_h) // 2 + 2
-            for idx, ln in enumerate(lines):
-                t_sh = self.font_thought.render(ln, True, (10, 8, 12))
-                t_fg = self.font_thought.render(ln, True, UI_TEXT_MAIN)
-                ly = start_y + idx * line_step
-                screen.blit(t_sh, (start_x + 2, ly + 2))
-                screen.blit(t_fg, (start_x, ly))
-
-        # Bottom HUD Bar + Golden XP Bar
-        hud_y = CANVAS_H * SCALE
-        self.draw_pixel_frame(screen, (0, hud_y, SCREEN_W, HUD_HEIGHT), UI_BG_DARK, UI_BORDER_WOOD, False, player.illumination)
-
-        xp_bar_x, xp_bar_y, xp_bar_w, xp_bar_h = 16, hud_y + 7, SCREEN_W - 32, 10
-        pygame.draw.rect(screen, (14, 12, 18), (xp_bar_x, xp_bar_y, xp_bar_w, xp_bar_h))
-        xp_ratio = min(1.0, player.xp / max(1, player.max_xp))
-        if xp_ratio > 0:
-            pygame.draw.rect(screen, (235, 185, 55), (xp_bar_x + 1, xp_bar_y + 1, int((xp_bar_w - 2) * xp_ratio), xp_bar_h - 2))
-        pygame.draw.rect(screen, UI_BORDER_GOLD, (xp_bar_x, xp_bar_y, xp_bar_w, xp_bar_h), 1)
-
-        # 1. Left of HP/MP Bars: Player Portrait Icon + Level Number Badge (No text labels!)
-        port_rect = pygame.Rect(16, hud_y + 22, 58, 58)
-        self.draw_pixel_frame(screen, port_rect, UI_SLOT_BG, UI_BORDER_GOLD, False, player.illumination)
-        h_diff, _ = self.get_hero_pair(player)
-        port_img = pygame.transform.scale(h_diff, (32, 40))
-        screen.blit(port_img, (port_rect.x + 13, port_rect.y + 8))
-        # Level badge on bottom-right corner of portrait
-        lvl_s = self.font_small.render(str(player.level), True, (255, 225, 90))
-        pygame.draw.rect(screen, (18, 15, 24), (port_rect.right - lvl_s.get_width() - 8, port_rect.bottom - 18, lvl_s.get_width() + 6, 16))
-        pygame.draw.rect(screen, UI_BORDER_GOLD, (port_rect.right - lvl_s.get_width() - 8, port_rect.bottom - 18, lvl_s.get_width() + 6, 16), 1)
-        screen.blit(lvl_s, (port_rect.right - lvl_s.get_width() - 5, port_rect.bottom - 17))
-
-        # 2. Label-free HP & Mana Bars
-        self._draw_pixel_bar(screen, 80, hud_y + 22, 176, 26, int(player.hp), player.max_hp, (185, 42, 52))
-        self._draw_pixel_bar(screen, 80, hud_y + 54, 176, 26, int(player.mp), player.max_mp, (48, 125, 210))
-
-        # 3. Compact Torch & D&D Currency Indicator
-        from elenor.data.economy import format_copper_Trigger
-        self.draw_pixel_frame(screen, (262, hud_y + 22, 88, 58), UI_SLOT_BG, UI_BORDER_WOOD, False, player.illumination)
-        torch = player.get_active_torch()
-        t_str = "[T] ВКЛ" if (torch and player.torch_on) else "[T] ТЕНЬ"
-        t_col = (255, 200, 75) if (torch and player.torch_on) else (130, 175, 235)
-        screen.blit(self.font_small.render(t_str, True, t_col), (270, hud_y + 29))
-        coin_s = self.font_small.render(format_copper_Trigger(player.gold, compact=True), True, COIN_TEXT_COLOR)
-        screen.blit(coin_s, (262 + (88 - coin_s.get_width()) // 2, hud_y + 51))
-
-        # Active slots Q/E/R/F.
-        hovered_hud_item = None
-        key_labels = ("Q", "E", "R", "F")
-        for i, rect in enumerate(self.ability_rects):
-            is_hov = rect.collidepoint(hover_pos)
-            item = player.ability_slots[i]
-            is_oom = bool(item and item.type in ("spell", "permanent_spell") and player.mp < player.ability_mana_cost(item))
-            bd_col = VECTOR_COLORS.get(item.branch, UI_BORDER_WOOD) if item else UI_BORDER_WOOD
-            self.draw_pixel_frame(screen, rect, (43, 35, 48) if is_hov else UI_SLOT_BG,
-                                  bd_col, False, player.illumination)
-            if item and drag_item is not item:
-                if is_oom:
-                    screen.blit(self._mana_icon(item.icon), (rect.x + 11, rect.y + 12))
-                    size = (rect.width - 14, rect.height - 14)
-                    oom_ov = self.mana_slot_overlays.get(size)
-                    if oom_ov is None:
-                        oom_ov = pygame.Surface(size, pygame.SRCALPHA)
-                        oom_ov.fill((22, 36, 68, 95))
-                        self.mana_slot_overlays[size] = oom_ov
-                    screen.blit(oom_ov, (rect.x + 7, rect.y + 7))
-                else:
-                    self.draw_item_icon(screen, item.icon, rect.x + 11, rect.y + 12, 32)
-
-                cd_left = player.cooldowns.get(item.id, 0.0)
-                if cd_left > 0.0:
-                    cd_ov = pygame.Surface((rect.width - 14, rect.height - 14), pygame.SRCALPHA)
-                    cd_ov.fill((10, 8, 16, 175))
-                    screen.blit(cd_ov, (rect.x + 7, rect.y + 7))
-                    cd_s = self.font_small.render(f"{cd_left:.1f}с", True, (255, 195, 90))
-                    screen.blit(cd_s, (rect.centerx - cd_s.get_width() // 2, rect.centery - 6))
-                if is_hov:
-                    hovered_hud_item = item
-            screen.blit(self.font_small.render(key_labels[i], True, (110, 145, 195) if is_oom else (135, 215, 255)), (rect.x + 6, rect.y + 5))
-
-        # 4B. 4 Consumable Slots [1..4]
-        for i, rect in enumerate(self.hotbar_rects):
-            is_hov = rect.collidepoint(hover_pos)
-            item = player.hotbar[i]
-            bd_col = item.rarity_color if item else UI_BORDER_WOOD
-            self.draw_pixel_frame(screen, rect, UI_SLOT_BG, bd_col, is_hov, player.illumination)
-            if item:
-                self.draw_item_icon(screen, item.icon, rect.x + 10, rect.y + 12, 32)
-                cd_left = player.cooldowns.get(item.id, 0.0)
-                if cd_left > 0.0:
-                    cd_ov = pygame.Surface((rect.width - 14, rect.height - 14), pygame.SRCALPHA)
-                    cd_ov.fill((10, 8, 16, 175))
-                    screen.blit(cd_ov, (rect.x + 7, rect.y + 7))
-                    cd_s = self.font_small.render(f"{cd_left:.1f}с", True, (255, 195, 90))
-                    screen.blit(cd_s, (rect.centerx - cd_s.get_width() // 2, rect.centery - 6))
-                if is_hov:
-                    hovered_hud_item = item
-            screen.blit(self.font_small.render(str(i + 1), True, UI_BORDER_HIGHLIGHT), (rect.x + 6, rect.y + 5))
-
-        # 5. 5 Passive Perk Slots with Hover Tooltip!
-        perks_db = ui_texts.get("_perks_db", {})
-        owned_passives = list(player.passive_perks.items())
-        hovered_passive = None
-        for p_idx, pr in enumerate(self.passive_slot_rects):
-            if p_idx < len(owned_passives):
-                pid, plvl = owned_passives[p_idx]
-                pdata = perks_db.get(pid, {})
-                p_col = VECTOR_COLORS.get(perk_branch(pid, pdata), UI_BORDER_WOOD)
-                is_p_hov = pr.collidepoint(hover_pos)
-                ready = player.passive_active(pid) or (pid == "firm_stance" and player.stance_ready())
-                flash = player.passive_flash(pid)
-                brightness = .23 * ready + .60 * flash ** 2
-                rim = tuple(round(c + (250 - c) * brightness) for c in p_col)
-                background = (43, 35, 48) if is_p_hov else UI_SLOT_BG
-                background = tuple(round(c + hue * brightness * .14) for c, hue in zip(background, p_col))
-                self.draw_pixel_frame(screen, pr, background, rim, False, player.illumination)
-                if flash > .05:
-                    sparks = tuple(round(c * (.45 + .55 * flash)) for c in p_col)
-                    pygame.draw.rect(screen, sparks, pr.inflate(4, 4), 1)
-                    for cx, cy in (pr.topleft, pr.topright, pr.bottomleft, pr.bottomright):
-                        pygame.draw.rect(screen, rim, (cx - 2, cy - 2, 4, 4))
-                self.draw_item_icon(screen, pdata.get("icon", "trinket"), pr.x + 8, pr.y + 8, 32)
-                lv_txt = self.font_small.render(str(plvl), True, (255, 235, 110))
-                pygame.draw.rect(screen, (14, 12, 18), (pr.right - lv_txt.get_width() - 6, pr.bottom - 16, lv_txt.get_width() + 4, 14))
-                screen.blit(lv_txt, (pr.right - lv_txt.get_width() - 4, pr.bottom - 16))
-                if ready:
-                    pygame.draw.rect(screen, rim, (pr.x + 5, pr.y + 5, 6, 3))
-                if is_p_hov:
-                    hovered_passive = (pid, plvl, pdata)
-            else:
-                self.draw_pixel_frame(screen, pr, (18, 15, 22), (65, 52, 48), False, player.illumination)
-
-        # 6. Far Right: Inventory Button [I] + Occupied/Unlocked Slots Counter
-        bag_hov = self.bag_btn_rect.collidepoint(hover_pos) or inv_open
-        self.draw_pixel_frame(screen, self.bag_btn_rect, (52, 40, 36) if bag_hov else UI_PANEL_BG, UI_BORDER_GOLD, bag_hov, player.illumination)
-        self.draw_item_icon(screen, "bag_small", self.bag_btn_rect.x + 8, self.bag_btn_rect.y + 10, 32)
-        used_slots = sum(1 for i in range(player.unlocked_slots) if player.inventory[i] is not None)
-        slot_col = (255, 110, 95) if used_slots >= player.unlocked_slots else (255, 220, 95)
-        screen.blit(self.font_ui.render(ui_texts["bag_btn"], True, UI_TEXT_MAIN), (self.bag_btn_rect.x + 42, self.bag_btn_rect.y + 10))
-        cnt_surf = self.font_small.render(f"{used_slots} / {player.unlocked_slots}", True, slot_col)
-        screen.blit(cnt_surf, (self.bag_btn_rect.x + 42, self.bag_btn_rect.y + 29))
+        if timings is not None:
+            hud_start = perf_counter()
+            timings["world_fx"] = (hud_start - scale_end) * 1000
+        self.hud.draw_thought(screen, self, shown_thought)
+        hud, hovered_hud_item, hovered_passive = self.hud.draw_bottom(
+            screen, self, player, ui_texts, hover_pos, drag_item, inv_open, ticks
+        )
+        if timings is not None:
+            timings["hud"] = (perf_counter() - hud_start) * 1000
+        if window is not None:
+            # Tooltips for world items are clipped to the world. HUD tooltips and
+            # modals can cover the bottom rows and invalidate their GPU copy.
+            window.hud_surface = None if (
+                levelup_choices or inv_open or hovered_hud_item or hovered_passive
+            ) else hud
 
         world_hover_item = ui_texts.get("_world_hover_item")
         if timings is not None:
@@ -1725,7 +1598,7 @@ class Renderer(UIRendererMixin):
             self._render_character_sheet_modal(screen, player, ui_texts, hover_pos, drag_item)
             if not ui_texts.get("_journal_open"):
                 if any(player.ability_slots):
-                    hint = self.font_small.render("Перетащи способности между Q/E/R/F", True, UI_TEXT_MAIN)
+                    hint = hud_label(self.font_small, "Перетащи способности между Q/E/R/F", UI_TEXT_MAIN)
                     center = (self.ability_rects[0].left + self.ability_rects[-1].right) // 2
                     screen.blit(hint, (center - hint.get_width() // 2, self.ability_rects[0].bottom - 2))
                 if not drag_item and hovered_hud_item:

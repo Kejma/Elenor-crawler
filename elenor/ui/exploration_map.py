@@ -124,7 +124,8 @@ def _map_label(font, label, color):
 
 def draw_map_hud(screen, game, background=THOUGHT_BOX_BG):
     labels = game.loc["exploration_map"]
-    font = game.renderer.font_small
+    renderer = game.renderer
+    font = renderer.font_small
     hint = _map_label(font, labels["hint"], TEXT)
     if not game.profile["show_minimap"]:
         rect = hint.get_rect(topleft=(31, 24))
@@ -135,34 +136,41 @@ def draw_map_hud(screen, game, background=THOUGHT_BOX_BG):
     tile_size = 7
     region = pygame.Rect(0, 0, 29, 21)
     region.center = (int(game.player.x), int(game.player.y))
-    viewport = pygame.Rect(30, 47, region.width * tile_size, region.height * tile_size)
-    panel = pygame.Rect(20, 16, viewport.width + 20, viewport.height + 41)
-    pygame.draw.rect(screen, background, panel, border_radius=5)
-    pygame.draw.rect(screen, BORDER, panel, width=1, border_radius=5)
-    screen.blit(hint, hint.get_rect(midleft=(viewport.left, 32)))
-    north = _map_label(font, labels["north"], DIM)
-    screen.blit(north, north.get_rect(midright=(viewport.right, 32)))
+    panel_pos = (20, 16)
+    viewport = pygame.Rect(10, 31, region.width * tile_size, region.height * tile_size)
     dungeon = game.dungeon
     key = region.topleft, dungeon.exploration_revision
-    cached = game.renderer.minimap_cache
+    cached = renderer.minimap_cache
     if cached is None or cached[0] is not dungeon.explored_tiles or cached[1] != key:
         chart = chart_surface(dungeon, region, background=None)
-        cached = dungeon.explored_tiles, key, pygame.transform.scale(chart, viewport.size)
-        game.renderer.minimap_cache = cached
-    screen.blit(cached[2], viewport)
+        art = pygame.transform.scale(chart, viewport.size)
+        for (x, y), kind in discovered_landmarks(dungeon):
+            if region.collidepoint(x, y):
+                point = (round((x + .5 - region.x) * tile_size), round((y + .5 - region.y) * tile_size))
+                draw_marker(art, kind, point, 5)
+        cached = dungeon.explored_tiles, key, art
+        renderer.minimap_cache = cached
+        renderer.minimap_panel = None
 
-    def pixel(x, y):
-        return (
-            viewport.x + round((x - region.x) * tile_size),
-            viewport.y + round((y - region.y) * tile_size),
-        )
+    north = _map_label(font, labels["north"], DIM)
+    panel_key = background, hint, north
+    if renderer.minimap_panel is None or renderer.minimap_panel[0] != panel_key:
+        panel = pygame.Surface((viewport.width + 20, viewport.height + 41), pygame.SRCALPHA)
+        pygame.draw.rect(panel, background, panel.get_rect(), border_radius=5)
+        pygame.draw.rect(panel, BORDER, panel.get_rect(), width=1, border_radius=5)
+        panel.blit(hint, hint.get_rect(midleft=(viewport.left, 16)))
+        panel.blit(north, north.get_rect(midright=(viewport.right, 16)))
+        panel.blit(cached[2], viewport)
+        renderer.minimap_panel = panel_key, panel
+    screen.blit(renderer.minimap_panel[1], panel_pos)
 
+    marker = (
+        panel_pos[0] + viewport.x + round((game.player.x - region.x) * tile_size),
+        panel_pos[1] + viewport.y + round((game.player.y - region.y) * tile_size),
+    )
     original_clip = screen.get_clip()
-    screen.set_clip(original_clip.clip(viewport))
-    for (x, y), kind in discovered_landmarks(game.dungeon):
-        if region.collidepoint(x, y):
-            draw_marker(screen, kind, pixel(x + 0.5, y + 0.5), 5)
-    draw_marker(screen, "player", pixel(game.player.x, game.player.y), 6)
+    screen.set_clip(original_clip.clip(viewport.move(panel_pos)))
+    draw_marker(screen, "player", marker, 6)
     screen.set_clip(original_clip)
 
 

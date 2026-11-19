@@ -61,10 +61,15 @@ class GLWindow:
         self.shader = shader
         self.gl = shader.moderngl
         self.fences = _Fences(loader)
-        # SDL draws UI in straight RGBA. The backing bytes upload without conversion.
+        # Match SDL's 32-bit font and alpha surfaces so blits stay on their fast path.
+        # OpenGL swizzles the same backing bytes when sampling the texture.
         self.ui_pixels = bytearray(SCREEN_W * SCREEN_H * 4)
-        self.canvas = pygame.image.frombuffer(self.ui_pixels, (SCREEN_W, SCREEN_H), "RGBA")
+        self.canvas = pygame.image.frombuffer(self.ui_pixels, (SCREEN_W, SCREEN_H), "BGRA")
         self.ui = ctx.texture((SCREEN_W, SCREEN_H), 4)
+        self.ui.swizzle = "BGRA"
+        self.ui_above_hud = memoryview(self.ui_pixels)[:SCREEN_W * CANVAS_H * SCALE * 4]
+        self.hud_surface = None
+        self.uploaded_hud = None
         self.software_fog = ctx.texture((VIEW_W, VIEW_H), 4)
         self.visibility = ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.last_visibility = None
@@ -217,7 +222,12 @@ class GLWindow:
 
     def present(self, viewport_rect, window_size, gameplay, timings=None):
         started = perf_counter() if timings is not None else 0.0
-        self.ui.write(self.ui_pixels)
+        hud = self.hud_surface if gameplay else None
+        if hud is not None and hud is self.uploaded_hud:
+            self.ui.write(self.ui_above_hud, viewport=(0, 0, SCREEN_W, CANVAS_H * SCALE))
+        else:
+            self.ui.write(self.ui_pixels)
+            self.uploaded_hud = hud
         if gameplay and self.upload_fog is not None:
             self.software_fog.write(pygame.image.tobytes(self.upload_fog, "RGBA"))
         if timings is not None:

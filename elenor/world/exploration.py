@@ -41,9 +41,14 @@ def remember_tiles(dungeon, seen, objects=()):
         if explored.get(position) != kind:
             explored[position] = kind
             changed = True
-    if changed:
-        dungeon.exploration_revision += 1
     if seen:
         for obj in objects:
-            if not obj.used and obj.kind in OBJECT_LANDMARKS and (obj.x, obj.y) in seen:
-                dungeon.map_landmarks[(obj.x, obj.y)] = OBJECT_LANDMARKS[obj.kind]
+            kind = OBJECT_LANDMARKS.get(obj.kind)
+            if kind is None or obj.used:
+                continue
+            position = obj.x, obj.y
+            if position in seen and dungeon.map_landmarks.get(position) != kind:
+                dungeon.map_landmarks[position] = kind
+                changed = True
+    if changed:
+        dungeon.exploration_revision += 1
