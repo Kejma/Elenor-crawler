@@ -3,6 +3,12 @@ from elenor.config import SCREEN_W, RARITY_COLORS, UI_PANEL_BG, UI_SLOT_BG, UI_B
 from elenor.entities import Enemy, Interactable
 
 
+_PANEL = pygame.Rect(80, 36, SCREEN_W - 160, 560)
+_CONTENT = pygame.Rect(_PANEL.x + 16, _PANEL.y + 164, _PANEL.width - 32, _PANEL.height - 180)
+_SPAWN_MOBS = (("rat", "Погребная крыса"), ("rat_cultist", "Крыса-сектант"), ("rat_king", "Крысиный Король"), ("skeleton", "Скелет-воин"), ("cultist", "Культист"))
+_SPAWN_OBJECTS = (("barrel", "Винная бочка"), ("ritual_altar", "Кровавый алтарь"), ("chest", "Сундук"), ("campfire", "Костёр"), ("alchemy", "Алхимия"), ("rack", "Оружейная стойка"), ("stairs", "Лестница вниз"))
+
+
 class DevPanel:
     def __init__(self):
         self.is_open = False
@@ -23,11 +29,12 @@ class DevPanel:
         self._banner_surf = None
         self._lbl_cache = {}
 
-    def handle_event(self, event, game, world_mx, world_my):
+    def handle_event(self, event, game, world_mx, world_my, mouse_pos):
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_F1, pygame.K_BACKQUOTE):
                 self.is_open = not self.is_open
                 self.click_mode = None
+                self.buttons.clear()
                 game.sfx.play("ui")
                 return True
 
@@ -38,11 +45,18 @@ class DevPanel:
                 return True
             return False
 
+        if event.type == pygame.MOUSEWHEEL and _CONTENT.collidepoint(mouse_pos):
+            offset = self.scroll[self.active_tab]
+            new_offset = max(0, min(self.scroll_max, offset - 54 * event.y))
+            if offset != new_offset:
+                self.scroll[self.active_tab] = new_offset
+                # The visible buttons are registered again when the list moves.
+                self.buttons = [(key, rect) for key, rect in self.buttons if rect.bottom <= _CONTENT.top]
+            return True
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button in (1, 3):
             mx, my = event.pos
-            win_rect = pygame.Rect(80, 36, SCREEN_W - 160, 560)
-
-            if not win_rect.collidepoint((mx, my)):
+            if not _PANEL.collidepoint((mx, my)):
                 if self.click_mode and event.button == 1:
                     self._execute_world_click(game, world_mx, world_my)
                 return True
@@ -80,12 +94,10 @@ class DevPanel:
         p = game.player
         game.sfx.play("ui")
 
-        if b_id == "tab_items":
-            self.active_tab = "items"
-        elif b_id == "tab_perks":
-            self.active_tab = "perks"
-        elif b_id == "tab_spawner":
-            self.active_tab = "spawner"
+        if b_id.startswith("tab_"):
+            self.active_tab = b_id[4:]
+            self.scroll_max = 0
+            self.buttons = [(key, rect) for key, rect in self.buttons if rect.bottom <= _CONTENT.top]
         elif b_id == "act_heal":
             p.hp = float(p.max_hp)
             p.mp = float(p.max_mp)

@@ -8,8 +8,8 @@ from elenor.rendering.occlusion import PROP_SAMPLE_STEPS, PROP_SHADOW_STRENGTH, 
 
 
 # Peak-channel compression preserves RGB ratios in warm or saturated lights.
-WORLD_HIGHLIGHTS = (195.0, 60.0)
-TEMPLE_HIGHLIGHTS = (164.0, 77.0)
+WORLD_HIGHLIGHTS = (203.0, 60.0)
+TEMPLE_HIGHLIGHTS = (170.0, 77.0)
 
 
 def tone_map_world(rgb, is_entity, temple_exposure, *, temple_only=False):

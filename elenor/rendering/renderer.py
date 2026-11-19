@@ -594,15 +594,13 @@ class Renderer(UIRendererMixin):
         cast = getattr(game_ref, "fishing_cast", None)
 
         clouds = []
-        volume_enabled = fx_mgr is None or flags.get("volumetric_fog", True)
-        if volume_enabled:
-            for cloud in fx_mgr.active_clouds if fx_mgr else ():
-                sx, sy = cloud["wx"] * TILE_W - cam_x, cloud["wy"] * TILE_H - cam_y
-                radius = cloud["radius"] * TILE_W
-                if -radius <= sx <= VIEW_W + radius and -radius <= sy <= VIEW_H + radius:
-                    clouds.append(cloud)
+        for cloud in fx_mgr.active_clouds if fx_mgr else ():
+            sx, sy = cloud["wx"] * TILE_W - cam_x, cloud["wy"] * TILE_H - cam_y
+            radius = cloud["radius"] * TILE_W
+            if -radius <= sx <= VIEW_W + radius and -radius <= sy <= VIEW_H + radius:
+                clouds.append(cloud)
         shader_fog = getattr(self.gpu_shader, "fog", None)
-        gpu_fog = (bool(clouds) and flags.get("gpu_fog", True)
+        gpu_fog = (bool(clouds)
                    and shader_fog is not None
                    and len(clouds) <= shader_fog.MAX_CLOUDS and len(lights) <= self.gpu_shader.MAX_LIGHTS)
 
@@ -659,11 +657,11 @@ class Renderer(UIRendererMixin):
 
             fx_mgr = ui_texts.get("_fx_mgr")
             # 1. Наложение «Памяти поля боя» (вечная кровь, обломки бочек, вино и копоть на полу)
-            if fx_mgr and fx_mgr.flags.get("battle_memory", True) and fx_mgr.has_decals:
+            if fx_mgr and fx_mgr.has_decals:
                 self.diff_canvas.blit(fx_mgr.decal_surf, (0, 0), area=pygame.Rect(int(cam_x), int(cam_y), VIEW_W, VIEW_H))
 
             # 2. Круги на воде при ходьбе по лужам
-            if fx_mgr and fx_mgr.flags.get("water_ripples", True):
+            if fx_mgr and fx_mgr.ripples:
                 for rp in fx_mgr.ripples:
                     prog_r = 1.0 - (rp["timer"] / rp["max_timer"])
                     rx_s = int(rp["wx"] * TILE_W - cam_x)
@@ -749,7 +747,6 @@ class Renderer(UIRendererMixin):
                         "pair": pair, "alpha": 255
                     })
 
-            use_hit_flash = fx_mgr.flags.get("hit_flash", True) if fx_mgr else True
             for m in mobs:
                 mx_i, my_i = int(m.x), int(m.y)
                 if getattr(m, "size_tiles", 1) >= 2:
@@ -759,7 +756,7 @@ class Renderer(UIRendererMixin):
                 if mob_vis:
                     chilled = getattr(m, "slow_timer", 0.0) > 0.0
                     f_mode = None
-                    if use_hit_flash and getattr(m, "hit_flash_timer", 0.0) > 0.0:
+                    if getattr(m, "hit_flash_timer", 0.0) > 0.0:
                         f_mode = "crit" if getattr(m, "hit_flash_crit", False) else "hit"
                     render_list.append({
                         "wx": m.x - 0.5 + m.bump_x,
@@ -774,7 +771,6 @@ class Renderer(UIRendererMixin):
 
             render_list.sort(key=lambda item: item["wy"])
 
-            use_shadows = fx_mgr.flags.get("drop_shadows", True) if fx_mgr else True
             if tall_trees_to_draw:
                 fov_sig = [id(fov_mask), getattr(dungeon, "_fov_key", None), cam_x, cam_y]
                 for ent in render_list:
@@ -809,7 +805,7 @@ class Renderer(UIRendererMixin):
                 draw_y = int(round(ent["wy"] * TILE_H - cam_y - (eh - TILE_H)))
                 sole_sy = float(draw_y + eh - 2)
                 if draw_y + eh > 0 and draw_y < VIEW_H:
-                    if use_shadows and ent.get("is_actor", False) and not ent.get("misted", False):
+                    if ent.get("is_actor", False) and not ent.get("misted", False):
                         awx = ent.get("actor_wx", ent["wx"] + 0.5)
                         awy = ent.get("actor_wy", ent["wy"] + 0.5)
                         vec_x, vec_y, w_sum = 0.0, 0.0, 0.0
@@ -955,7 +951,7 @@ class Renderer(UIRendererMixin):
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
                 scene_fov, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
-                enable_ao=en_ao, enable_bloom=en_bloom,
+                enable_bloom=self._emissive_dirty,
                 temple_exposure=temple_exposure, bounce_color=bounce_color,
                 tonemap=tonemap, timings=timings if window is None else None,
                 fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,
@@ -1164,7 +1160,7 @@ class Renderer(UIRendererMixin):
             self.lit_pixels.flush(screen, None, window=window, lit=True)
 
         # 5. Пылинки и споры, видимые ТОЛЬКО когда они пролетают сквозь лучи света!
-        if fx_mgr and fx_mgr.flags.get("dust_motes", True):
+        if fx_mgr and fx_mgr.dust_motes:
             mote_lights = [
                 (lgt["pos"][0], lgt["pos"][1], lgt["radius"] * 0.85, (lgt["radius"] * 0.85) ** 2,
                  lgt.get("allowed_tiles"), lgt["color"])

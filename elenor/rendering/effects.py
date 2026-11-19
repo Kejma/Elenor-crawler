@@ -184,8 +184,6 @@ class FXManager:
 
     # --- ПАМЯТЬ ПОЛЯ БОЯ (ВЕЧНЫЕ ДЕКАЛИ НА ПОЛУ) ---
     def add_blood_splatter(self, wx, wy, count=5, is_kill=False):
-        if not self.flags["battle_memory"]:
-            return
         self.has_decals = True
         self.decal_revision += 1
         cx = int(wx * TILE_W)
@@ -204,8 +202,6 @@ class FXManager:
             pygame.draw.rect(self.decal_surf, col, (ox, oy, sz, sz))
 
     def add_barrel_debris(self, tx, ty):
-        if not self.flags["battle_memory"]:
-            return
         self.has_decals = True
         self.decal_revision += 1
         cx = int((tx + 0.5) * TILE_W)
@@ -219,8 +215,6 @@ class FXManager:
         pygame.draw.rect(self.decal_surf, (78, 84, 96, 225), (cx - 2, cy - 5, 5, 1))
 
     def add_scorch_mark(self, wx, wy, radius_tiles=0.55):
-        if not self.flags["battle_memory"]:
-            return
         self.has_decals = True
         self.decal_revision += 1
         cx = int(wx * TILE_W)
@@ -236,8 +230,6 @@ class FXManager:
 
     # --- КРУГИ НА ВОДЕ (СТРОГО ПОД ПОДОШВАМИ САПОГ: wy + 0.36!) ---
     def add_water_ripple(self, wx, wy, *, green=False):
-        if not self.flags["water_ripples"]:
-            return
         self.ripples.append({
             "wx": float(wx),
             "wy": float(wy) + 0.36,
@@ -247,8 +239,6 @@ class FXManager:
         })
 
     def trigger_shake(self, amplitude=1.8, duration=0.14):
-        if not self.flags["screenshake"]:
-            return
         self.shake_amp = max(self.shake_amp, float(amplitude))
         self.shake_max_timer = max(0.01, float(duration))
         self.shake_timer = max(self.shake_timer, float(duration))
@@ -256,7 +246,7 @@ class FXManager:
     def update(self, dt, player, dungeon, mobs=None, add_popup=None):
         if dt <= 0:
             return
-        if self.shake_timer > 0.0 and self.flags["screenshake"]:
+        if self.shake_timer > 0.0:
             self.shake_timer = max(0.0, self.shake_timer - dt)
             fade = self.shake_timer / self.shake_max_timer
             cur_a = self.shake_amp * fade
@@ -297,7 +287,7 @@ class FXManager:
                             self.game._check_mob_death(m)
 
         # Пылинки и споры летают ТОЛЬКО внутри разрешённых тематических зон (`zone_rect`)!
-        if self.flags["dust_motes"] and self.dust_motes:
+        if self.dust_motes:
             for dm in self.motes_in_view(getattr(self.game, "cam_x", 0.0), getattr(self.game, "cam_y", 0.0)):
                 if "anchor" in dm:
                     x, y = dm["anchor"]

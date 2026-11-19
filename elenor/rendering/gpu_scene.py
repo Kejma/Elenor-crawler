@@ -480,10 +480,6 @@ class GPUSceneRenderer:
 
         has_trees = bool(tall_trees)
         assets = renderer.assets
-        flags_map = fx_mgr.flags if fx_mgr else {}
-        use_hit_flash = flags_map.get("hit_flash", True)
-        use_shadows = flags_map.get("drop_shadows", True)
-
         # Собираем плоские объекты пола и объёмные сущности для Y-сортировки
         ground_items = []
         hero_pair = renderer.get_hero_pair(player)
@@ -570,7 +566,7 @@ class GPUSceneRenderer:
             if mob_vis:
                 chilled = getattr(m, "slow_timer", 0.0) > 0.0
                 f_mode = None
-                if use_hit_flash and getattr(m, "hit_flash_timer", 0.0) > 0.0:
+                if getattr(m, "hit_flash_timer", 0.0) > 0.0:
                     f_mode = "crit" if getattr(m, "hit_flash_crit", False) else "hit"
                 render_list.append({
                     "wx": m.x - 0.5 + m.bump_x,
@@ -622,7 +618,7 @@ class GPUSceneRenderer:
                 continue
             sole_sy = float(draw_y + eh - 2)
 
-            if use_shadows and ent.get("is_actor", False) and not ent.get("misted", False):
+            if ent.get("is_actor", False) and not ent.get("misted", False):
                 awx = ent.get("actor_wx", ent["wx"] + 0.5)
                 awy = ent.get("actor_wy", ent["wy"] + 0.5)
                 vec_x = vec_y = w_sum = 0.0
@@ -755,7 +751,7 @@ class GPUSceneRenderer:
                 self.sprite_color_vao.render(gl.TRIANGLE_STRIP, instances=len(doors))
 
             # 4. Декали боя (кровь, обломки, копоть — заливаются только при изменении)
-            if fx_mgr and flags_map.get("battle_memory", True) and fx_mgr.has_decals:
+            if fx_mgr and fx_mgr.has_decals:
                 d_key = (id(fx_mgr.decal_surf), fx_mgr.decal_revision)
                 if self._decal_key != d_key:
                     sz = fx_mgr.decal_surf.get_size()
@@ -774,7 +770,7 @@ class GPUSceneRenderer:
                 self.quad_d_vao.render(gl.TRIANGLE_STRIP)
 
             # 5. Редкие динамические слои пола (круги на воде и капканы)
-            has_ripples = bool(fx_mgr and flags_map.get("water_ripples", True) and fx_mgr.ripples)
+            has_ripples = bool(fx_mgr and fx_mgr.ripples)
             has_traps = bool(physical_states and any(s["kind"] in ("trap", "trap_snap") for s in physical_states))
             if has_ripples or has_traps:
                 self._ensure_dyn_layer()
