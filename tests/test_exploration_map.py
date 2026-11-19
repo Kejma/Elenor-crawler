@@ -58,6 +58,22 @@ class ExplorationMapTests(unittest.TestCase):
             cache.set_view(dungeon, 9.6, 7.5)
             self.assertEqual(cache.target(tree), 0.0)
 
+    def test_cached_canopy_obstacles_match_scalar_rays_when_a_door_opens(self):
+        dungeon = Dungeon()
+        dungeon.grid = [[0] * 22 for _ in range(14)]
+        dungeon.thickets = {(14, 6), (15, 6), (14, 7), (15, 7)}
+        door = Door(10, 5)
+        dungeon.doors = {(10, 5): door}
+        dungeon.invalidate_light_cache()
+
+        cache = CanopyVisibility()
+        for is_open in (False, True):
+            door.is_open = is_open
+            for x, y in ((7.5, 5.5), (8.33, 5.23), (9.2, 3.8), (13.2, 6.5)):
+                cache.set_view(dungeon, x, y)
+                for tree in dungeon.thickets:
+                    self.assertEqual(cache.target(tree), canopy_visibility(dungeon, x, y, *tree))
+
     def test_fov_cache_refreshes_on_camera_door_and_geometry_changes(self):
         dungeon = Dungeon()
         dungeon.grid = [[1] * 15 for _ in range(12)]
@@ -77,7 +93,9 @@ class ExplorationMapTests(unittest.TestCase):
         opened = dungeon.compute_nox_fov(*viewer, 0, 0)
         self.assertIn((8, 5), opened[2])
         before_pan = opened[0].copy()
-        panned = dungeon.compute_nox_fov(*viewer, TILE_W, 0)
+        with patch.object(dungeon, "_trace_floor_rays", wraps=dungeon._trace_floor_rays) as trace:
+            panned = dungeon.compute_nox_fov(*viewer, TILE_W, 0)
+            trace.assert_not_called()
         self.assertFalse(np.array_equal(before_pan, panned[0]))
         self.assertEqual(opened[2], panned[2])
 

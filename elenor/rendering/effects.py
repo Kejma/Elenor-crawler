@@ -454,6 +454,7 @@ class FXManager:
 
         g.cam_x = g.player.x * TILE_W - VIEW_W * 0.5
         g.cam_y = g.player.y * TILE_H - VIEW_H * 0.5
+        g.renderer.terrain.warm(d)
 
         g.sfx.start_disco_track()
         g.set_thought("Акустическое крыло готово! Проверь звук на танцполе и в 3 комнатах справа (за 1, 2 и 3 стенами)!")

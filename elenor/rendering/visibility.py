@@ -10,7 +10,63 @@ _X = np.arange(VIEW_W, dtype=np.float32)[:, None]
 _Y = np.arange(VIEW_H, dtype=np.float32)[None, :]
 
 
-def canopy_visibility(dungeon, player_x, player_y, x, y):
+@lru_cache(maxsize=144)
+def _ray_fractions(steps):
+    return tuple(i / steps for i in range(1, steps + 1))
+
+
+class _CanopyOcclusion:
+    """Shared wall and root flags, packed into rows for scalar canopy rays."""
+
+    def __init__(self, dungeon, closed_doors):
+        walls, roots = dungeon.sight_geometry(closed_doors)
+        self.rows = tuple(row.tobytes() for row in (roots | (walls.astype(np.uint8) << 5)).T)
+        self.width, self.height = walls.shape
+        self.rate = 8 if dungeon.thickets else 3
+
+    def blocked(self, x, y):
+        return not (0 <= x < self.width and 0 <= y < self.height) or self.rows[y][x] != 0
+
+    def trace(self, x0, y0, x1, y1, max_dist, *, target_thicket):
+        dx, dy = x1 - x0, y1 - y0
+        dist = math.hypot(dx, dy)
+        if dist > max_dist:
+            return False
+        steps = int(dist * self.rate) + 1
+        rows, width, height = self.rows, self.width, self.height
+        floor = math.floor
+        target_x, target_y = target_thicket
+        previous_x, previous_y = floor(x0), floor(y0)
+        row = None
+        flag = 0
+        check_root = False
+        for t in _ray_fractions(steps):
+            x, y = x0 + dx * t, y0 + dy * t
+            cx, cy = floor(x), floor(y)
+            if row is None or cx != previous_x or cy != previous_y:
+                if not (0 <= cx < width and 0 <= cy < height):
+                    return False
+                row = rows[cy]
+                flag = row[cx]
+                if flag & 32:
+                    return False
+                if cx != previous_x and cy != previous_y and (
+                    (not 0 <= previous_y < height or rows[previous_y][cx])
+                    and (not 0 <= previous_x < width or row[previous_x])
+                ):
+                    return False
+                previous_x, previous_y = cx, cy
+                check_root = flag and (cx != target_x or cy != target_y)
+            if check_root:
+                ox, oy = x - cx - .5, y - cy - .5
+                if (ox * ox + oy * oy <= .22 ** 2
+                        or abs(oy) <= .15 and flag & (2 if ox > 0 else 4)
+                        or abs(ox) <= .15 and flag & (8 if oy > 0 else 16)):
+                    return False
+        return True
+
+
+def canopy_visibility(dungeon, player_x, player_y, x, y, *, obstacles=None):
     """Trace to the exposed faces of a tree independently of the floor ray fan."""
     cx, cy = x + 0.5, y + 0.5
     dx, dy = player_x - cx, player_y - cy
@@ -21,16 +77,19 @@ def canopy_visibility(dungeon, player_x, player_y, x, y):
     horizontal = (1 if dx > 0 else -1, 0)
     vertical = (0, 1 if dy > 0 else -1)
     faces = (horizontal, vertical) if abs(dx) > abs(dy) else (vertical, horizontal)
+    blocked = obstacles.blocked if obstacles is not None else dungeon.is_blocking_sight
+    trace = obstacles.trace if obstacles is not None else dungeon.has_line_of_sight
+    target_tile = x, y
     grazing = 0
     for fx, fy in faces:
-        if dungeon.is_blocking_sight(x + fx, y + fy):
+        if blocked(x + fx, y + fy):
             continue
         face_x, face_y = cx + fx * .42, cy + fy * .42
 
         def visible(offset):
-            return dungeon.has_line_of_sight(
+            return trace(
                 player_x, player_y, face_x + fy * offset, face_y + fx * offset,
-                LOS_MAX_RADIUS / TILE_W, target_thicket=(x, y),
+                LOS_MAX_RADIUS / TILE_W, target_thicket=target_tile,
             )
 
         if visible(0):
@@ -45,6 +104,7 @@ class CanopyVisibility:
     def __init__(self):
         self.grid = None
         self.view = None
+        self.obstacles = None
         self.targets = {}
         self.previous = {}
         self.current = {}
@@ -54,6 +114,7 @@ class CanopyVisibility:
     def begin_frame(self, grid, time):
         if grid is not self.grid:
             self.grid = grid
+            self.obstacles = None
             self.targets.clear()
             self.previous = {}
             self.blend = 1.0
@@ -68,13 +129,17 @@ class CanopyVisibility:
         closed_doors = tuple(point for point, door in dungeon.doors.items() if not door.is_open)
         view = dungeon, dungeon.geometry_revision, x, y, closed_doors
         if view != self.view:
+            if self.view is None or view[:2] != self.view[:2] or closed_doors != self.view[4]:
+                self.obstacles = None
             self.view = view
             self.targets.clear()
 
     def target(self, tile):
         if tile not in self.targets:
-            dungeon, _, x, y, _ = self.view
-            self.targets[tile] = canopy_visibility(dungeon, x, y, *tile)
+            dungeon, _, x, y, closed_doors = self.view
+            if self.obstacles is None:
+                self.obstacles = _CanopyOcclusion(dungeon, closed_doors)
+            self.targets[tile] = canopy_visibility(dungeon, x, y, *tile, obstacles=self.obstacles)
         return self.targets[tile]
 
     def sample(self, tile, target):

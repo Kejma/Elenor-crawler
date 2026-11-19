@@ -262,6 +262,28 @@ class TerrainCache:
             x, y = position
             pygame.draw.rect(diffuse, JUNGLE_KEY_COLORS[door.key_color], (x + 10, y + 8, 3, 4))
 
+    def _get_chunk(self, dungeon, x, y, width, height):
+        key = dungeon, x, y
+        chunk = self.chunks.get(key)
+        if chunk is None:
+            chunk = self._bake(dungeon, x, y, width, height)
+            self.chunks[key] = chunk
+            if len(self.chunks) > MAX_CHUNKS:
+                self.chunks.popitem(last=False)
+        else:
+            self.chunks.move_to_end(key)
+        return chunk
+
+    def warm(self, dungeon):
+        """Fill the cache after the location's final terrain edits."""
+        width, height = dungeon.width, dungeon.height
+        columns = range(0, width, CHUNK_TILES)
+        rows = range(0, height, CHUNK_TILES)
+        if len(columns) * len(rows) <= MAX_CHUNKS and self._refresh_map(dungeon):
+            for y in rows:
+                for x in columns:
+                    self._get_chunk(dungeon, x, y, width, height)
+
     def draw(self, dungeon, left, top, right, bottom, cam_x, cam_y, diffuse, normals):
         trees = []
         if left >= right or top >= bottom:
@@ -283,16 +305,8 @@ class TerrainCache:
         visible_pixels = pygame.Rect(left * TILE_W, top * TILE_H, (right - left) * TILE_W, (bottom - top) * TILE_H)
         for y in range(top // CHUNK_TILES * CHUNK_TILES, bottom, CHUNK_TILES):
             for x in range(left // CHUNK_TILES * CHUNK_TILES, right, CHUNK_TILES):
-                key = dungeon, x, y
-                chunk = self.chunks.get(key)
-                if chunk is None:
-                    chunk = self._bake(dungeon, x, y, width, height)
-                    self.chunks[key] = chunk
-                    if len(self.chunks) > MAX_CHUNKS:
-                        self.chunks.popitem(last=False)
-                else:
-                    self.chunks.move_to_end(key)
-                    self._animate(chunk)
+                chunk = self._get_chunk(dungeon, x, y, width, height)
+                self._animate(chunk)
 
                 visible = visible_pixels.clip(chunk.pixels)
                 position = visible.x - cam_x, visible.y - cam_y

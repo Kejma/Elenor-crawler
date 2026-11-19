@@ -298,6 +298,9 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.dungeon.solid_props = {
             (obj.x, obj.y) for obj in self.objects if obj.kind in solid_kinds
         }
+        renderer = getattr(self, "renderer", None)
+        if renderer is not None:
+            renderer.terrain.warm(self.dungeon)
 
 
     def add_popup(self, wx, wy, text, color, icon=None, big=False):

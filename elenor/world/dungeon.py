@@ -53,7 +53,7 @@ class Dungeon:
         self._ray_dy = np.sin(angles)[:, None] * radii
         self._ray_indices = np.arange(RAY_COUNT)
         self._ray_steps = np.arange(radii.shape[1])[None, :]
-        self._fov_surf = pygame.Surface((VIEW_W, VIEW_H))
+        self._fov_surf = pygame.Surface((VIEW_W, VIEW_H), depth=8)
         self._fov_full_mask = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
         self._base_block_grid = None
         self.forest_rect = pygame.Rect(3, 12, 14, 16)
@@ -74,6 +74,7 @@ class Dungeon:
         self._light_cache = {}
         self._base_block_grid = None
         self._fov_key = None
+        self._world_fov_key = None
         self._sight_doors = None
 
     def invalidate_terrain(self, area=None):
@@ -778,7 +779,7 @@ class Dungeon:
                         allowed_grid[wx, wy] = 1.0
         return allowed_grid
 
-    def _sight_geometry(self, closed_doors):
+    def sight_geometry(self, closed_doors):
         """Tile obstacles and sub-tile root geometry shared by visibility passes."""
         if self._base_block_grid is None:
             base_bg = np.zeros((self.width, self.height), dtype=bool)
@@ -804,88 +805,113 @@ class Dungeon:
             self._sight_doors = closed_doors
         return self._closed_sight_grid, self._fov_roots
 
-    def compute_nox_fov(self, world_ox, world_oy, cam_x, cam_y):
-        self._last_viewer_pos = (world_ox / TILE_W, world_oy / TILE_H)
-        cam_ix, cam_iy = int(round(cam_x)), int(round(cam_y))
+    def _trace_floor_rays(self, world_x, world_y, walls, root_grid):
+        """Trace the existing samples in bands, retiring rays at their first hit."""
+        width, height = walls.shape
+        step_count = self._ray_steps.size
+        has_roots = bool(self.thickets)
+        band_size = 48 if has_roots else step_count
+        active = self._ray_indices
+        endpoints = np.empty(len(active), np.intp)
+        open_grid = np.zeros_like(walls)
+        hit_grid = np.zeros_like(walls)
+        last_x = last_y = None
+        for begin in range(0, step_count, band_size):
+            end = min(begin + band_size, step_count)
+            count = end - begin
+            wx = world_x + self._ray_dx[active, begin:end]
+            wy = world_y + self._ray_dy[active, begin:end]
+            # Negative samples clamp to tile zero in either case.
+            tx = (wx.astype(np.int32) // TILE_W).clip(0, width - 1)
+            ty = (wy.astype(np.int32) // TILE_H).clip(0, height - 1)
+            blocked = walls[tx, ty]
+            if last_x is not None:
+                x, y = tx[:, 0], ty[:, 0]
+                blocked[:, 0] |= (x != last_x) & (y != last_y) & walls[x, last_y] & walls[last_x, y]
 
-        closed_doors = tuple(point for point, door in self.doors.items() if not door.is_open)
-        key = world_ox, world_oy, cam_ix, cam_iy, closed_doors
-        if self._fov_key == key:
-            return self._fov_result
+            # A diagonal step between two closed side tiles cannot transmit sight.
+            ray, step = np.nonzero((tx[:, 1:] != tx[:, :-1]) & (ty[:, 1:] != ty[:, :-1]))
+            blocked[ray, step + 1] |= walls[tx[ray, step + 1], ty[ray, step]] & walls[tx[ray, step], ty[ray, step + 1]]
 
-        fov_surf = self._fov_surf
-        fov_surf.fill((0, 0, 0))
+            if has_roots:
+                roots = root_grid[tx, ty]
+                root_ray, root_step = np.nonzero((roots != 0) & ~blocked)
+                roots = roots[root_ray, root_step]
+                ox = wx[root_ray, root_step] / TILE_W - tx[root_ray, root_step] - .5
+                oy = wy[root_ray, root_step] / TILE_H - ty[root_ray, root_step] - .5
+                trunks = ox * ox + oy * oy <= .22 ** 2
+                branch_x = (np.abs(oy) <= .15) & ((np.where(ox > 0, 2, 4) & roots) != 0)
+                branch_y = (np.abs(ox) <= .15) & ((np.where(oy > 0, 8, 16) & roots) != 0)
+                blocked[root_ray, root_step] = trunks | branch_x | branch_y
 
-        start_tx = max(0, min(self.width - 1, int(world_ox) // TILE_W))
-        start_ty = max(0, min(self.height - 1, int(world_oy) // TILE_H))
+            hit = blocked.any(axis=1)
+            final_band = end == step_count
+            # An unobstructed ray ends at the same last sample as the original fan.
+            limit = np.where(hit, blocked.argmax(axis=1), count - int(final_band))
+            open_samples = self._ray_steps[:, :count] < limit[:, None]
+            open_grid[tx[open_samples], ty[open_samples]] = True
+            hit_rows = np.flatnonzero(hit)
+            hit_grid[tx[hit_rows, limit[hit_rows]], ty[hit_rows, limit[hit_rows]]] = True
+            done = hit | final_band
+            endpoints[active[done]] = begin + limit[done]
+            remaining = ~done
+            active = active[remaining]
+            if not active.size:
+                break
+            last_x, last_y = tx[remaining, -1], ty[remaining, -1]
+        return endpoints, open_grid, hit_grid
 
-        walls, roots_grid = self._sight_geometry(closed_doors)
-        block_grid = walls.copy()
-        block_grid[start_tx, start_ty] = False
+    def _world_floor_visibility(self, world_x, world_y, closed_doors):
+        terrain, root_grid = self.sight_geometry(closed_doors)
+        walls = terrain.copy()
+        width, height = walls.shape
+        start_x = max(0, min(width - 1, int(world_x) // TILE_W))
+        start_y = max(0, min(height - 1, int(world_y) // TILE_H))
+        walls[start_x, start_y] = False
 
-        # Векторный расчёт всех 280 лучей одновременно через NumPy!
-        wx = world_ox + self._ray_dx
-        wy = world_oy + self._ray_dy
-        tx = np.clip(np.floor(wx / TILE_W).astype(np.int32), 0, self.width - 1)
-        ty = np.clip(np.floor(wy / TILE_H).astype(np.int32), 0, self.height - 1)
-
-        blocked = block_grid[tx, ty]
-        if self.thickets:
-            roots = roots_grid[tx, ty]
-            ox, oy = wx / TILE_W - tx - 0.5, wy / TILE_H - ty - 0.5
-            trunks = (ox * ox + oy * oy <= 0.22 ** 2)
-            branches_x = (np.abs(oy) <= 0.15) & np.where(ox > 0, roots & 2, roots & 4).astype(bool)
-            branches_y = (np.abs(ox) <= 0.15) & np.where(oy > 0, roots & 8, roots & 16).astype(bool)
-            blocked |= (roots != 0) & (trunks | branches_x | branches_y)
-        # Защита от прострела диагональных стыков стен
-        diag_step = (tx[:, 1:] != tx[:, :-1]) & (ty[:, 1:] != ty[:, :-1])
-        diag_pinch = diag_step & block_grid[tx[:, 1:], ty[:, :-1]] & block_grid[tx[:, :-1], ty[:, 1:]]
-        blocked[:, 1:] |= diag_pinch
-
-        has_hit = blocked.any(axis=1)
-        hit_idx = np.where(has_hit, np.argmax(blocked, axis=1), self._ray_steps.size - 1)
-
-        ray_indices = self._ray_indices
-        end_wx = wx[ray_indices, hit_idx]
-        end_wy = wy[ray_indices, hit_idx]
-        poly_points = list(zip((end_wx - cam_ix).astype(int).tolist(), (end_wy - cam_iy).astype(int).tolist()))
-
-        open_mask = self._ray_steps < hit_idx[:, None]
-        open_grid = np.zeros_like(block_grid)
-        open_grid[tx[open_mask], ty[open_mask]] = True
-        open_grid[start_tx, start_ty] = True
-
-        # Find wall faces in neighbouring cells without revisiting a tile for each ray.
-        width, height = open_grid.shape
+        endpoints, open_grid, hit_grid = self._trace_floor_rays(world_x, world_y, walls, root_grid)
+        open_grid[start_x, start_y] = True
         nearby = np.zeros_like(open_grid)
         padded = np.pad(open_grid, 1)
         for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
             nearby |= padded[1 + dx:1 + dx + width, 1 + dy:1 + dy + height]
-        visible_grid = open_grid | (nearby & block_grid)
-        visible_grid[tx[ray_indices[has_hit], hit_idx[has_hit]],
-                     ty[ray_indices[has_hit], hit_idx[has_hit]]] = True
-
+        visible_grid = open_grid | (nearby & walls) | hit_grid
         open_x, open_y = np.nonzero(open_grid)
         visible_x, visible_y = np.nonzero(visible_grid)
-        open_visible_tiles = frozenset(zip(open_x.tolist(), open_y.tolist()))
-        visible_tiles = frozenset(zip(visible_x.tolist(), visible_y.tolist()))
+        wall_x, wall_y = np.nonzero(visible_grid & walls)
+        end_x = world_x + self._ray_dx[self._ray_indices, endpoints]
+        end_y = world_y + self._ray_dy[self._ray_indices, endpoints]
+        return (
+            end_x, end_y, tuple(zip(wall_x.tolist(), wall_y.tolist())),
+            frozenset(zip(visible_x.tolist(), visible_y.tolist())),
+            frozenset(zip(open_x.tolist(), open_y.tolist())),
+        )
 
-        if len(poly_points) >= 3:
-            pygame.draw.polygon(fov_surf, (255, 255, 255), poly_points)
+    def compute_nox_fov(self, world_ox, world_oy, cam_x, cam_y):
+        self._last_viewer_pos = (world_ox / TILE_W, world_oy / TILE_H)
+        cam_x, cam_y = round(cam_x), round(cam_y)
+        closed_doors = tuple(point for point, door in self.doors.items() if not door.is_open)
+        world_key = world_ox, world_oy, closed_doors
+        key = world_key, cam_x, cam_y
+        if self._fov_key == key:
+            return self._fov_result
+        # Camera shake only changes the screen projection of the same rays.
+        if self._world_fov_key != world_key:
+            self._world_fov = self._world_floor_visibility(world_ox, world_oy, closed_doors)
+            self._world_fov_key = world_key
 
-        wall_x, wall_y = np.nonzero(visible_grid & block_grid)
-        for vtx, vty in zip(wall_x.tolist(), wall_y.tolist()):
-            pygame.draw.rect(
-                fov_surf, (255, 255, 255),
-                (vtx * TILE_W - cam_ix, vty * TILE_H - cam_iy, TILE_W, TILE_H),
-            )
-
-        fov_red_view = pygame.surfarray.pixels3d(fov_surf)[:, :, 0]
-        np.multiply(fov_red_view, 1.0 / 255.0, out=self._fov_full_mask[:, :VIEW_H], casting="unsafe")
-        del fov_red_view
+        end_x, end_y, walls, visible_tiles, open_tiles = self._world_fov
+        points = list(zip((end_x - cam_x).astype(int).tolist(), (end_y - cam_y).astype(int).tolist()))
+        surface = self._fov_surf
+        surface.fill(0)
+        if len(points) >= 3:
+            pygame.draw.polygon(surface, 1, points)
+        for x, y in walls:
+            pygame.draw.rect(surface, 1, (x * TILE_W - cam_x, y * TILE_H - cam_y, TILE_W, TILE_H))
+        np.copyto(self._fov_full_mask[:, :VIEW_H], pygame.surfarray.pixels2d(surface))
 
         mask = self._fov_full_mask.view()
         mask.flags.writeable = False
         self._fov_key = key
-        self._fov_result = mask, visible_tiles, open_visible_tiles
+        self._fov_result = mask, visible_tiles, open_tiles
         return self._fov_result

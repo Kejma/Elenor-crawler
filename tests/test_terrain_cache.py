@@ -43,6 +43,15 @@ class TerrainCacheTests(unittest.TestCase):
         self.cache.draw(self.dungeon, 0, 0, self.dungeon.width, self.dungeon.height, 0, 0,
                         self.diffuse, self.normals)
 
+    def test_warm_bakes_all_chunks_before_the_camera_uses_them(self):
+        self.cache.warm(self.dungeon)
+        warm_chunks = dict(self.cache.chunks)
+        self.assertEqual(len(warm_chunks), 3)
+        self.draw()
+        self.cache.warm(self.dungeon)
+        for key, chunk in warm_chunks.items():
+            self.assertIs(chunk, self.cache.chunks[key])
+
     def test_local_edit_rebakes_both_sides_of_an_autotile_boundary(self):
         self.dungeon.moss_tiles.add((CHUNK_TILES - 1, 0))
         self.draw()
