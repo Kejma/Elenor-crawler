@@ -58,7 +58,6 @@ DEFAULT_PROFILE = {
     "thought_freq_mode": 2,
     "show_minimap": True,
     "show_performance": False,
-    "direct_gl": False,
     "window_mode": "windowed",
     "resolution_idx": None,
     "fullscreen": False,
@@ -85,6 +84,7 @@ def load_profile():
                 prof.update(data)
         except Exception:
             pass
+    prof.pop("direct_gl", None)  # Legacy display setting.
     return prof
 
 
@@ -92,14 +92,16 @@ def save_profile(prof):
     path = get_profile_path()
     try:
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(prof, f, ensure_ascii=False, indent=2)
+            data = dict(prof)
+            data.pop("direct_gl", None)
+            json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 
 
 def reset_profile_progress(prof):
     keep_keys = (
-        "volume", "typewriter_mode", "thought_freq_mode", "show_minimap", "show_performance", "direct_gl",
+        "volume", "typewriter_mode", "thought_freq_mode", "show_minimap", "show_performance",
         "window_mode", "resolution_idx", "fullscreen",
     )
     saved_settings = {k: prof.get(k, DEFAULT_PROFILE[k]) for k in keep_keys}
@@ -137,7 +139,6 @@ def apply_display_mode(prof, game=None):
         flags = pygame.FULLSCREEN
 
     old_gl = getattr(game, "gl_window", None)
-    direct = game is not None and prof.get("direct_gl", False)
     gl_window = None
     if old_gl is not None:
         old_gl.collect(game.dungeon)
@@ -147,7 +148,7 @@ def apply_display_mode(prof, game=None):
         pygame.display.quit()
         pygame.display.init()
 
-    if direct:
+    if game is not None:
         if game.renderer.gpu_shader is not None:
             game.renderer.gpu_shader.ctx.release()
             game.renderer.gpu_shader = None
@@ -163,7 +164,7 @@ def apply_display_mode(prof, game=None):
             disp_surf = pygame.display.set_mode((target_w, target_h), flags)
         except pygame.error:
             disp_surf = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-        if old_gl is not None or direct:
+        if game is not None:
             game.renderer.init_standalone_shader()
     pygame.display.set_caption("Elenor-crawler")
 

@@ -316,35 +316,6 @@ class GLWindow:
     def present(self, viewport_rect, window_size, gameplay, timings=None):
         started = perf_counter() if timings is not None else 0.0
         hud = self.hud_surface if gameplay else None
-        if not hasattr(self, "ui_top"):
-            if hud is not None and hud is self.uploaded_hud:
-                self.ui.write(self.ui_above_hud, viewport=(0, 0, SCREEN_W, CANVAS_H * SCALE))
-            else:
-                self.ui.write(self.ui_pixels)
-                self.uploaded_hud = hud
-            if gameplay and self.upload_fog is not None:
-                self.software_fog.write(pygame.image.tobytes(self.upload_fog, "RGBA"))
-            if timings is not None:
-                timings["ui_upload"] = (perf_counter() - started) * 1000
-            self.ctx.screen.use()
-            x, y, width, height = viewport_rect
-            if window_size != self.drawable:
-                sx, sy = self.drawable[0] / window_size[0], self.drawable[1] / window_size[1]
-                x, y, width, height = round(x * sx), round(y * sy), round(width * sx), round(height * sy)
-            if (x, y, width, height) != (0, 0, *self.drawable):
-                self.ctx.screen.clear(8 / 255, 6 / 255, 12 / 255, 1)
-            viewport = (x, self.drawable[1] - y - height, width, height)
-            self.ctx.viewport = viewport
-            self.present_program["viewport"].value = (viewport[0], viewport[1], height)
-            self.present_program["logical_scale"].value = (SCREEN_W / width, SCREEN_H / height)
-            scene = self.scene if gameplay else None
-            self.present_program["has_scene"].value = scene is not None
-            self.present_program["has_fog"].value = scene is not None and self.upload_fog is not None
-            (scene if scene is not None else self.probe).use(0)
-            self.software_fog.use(1)
-            self.ui.use(2)
-            self.quad.render(self.gl.TRIANGLE_STRIP, vertices=4)
-            return
         if not gameplay:
             self.ui.write(self.ui_pixels)
             self.uploaded_hud = None

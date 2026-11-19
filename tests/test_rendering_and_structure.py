@@ -5,7 +5,7 @@ import pkgutil
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, call, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -50,7 +50,7 @@ class RenderingTests(unittest.TestCase):
         self.assertFalse(profile["rat_king_defeated"])
         self.assertEqual(profile["window_mode"], "borderless")
         self.assertEqual(profile["resolution_idx"], 3)
-        self.assertTrue(profile["direct_gl"])
+        self.assertNotIn("direct_gl", profile)
 
     def test_default_resolution_and_software_scaling(self):
         available = [(3840, 2160, ""), (2560, 1440, ""), (1920, 1080, ""), (1280, 720, "")]
@@ -67,7 +67,7 @@ class RenderingTests(unittest.TestCase):
         self.assertEqual(pygame.image.tobytes(destination, "RGB"), pygame.image.tobytes(expected, "RGB"))
 
     def test_unavailable_direct_gl_recovers_software_window(self):
-        profile = {"direct_gl": True}
+        profile = {}
         renderer = Mock(gpu_shader=None)
         game = SimpleNamespace(renderer=renderer, gl_window=None)
         display = pygame.Surface((1280, 720))
@@ -82,8 +82,34 @@ class RenderingTests(unittest.TestCase):
             apply_display_mode(profile, game)
         self.assertIs(game.display_surface, display)
         self.assertIsNone(game.gl_window)
-        self.assertTrue(profile["direct_gl"])
         renderer.init_standalone_shader.assert_called_once()
+
+    def test_old_profile_cannot_disable_default_opengl_output(self):
+        from elenor.profile import load_profile, save_profile
+
+        renderer = Mock(gpu_shader=None)
+        game = SimpleNamespace(renderer=renderer, gl_window=None)
+        display = pygame.Surface((1280, 720))
+        gl_window = Mock()
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "save_profile.json")
+            with open(path, "w", encoding="utf-8") as file:
+                file.write('{"direct_gl": false, "volume": 0.42}')
+            with (
+                patch("elenor.profile.get_profile_path", return_value=path),
+                patch("elenor.profile.get_available_resolutions", return_value=[(1280, 720, "")]),
+                patch("elenor.profile._open_gl_window", return_value=(display, gl_window)) as open_gl,
+                patch("pygame.display.set_caption"),
+            ):
+                profile = load_profile()
+                apply_display_mode(profile, game)
+                save_profile(profile)
+            with open(path, encoding="utf-8") as file:
+                self.assertNotIn("direct_gl", file.read())
+        open_gl.assert_called_once()
+        self.assertEqual(profile["volume"], 0.42)
+        self.assertIs(game.gl_window, gl_window)
+        self.assertIs(renderer.gpu_shader, gl_window.shader)
 
     def test_window_exploration_does_not_read_an_unfinished_gpu_transfer(self):
         from elenor.rendering import window
@@ -111,30 +137,21 @@ class RenderingTests(unittest.TestCase):
         self.assertFalse(presenter.pending)
 
     def test_ui_upload_retains_hud_until_a_menu_overwrites_it(self):
-        from elenor.rendering.window import GLWindow
+        from elenor.rendering import window
 
-        presenter = GLWindow.__new__(GLWindow)
-        presenter.ctx = Mock()
-        presenter.gl = Mock()
-        presenter.probe = Mock()
-        presenter.present_program = {key: SimpleNamespace()
-                                     for key in ("viewport", "logical_scale", "has_scene", "has_fog")}
-        presenter.quad = Mock()
-        presenter.ui = Mock()
-        presenter.software_fog = Mock()
-        presenter.scene = presenter.upload_fog = None
-        presenter.ui_pixels = object()
-        presenter.ui_above_hud = object()
-        presenter.hud_surface = object()
-        presenter.uploaded_hud = None
-        presenter.drawable = (SCREEN_W, SCREEN_H)
-        viewport = (0, 0, *presenter.drawable)
+        ctx = MagicMock()
+        viewport = (0, 0, SCREEN_W, SCREEN_H)
+        ctx.screen.size = (SCREEN_W, SCREEN_H)
+        with patch.object(window, "_Fences"):
+            presenter = window.GLWindow(ctx, Mock(), Mock())
+        hud = object()
         for gameplay in (True, True, False, True, True):
-            presenter.present(viewport, presenter.drawable, gameplay)
+            presenter.begin_ui_frame()
+            presenter.hud_surface = hud
+            presenter.present(viewport, ctx.screen.size, gameplay)
 
-        full = call(presenter.ui_pixels)
-        above_hud = call(presenter.ui_above_hud, viewport=(0, 0, SCREEN_W, CANVAS_H * SCALE))
-        self.assertEqual(presenter.ui.write.call_args_list, [full, above_hud, full, full, above_hud])
+        # First frame, menu and the return to the game each replace the texture.
+        self.assertEqual(presenter.ui.write.call_args_list, [call(presenter.ui_pixels)] * 3)
 
     def test_visibility_masks_occlusion_and_soft_dark_edges(self):
         fov = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
@@ -262,16 +279,20 @@ class RenderingTests(unittest.TestCase):
                         "poison_flask",
                     ):
                         self.player.apply_perk(key, self.loc["perks"])
-                    for key in (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f):
-                        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=key))
-                    pygame.event.post(
-                        pygame.event.Event(
-                            pygame.MOUSEBUTTONDOWN, button=3, pos=(500, 200)
-                        )
-                    )
-
                 def use_or_equip_item(self, item, *args, **kwargs):
                     calls.append(item.id)
+
+            configure_display = loop.apply_display_mode
+
+            def configure_and_post_input(profile, game):
+                configure_display(profile, game)
+                for key in (pygame.K_q, pygame.K_e, pygame.K_r, pygame.K_f):
+                    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=key))
+                pygame.event.post(
+                    pygame.event.Event(
+                        pygame.MOUSEBUTTONDOWN, button=3, pos=(500, 200)
+                    )
+                )
 
             original = loop.present_logical_canvas
 
@@ -281,6 +302,7 @@ class RenderingTests(unittest.TestCase):
 
             with (
                 patch.object(loop, "GameController", KeyGame),
+                patch.object(loop, "apply_display_mode", configure_and_post_input),
                 patch.object(loop, "present_logical_canvas", present),
             ):
                 loop.main()

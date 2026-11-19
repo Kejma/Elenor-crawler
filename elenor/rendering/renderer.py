@@ -1127,10 +1127,11 @@ class Renderer(UIRendererMixin):
                 render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask, lights, cam_x, cam_y))
 
         if windups:
+            from elenor.rendering.jungle_attacks import render_jungle_attacks
+
             if use_gpu_lit_fx:
                 render_jungle_attacks(screen, windups, cam_x, cam_y, None, lights, self.jungle_attack_cache, layer=self.lit_pixels)
             else:
-                from elenor.rendering.jungle_attacks import render_jungle_attacks
                 render_jungle_attacks(screen, windups, cam_x, cam_y, fov_mask, lights, self.jungle_attack_cache)
 
         if use_gpu_lit_fx and (has_phys_fx or windups):
