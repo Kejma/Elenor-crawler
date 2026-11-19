@@ -32,12 +32,17 @@ def terrain_kind(tile):
 
 def remember_tiles(dungeon, seen, objects=()):
     """Snapshot terrain, including the state of doors when last seen."""
+    changed = False
+    explored = dungeon.explored_tiles
     for x, y in seen:
         position = (x, y)
         door = dungeon.doors.get(position)
-        dungeon.explored_tiles[position] = (
-            "door" if door and not door.is_open else terrain_kind(dungeon.grid[y][x])
-        )
+        kind = "door" if door and not door.is_open else terrain_kind(dungeon.grid[y][x])
+        if explored.get(position) != kind:
+            explored[position] = kind
+            changed = True
+    if changed:
+        dungeon.exploration_revision += 1
     if seen:
         for obj in objects:
             if not obj.used and obj.kind in OBJECT_LANDMARKS and (obj.x, obj.y) in seen:

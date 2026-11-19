@@ -24,6 +24,9 @@ class Renderer(UIRendererMixin):
         from elenor.rendering.jungle import river_log_sections
         self.log_sections = river_log_sections(self.assets["hollow_log"])
         self.hero_cache = {}
+        self.mana_icons = {}
+        self.mana_slot_overlays = {}
+        self.minimap_cache = None
         self.rot_cache = {}
         self.flip_cache = {}
         self.chill_cache = {}
@@ -356,6 +359,21 @@ class Renderer(UIRendererMixin):
         pygame.draw.rect(surface, bg_lit, (x + 7, y + 7, w - 14, h - 14))
         for rx, ry in ((x + 3, y + 3), (x + w - 6, y + 3), (x + 3, y + h - 6), (x + w - 6, y + h - 6)):
             pygame.draw.rect(surface, UI_BORDER_GOLD, (rx, ry, 3, 3))
+
+    def _mana_icon(self, icon):
+        tinted = self.mana_icons.get(icon)
+        if tinted is None:
+            tinted = pygame.Surface((32, 32), pygame.SRCALPHA)
+            self.draw_item_icon(tinted, icon, 0, 0, 32)
+            rgb = pygame.surfarray.pixels3d(tinted)
+            alpha = pygame.surfarray.pixels_alpha(tinted)
+            opaque = alpha > 10
+            r, g, b = rgb[opaque].T
+            luma = (.299 * r + .587 * g + .114 * b).astype(np.int32)
+            rgb[opaque] = np.column_stack((luma // 3 + 32, luma // 3 + 52, luma // 2 + 95))
+            del rgb, alpha
+            self.mana_icons[icon] = tinted
+        return tinted
 
     def draw_item_icon(self, surface, icon_name, x, y, size=32):
         from elenor.rendering.ability_icons import draw_ability_icon
@@ -936,6 +954,9 @@ class Renderer(UIRendererMixin):
             light_start = perf_counter()
             timings["scene"] = (light_start - scene_start) * 1000
         temple_exposure = dungeon.interior == "temple"
+        gpu_fog = (bool(clouds) and flags.get("gpu_fog", True)
+                   and self.gpu_shader is not None and self.gpu_shader.fog is not None
+                   and len(clouds) <= self.gpu_shader.fog.MAX_CLOUDS and len(lights) <= self.gpu_shader.MAX_LIGHTS)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
@@ -946,7 +967,7 @@ class Renderer(UIRendererMixin):
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
                 temple_exposure=temple_exposure, bounce_color=bounce_color,
-                tonemap=tonemap, timings=timings,
+                tonemap=tonemap, timings=timings, fog=(clouds, now_sec, fov_mask) if gpu_fog else None,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
             )
             r_mult = g_mult = b_mult = None
@@ -1017,6 +1038,7 @@ class Renderer(UIRendererMixin):
                     shadow = self.light_occlusion.surface_visibility(
                         dx, -dy, self.px[x0:x1, :] + cam_x, self.py[:, y0:y1] + cam_y,
                         lx + cam_x, ly + cam_y, radius, viewer, light_z=lz, ground=ent_y <= -9000.0,
+                        shadow_radius=lgt.get("shadow_radius"),
                     )
                     atten *= shadow
 
@@ -1068,20 +1090,30 @@ class Renderer(UIRendererMixin):
         if ui_texts.get("_survey_map"):
             from elenor.rendering.visibility import visible_lit_tiles
             from elenor.world.exploration import remember_tiles
-            seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y)
+            brightness = self.gpu_shader.survey_brightness if gpu_fog else None
+            seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y, brightness=brightness)
             remember_tiles(dungeon, seen, objects)
 
         if timings is not None:
             fog_start = perf_counter()
-        if clouds:
+        if clouds and not gpu_fog:
             fog_lights = [light for light in lights if not light.get("ambient", False)]
             self.fog_renderer.render(lit_surf, dungeon, clouds, fog_lights, fov_mask,
                                      self.entity_y_canvas, cam_x, cam_y, now_sec)
         if timings is not None:
             overlay_start = perf_counter()
             timings["fog"] = (overlay_start - fog_start) * 1000
-        scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
-        screen.blit(scaled_view, (0, 0))
+        viewport = screen.subsurface((0, 0, VIEW_W * SCALE, CANVAS_H * SCALE))
+        # Convert at native resolution, then expand directly into the logical canvas.
+        if lit_surf.get_masks() != viewport.get_masks() or lit_surf.get_bitsize() != viewport.get_bitsize():
+            lit_surf_for_scale = lit_surf.convert(viewport)
+        else:
+            lit_surf_for_scale = lit_surf
+        pygame.transform.scale(lit_surf_for_scale, viewport.get_size(), viewport)
+        if timings is not None:
+            scale_end = perf_counter()
+            timings["survey"] = (fog_start - post_start) * 1000
+            timings["scale"] = (scale_end - overlay_start) * 1000
 
         if game_ref is not None and getattr(game_ref, "mirror_puzzles", None):
             from elenor.rendering.mirrors import render_mirror_puzzles_beams
@@ -1704,17 +1736,13 @@ class Renderer(UIRendererMixin):
                                   bd_col, False, player.illumination)
             if item and drag_item is not item:
                 if is_oom:
-                    ic_tmp = pygame.Surface((32, 32), pygame.SRCALPHA)
-                    self.draw_item_icon(ic_tmp, item.icon, 0, 0, 32)
-                    for py_i in range(32):
-                        for px_i in range(32):
-                            ir, ig, ib, ia = ic_tmp.get_at((px_i, py_i))
-                            if ia > 10:
-                                lum = int(0.299 * ir + 0.587 * ig + 0.114 * ib)
-                                ic_tmp.set_at((px_i, py_i), (min(255, lum // 3 + 32), min(255, lum // 3 + 52), min(255, lum // 2 + 95), ia))
-                    screen.blit(ic_tmp, (rect.x + 11, rect.y + 12))
-                    oom_ov = pygame.Surface((rect.width - 14, rect.height - 14), pygame.SRCALPHA)
-                    oom_ov.fill((22, 36, 68, 95))
+                    screen.blit(self._mana_icon(item.icon), (rect.x + 11, rect.y + 12))
+                    size = (rect.width - 14, rect.height - 14)
+                    oom_ov = self.mana_slot_overlays.get(size)
+                    if oom_ov is None:
+                        oom_ov = pygame.Surface(size, pygame.SRCALPHA)
+                        oom_ov.fill((22, 36, 68, 95))
+                        self.mana_slot_overlays[size] = oom_ov
                     screen.blit(oom_ov, (rect.x + 7, rect.y + 7))
                 else:
                     self.draw_item_icon(screen, item.icon, rect.x + 11, rect.y + 12, 32)
@@ -1793,10 +1821,15 @@ class Renderer(UIRendererMixin):
         screen.blit(cnt_surf, (self.bag_btn_rect.x + 42, self.bag_btn_rect.y + 29))
 
         world_hover_item = ui_texts.get("_world_hover_item")
+        if timings is not None:
+            map_start = perf_counter()
         if ui_texts.get("_show_map_hud"):
             from elenor.ui.exploration_map import draw_map_hud
             thought_bg = lit_surf.get_at((THOUGHT_BOX_X + 8, THOUGHT_BOX_Y + 8))[:3]
             draw_map_hud(screen, ui_texts["_game_ref"], thought_bg)
+        if timings is not None:
+            map_end = perf_counter()
+            timings["minimap"] = (map_end - map_start) * 1000
         if levelup_choices:
             self._render_levelup_modal(screen, player, levelup_choices, ui_texts, hover_pos)
         elif inv_open:
@@ -1818,4 +1851,4 @@ class Renderer(UIRendererMixin):
             self._render_item_tooltip(screen, player, world_hover_item, ui_texts, hover_pos, compare=True, world_item=True)
 
         if timings is not None:
-            timings["overlay"] = (perf_counter() - overlay_start + fog_start - post_start) * 1000
+            timings["overlay"] = (map_start - scale_end + perf_counter() - map_end) * 1000

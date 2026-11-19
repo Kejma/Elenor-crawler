@@ -4,7 +4,7 @@ from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER
 from elenor.rendering.normals import LiveLightPreview
 
 
-from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, apply_display_mode, get_available_resolutions, WINDOW_MODES_LIST
+from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, apply_display_mode, get_available_resolutions, resolution_index, WINDOW_MODES_LIST
 from elenor.data.economy import format_copper_Trigger
 from elenor.rendering.appearance import HERO_TYPES_ORDER, HERO_CUSTOMIZATION_DB, build_custom_hero_sprite
 from elenor.ui.clipboard import paste_text
@@ -599,7 +599,7 @@ class MainMenuController:
         )
 
         avail = get_available_resolutions()
-        cur_r_idx = int(prof.get("resolution_idx", 0)) % len(avail)
+        cur_r_idx = resolution_index(prof, avail)
         res_title = avail[cur_r_idx][2]
         dd_res_rect = self._draw_dropdown_box(
             screen, row_x, box.y + 32 + step_y, row_w,

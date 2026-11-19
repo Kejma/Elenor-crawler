@@ -1,5 +1,7 @@
 """Exploration map and HUD minimap drawn only from remembered terrain."""
 
+from functools import lru_cache
+
 import pygame
 
 from elenor.config import SCREEN_H, SCREEN_W, THOUGHT_BOX_BG
@@ -37,8 +39,10 @@ MARKER_STYLE = {
 
 def chart_surface(dungeon, region=None, *, background=INK):
     """One pixel per known tile. The world grid is deliberately absent here."""
-    surface = pygame.Surface((dungeon.width, dungeon.height) if region is None else region.size)
-    surface.fill(background)
+    size = (dungeon.width, dungeon.height) if region is None else region.size
+    surface = pygame.Surface(size, pygame.SRCALPHA if background is None else 0)
+    if background is not None:
+        surface.fill(background)
     if region is None:
         for point, kind in dungeon.explored_tiles.items():
             surface.set_at(point, TERRAIN[kind])
@@ -113,10 +117,15 @@ def draw_marker(screen, kind, point, radius=8):
         pygame.draw.polygon(screen, color, [tip, upper, lower])
 
 
+@lru_cache(maxsize=16)
+def _map_label(font, label, color):
+    return font.render(label, True, color)
+
+
 def draw_map_hud(screen, game, background=THOUGHT_BOX_BG):
     labels = game.loc["exploration_map"]
     font = game.renderer.font_small
-    hint = font.render(labels["hint"], True, TEXT)
+    hint = _map_label(font, labels["hint"], TEXT)
     if not game.profile["show_minimap"]:
         rect = hint.get_rect(topleft=(31, 24))
         pygame.draw.rect(screen, background, rect.inflate(22, 12), border_radius=4)
@@ -131,10 +140,16 @@ def draw_map_hud(screen, game, background=THOUGHT_BOX_BG):
     pygame.draw.rect(screen, background, panel, border_radius=5)
     pygame.draw.rect(screen, BORDER, panel, width=1, border_radius=5)
     screen.blit(hint, hint.get_rect(midleft=(viewport.left, 32)))
-    north = font.render(labels["north"], True, DIM)
+    north = _map_label(font, labels["north"], DIM)
     screen.blit(north, north.get_rect(midright=(viewport.right, 32)))
-    chart = chart_surface(game.dungeon, region, background=background)
-    screen.blit(pygame.transform.scale(chart, viewport.size), viewport)
+    dungeon = game.dungeon
+    key = region.topleft, dungeon.exploration_revision
+    cached = game.renderer.minimap_cache
+    if cached is None or cached[0] is not dungeon.explored_tiles or cached[1] != key:
+        chart = chart_surface(dungeon, region, background=None)
+        cached = dungeon.explored_tiles, key, pygame.transform.scale(chart, viewport.size)
+        game.renderer.minimap_cache = cached
+    screen.blit(cached[2], viewport)
 
     def pixel(x, y):
         return (

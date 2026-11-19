@@ -14,7 +14,7 @@ import elenor
 from elenor.config import VIEW_W, VIEW_H, CANVAS_H, SCALE
 from elenor.rendering.visibility import overlay_visibility, mask_overlay
 from elenor.rendering.mirrors import render_mirror_puzzles_beams
-from elenor.profile import reset_profile_progress
+from elenor.profile import present_logical_canvas, reset_profile_progress, resolution_index
 from elenor.paths import PROJECT_ROOT
 
 
@@ -48,6 +48,20 @@ class RenderingTests(unittest.TestCase):
         self.assertFalse(profile["rat_king_defeated"])
         self.assertEqual(profile["window_mode"], "borderless")
         self.assertEqual(profile["resolution_idx"], 3)
+
+    def test_default_resolution_and_software_scaling(self):
+        available = [(3840, 2160, ""), (2560, 1440, ""), (1920, 1080, ""), (1280, 720, "")]
+        self.assertEqual(resolution_index({"resolution_idx": None}, available), 2)
+        self.assertEqual(resolution_index({"resolution_idx": 0}, available), 0)
+        source = pygame.Surface((8, 4))
+        source.fill((10, 20, 30))
+        source.fill((100, 20, 30), (2, 2, 3, 2))
+        destination = pygame.Surface((20, 14))
+        present_logical_canvas(destination, source, (2, 2, 16, 8))
+        expected = pygame.Surface(destination.get_size())
+        expected.fill((8, 6, 12))
+        expected.blit(pygame.transform.scale(source, (16, 8)), (2, 2))
+        self.assertEqual(pygame.image.tobytes(destination, "RGB"), pygame.image.tobytes(expected, "RGB"))
 
     def test_visibility_masks_occlusion_and_soft_dark_edges(self):
         fov = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)

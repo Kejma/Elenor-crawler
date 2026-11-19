@@ -59,7 +59,7 @@ DEFAULT_PROFILE = {
     "show_minimap": True,
     "show_performance": False,
     "window_mode": "windowed",
-    "resolution_idx": 0,
+    "resolution_idx": None,
     "fullscreen": False,
 }
 
@@ -108,6 +108,13 @@ def reset_profile_progress(prof):
     save_profile(prof)
 
 
+def resolution_index(profile, available):
+    saved = profile.get("resolution_idx")
+    if isinstance(saved, int) and 0 <= saved < len(available):
+        return saved
+    return next((i for i, (w, h, _) in enumerate(available) if w <= SCREEN_W and h <= SCREEN_H), 0)
+
+
 def apply_display_mode(prof, game=None):
     """
     Применяет выбранное разрешение и режим (В окне / Без рамки / Полный экран)
@@ -118,10 +125,8 @@ def apply_display_mode(prof, game=None):
 
     w_mode = prof.get("window_mode", "windowed")
     avail = get_available_resolutions()
-    r_idx = int(prof.get("resolution_idx", 0))
-    if r_idx >= len(avail):
-        r_idx = 0
-        prof["resolution_idx"] = 0
+    r_idx = resolution_index(prof, avail)
+    prof["resolution_idx"] = r_idx
     target_w, target_h, _ = avail[r_idx]
 
     flags = 0
@@ -131,15 +136,12 @@ def apply_display_mode(prof, game=None):
         flags = pygame.FULLSCREEN
 
     try:
-        disp_surf = pygame.display.set_mode((target_w, target_h), flags, vsync=1)
-    except Exception:
-        try:
-            disp_surf = pygame.display.set_mode((target_w, target_h), flags)
-        except Exception:
-            disp_surf = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+        disp_surf = pygame.display.set_mode((target_w, target_h), flags)
+    except pygame.error:
+        disp_surf = pygame.display.set_mode((SCREEN_W, SCREEN_H))
 
     real_w, real_h = disp_surf.get_size()
-    # Считаем вписывание 1152x858 в реальное окно с сохранением пропорций (чёткие пиксели без мыла!)
+    # Считаем вписывание 1920x1080 в реальное окно с сохранением пропорций (чёткие пиксели без мыла!)
     scale_factor = min(real_w / float(SCREEN_W), real_h / float(SCREEN_H))
     scaled_w = max(1, int(round(SCREEN_W * scale_factor)))
     scaled_h = max(1, int(round(SCREEN_H * scale_factor)))
@@ -153,22 +155,43 @@ def apply_display_mode(prof, game=None):
 
 
 def map_window_to_logical(pos, viewport_rect):
-    """Переводит физические координаты мыши окна в логические координаты игры (1152x858)."""
+    """Переводит физические координаты мыши окна в логические координаты игры (1920x1080)."""
     ox, oy, sw, sh = viewport_rect
     lx = int((pos[0] - ox) * SCREEN_W / max(1, sw))
     ly = int((pos[1] - oy) * SCREEN_H / max(1, sh))
     return (max(0, min(SCREEN_W - 1, lx)), max(0, min(SCREEN_H - 1, ly)))
 
 
+_scaled_canvas = None
+
+
 def present_logical_canvas(display_surf, logical_surf, viewport_rect):
-    """Выводит логический холст 1152x858 на экран с бритвенно-резким Nearest-Neighbor скейлом."""
+    """Выводит логический холст 1920x1080 на экран с бритвенно-резким Nearest-Neighbor скейлом."""
+    global _scaled_canvas
     ox, oy, sw, sh = viewport_rect
     if sw == SCREEN_W and sh == SCREEN_H and ox == 0 and oy == 0:
         display_surf.blit(logical_surf, (0, 0))
     else:
-        display_surf.fill((8, 6, 12))
-        # pygame.transform.scale всегда использует строгий Nearest-Neighbor без билинейного мыла!
-        sharp_scaled = pygame.transform.scale(logical_surf, (sw, sh))
-        display_surf.blit(sharp_scaled, (ox, oy))
+        width, height = display_surf.get_size()
+        bar_color = (8, 6, 12)
+        if ox:
+            display_surf.fill(bar_color, (0, 0, ox, height))
+        if ox + sw < width:
+            display_surf.fill(bar_color, (ox + sw, 0, width - ox - sw, height))
+        if oy:
+            display_surf.fill(bar_color, (ox, 0, sw, oy))
+        if oy + sh < height:
+            display_surf.fill(bar_color, (ox, oy + sh, sw, height - oy - sh))
+        mask = logical_surf.get_masks()
+        depth = logical_surf.get_bitsize()
+        if display_surf.get_masks() == mask and display_surf.get_bitsize() == depth:
+            viewport = display_surf.subsurface((ox, oy, sw, sh))
+            pygame.transform.scale(logical_surf, (sw, sh), viewport)
+        else:
+            if (_scaled_canvas is None or _scaled_canvas.get_size() != (sw, sh)
+                    or _scaled_canvas.get_masks() != mask or _scaled_canvas.get_bitsize() != depth):
+                _scaled_canvas = pygame.Surface((sw, sh), 0, logical_surf)
+            pygame.transform.scale(logical_surf, (sw, sh), _scaled_canvas)
+            display_surf.blit(_scaled_canvas, (ox, oy))
 
 

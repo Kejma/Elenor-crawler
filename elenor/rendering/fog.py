@@ -35,7 +35,8 @@ class FogRenderer:
             dist = np.sqrt(dx * dx + dy * dy)
             if not ((dist < radius) & visible[i0:i1, j0:j1]).any():
                 continue
-            stops = self.occlusion.distances(lx + cam_x, ly + cam_y, radius)
+            reach = light.get("shadow_radius", light["radius"]) * 1.08
+            stops = self.occlusion.distances(lx + cam_x, ly + cam_y, reach)
             angle = np.arctan2(dy, dx) * (SHADOW_RAYS / math.tau)
             transmission = self.occlusion.penumbra(stops, angle, dist)
             range_fade = np.clip(1.0 - np.hypot(dist, lz * .43) / radius, 0.0, 1.0)
@@ -125,9 +126,14 @@ class FogRenderer:
         del alpha
 
         pygame.transform.smoothscale(self.half, self.full.get_size(), self.full)
+        # Account for the interpolation footprint and smoothscale's edge alignment.
+        left, top = max(0, i0 * 2 - 2), max(0, j0 * 2 - 2)
+        right, bottom = min(VIEW_W, i1 * 2 + 3), min(VIEW_H, j1 * 2 + 3)
         alpha = pygame.surfarray.pixels_alpha(self.full)
-        sx = (np.arange(VIEW_W) + cam_x).astype(np.int32).clip(0, self.occlusion.blockers.shape[0] - 1)
-        sy = (np.arange(VIEW_H) + cam_y).astype(np.int32).clip(0, self.occlusion.blockers.shape[1] - 1)
-        np.multiply(alpha, fov_mask[:, :VIEW_H] * ~self.occlusion.blockers[sx[:, None], sy], out=alpha, casting="unsafe")
-        del alpha
-        screen.blit(self.full, (0, 0))
+        active_alpha = alpha[left:right, top:bottom]
+        sx = (np.arange(left, right) + cam_x).astype(np.int32).clip(0, self.occlusion.blockers.shape[0] - 1)
+        sy = (np.arange(top, bottom) + cam_y).astype(np.int32).clip(0, self.occlusion.blockers.shape[1] - 1)
+        visibility = fov_mask[left:right, top:bottom] * ~self.occlusion.blockers[sx[:, None], sy]
+        np.multiply(active_alpha, visibility, out=active_alpha, casting="unsafe")
+        del active_alpha, alpha
+        screen.blit(self.full, (left, top), (left, top, right - left, bottom - top))

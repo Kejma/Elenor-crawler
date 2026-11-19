@@ -39,8 +39,11 @@ def capture_scene(game, campaign):
     if campaign == "jungle":
         cloud = dict(wx=game.player.x, wy=game.player.y, radius=5, density=.4,
                      color=(.55, .7, .65), timer=None)
-        game.renderer.fog_renderer.render(fog, dungeon, [cloud], lights, mask,
-                                          game.renderer.entity_y_canvas, cam_x, cam_y, 0)
+        if game.renderer.gpu_shader.fog is not None and len(lights) <= game.renderer.gpu_shader.MAX_LIGHTS:
+            lighting.call_args.kwargs["fog"] = ([cloud], 0.0, mask)
+        elif lighting.call_args.kwargs["fog"] is None:
+            game.renderer.fog_renderer.render(fog, dungeon, [cloud], lights, mask,
+                                              game.renderer.entity_y_canvas, cam_x, cam_y, 0)
     overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
     overlay.blit(pygame.transform.scale_by(fog, SCALE), (0, 0))
     hud = screen.subsurface((0, CANVAS_H * SCALE, SCREEN_W, SCREEN_H - CANVAS_H * SCALE))

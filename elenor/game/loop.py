@@ -32,13 +32,12 @@ def main():
     os.environ["SDL_VIDEO_CENTERED"] = "1"
     pygame.init()
 
-    # Внутренний эталонный холст игры (всегда 1152x858, чтобы ни один пиксель не мылился!)
-    screen = pygame.Surface((SCREEN_W, SCREEN_H))
     pygame.display.set_caption("Elenor-crawler")
     clock = pygame.time.Clock()
 
     game = GameController()
     apply_display_mode(game.profile, game)
+    screen = pygame.Surface((SCREEN_W, SCREEN_H), 0, game.display_surface)
     running = True
     map_chart = None
     fps_start = None
@@ -74,7 +73,9 @@ def main():
             place = f"{game.campaign}/{game.dungeon.floor_num}/{game.dungeon.interior or 'surface'}"
             disabled = ",".join(key for key, enabled in game.fx.flags.items() if not enabled) or "-"
             backend = "gl" if gpu else "cpu"
-            profile.end(f"{place} seed={game.run_seed} backend={backend} off={disabled}", present_start)
+            width, height = game.display_surface.get_size()
+            profile.end(f"{place} seed={game.run_seed} backend={backend} res={width}x{height} off={disabled}",
+                        present_start)
 
     while running:
         profile.begin(game.profile["show_performance"])
@@ -765,6 +766,7 @@ def main():
                     if math.hypot(game.player.x - vfx["x"], game.player.y - vfx["y"]) <= vfx["radius"]:
                         game.on_player_hit(vfx["dmg"], is_magic=True, source=vfx.get("source"))
 
+        flicker_extent = 3.5 + 1.8
         flicker = math.sin(t * 3.2) * 3.5 + math.cos(t * 6.7) * 1.8
         p_sx = world_ox - game.cam_x
         p_sy = world_oy - game.cam_y
@@ -785,6 +787,7 @@ def main():
                 "pos": (p_sx + 4, p_sy - 2, TORCH_Z_HEIGHT),
                 "foot_y": p_foot_sy + 1.5,
                 "radius": game.player.torch_light_radius + flicker,
+                "shadow_radius": game.player.torch_light_radius + flicker_extent,
                 "color": (1.15, 0.80, 0.40)
             })
 
@@ -804,6 +807,7 @@ def main():
                 "foot_y": p_foot_sy + 2.0,
                 "ignore_depth": True,
                 "radius": 92.0 + flicker,
+                "shadow_radius": 92.0 + flicker_extent,
                 "color": (1.35, 0.62, 0.22)
             })
         if getattr(game.player, "rejuv_timer", 0.0) > 0.0:
@@ -841,7 +845,7 @@ def main():
                 "color": (1.4, 1.15, 0.45)
             })
 
-        def register_world_and_hud_light(wx_px, wy_px, foot_wy_px, z_h, rad, col, allowed_set, ignore_d=False):
+        def register_world_and_hud_light(wx_px, wy_px, foot_wy_px, z_h, rad, col, allowed_set, ignore_d=False, *, shadow_radius=None):
             sx, sy = wx_px - game.cam_x, wy_px - game.cam_y
             if -rad <= sx <= VIEW_W + rad and -rad <= sy <= VIEW_H + rad:
                 lights.append({
@@ -849,6 +853,7 @@ def main():
                     "foot_y": foot_wy_px - game.cam_y,
                     "ignore_depth": ignore_d,
                     "radius": rad,
+                    "shadow_radius": rad if shadow_radius is None else shadow_radius,
                     "color": col,
                     "allowed_tiles": allowed_set
                 })
@@ -877,7 +882,7 @@ def main():
                 })
 
         if getattr(game.dev_panel, "reveal_map", False):
-            fov_mask[:, :] = 1.0
+            fov_mask = game.dungeon.revealed_fov
             visible_tiles = {(c, r) for r in range(game.dungeon.height) for c in range(game.dungeon.width)}
             lights.append({"pos": (VIEW_W * 0.5, VIEW_H * 0.5, 180.0), "foot_y": 9999.0, "ignore_depth": True, "radius": 600.0, "ambient": True, "color": (0.85, 0.85, 0.95)})
 
@@ -887,7 +892,8 @@ def main():
             rad = br["radius"] + flicker * 0.5
             if (abs(lx_w - world_ox) > VIEW_W + rad or abs(ly_w - world_oy) > VIEW_H + rad):
                 continue
-            register_world_and_hud_light(lx_w, ly_w, foot_w, 22.0, rad, br["color"], None)
+            register_world_and_hud_light(lx_w, ly_w, foot_w, 22.0, rad, br["color"], None,
+                                         shadow_radius=br["radius"] + flicker_extent * 0.5)
 
         for rl in game.dungeon.room_lights:
             lx_w, ly_w = rl["x"] * TILE_W + 8, rl["y"] * TILE_H + 8
@@ -909,7 +915,8 @@ def main():
                 lx_w, ly_w = obj.x * TILE_W + 8, obj.y * TILE_H + 8
                 foot_w = (obj.y + 0.5) * TILE_H
                 rad = 115.0 + flicker * 0.8
-                register_world_and_hud_light(lx_w, ly_w, foot_w, 24.0, rad, (1.20, 0.72, 0.32), None)
+                register_world_and_hud_light(lx_w, ly_w, foot_w, 24.0, rad, (1.20, 0.72, 0.32), None,
+                                             shadow_radius=115.0 + flicker_extent * 0.8)
 
         inject_mirror_puzzle_lights(game, lights, player_open_tiles, register_world_and_hud_light)
 

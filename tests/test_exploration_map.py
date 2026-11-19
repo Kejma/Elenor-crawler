@@ -58,6 +58,33 @@ class ExplorationMapTests(unittest.TestCase):
             cache.set_view(dungeon, 9.6, 7.5)
             self.assertEqual(cache.target(tree), 0.0)
 
+    def test_fov_cache_refreshes_on_camera_door_and_geometry_changes(self):
+        dungeon = Dungeon()
+        dungeon.grid = [[1] * 15 for _ in range(12)]
+        dungeon.thickets.clear()
+        dungeon._carve_rect(pygame.Rect(1, 5, 12, 1), 4)
+        door = Door(5, 5)
+        dungeon.doors = {(5, 5): door}
+        dungeon.invalidate_light_cache()
+        viewer = (2.5 * TILE_W, 5.5 * TILE_H)
+
+        closed = dungeon.compute_nox_fov(*viewer, 0, 0)
+        self.assertIs(closed, dungeon.compute_nox_fov(*viewer, 0, 0))
+        self.assertFalse(closed[0].flags.writeable)
+        self.assertNotIn((8, 5), closed[2])
+
+        door.is_open = True
+        opened = dungeon.compute_nox_fov(*viewer, 0, 0)
+        self.assertIn((8, 5), opened[2])
+        before_pan = opened[0].copy()
+        panned = dungeon.compute_nox_fov(*viewer, TILE_W, 0)
+        self.assertFalse(np.array_equal(before_pan, panned[0]))
+        self.assertEqual(opened[2], panned[2])
+
+        dungeon.grid[5][5] = 1
+        dungeon.invalidate_light_cache()
+        self.assertNotIn((8, 5), dungeon.compute_nox_fov(*viewer, TILE_W, 0)[2])
+
     def test_survey_requires_both_light_and_line_of_sight(self):
         scene = pygame.Surface((VIEW_W, VIEW_H))
         scene.fill((0, 0, 0))

@@ -25,6 +25,9 @@ class Lever:
 
 
 class Dungeon:
+    revealed_fov = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
+    revealed_fov.flags.writeable = False
+
     def __init__(self, puzzle_profile="procedural", puzzle_chance=0.12, merchant_chance=MERCHANT_ROOM_CHANCE):
         # The campaign opts into its fixed introduction explicitly.
         if puzzle_profile not in ("rats", "procedural"):
@@ -45,9 +48,11 @@ class Dungeon:
         self._last_viewer_pos = (8.0, 20.0)
         # Предвычисленные матрицы лучей для мгновенного векторного расчёта FOV
         angles = np.radians(np.arange(RAY_COUNT, dtype=np.float32) * (360.0 / RAY_COUNT))
-        self._ray_cos = np.cos(angles)[:, None]
-        self._ray_sin = np.sin(angles)[:, None]
-        self._ray_r = np.arange(2.0, LOS_MAX_RADIUS, 2.0, dtype=np.float32)[None, :]
+        radii = np.arange(2.0, LOS_MAX_RADIUS, 2.0, dtype=np.float32)[None, :]
+        self._ray_dx = np.cos(angles)[:, None] * radii
+        self._ray_dy = np.sin(angles)[:, None] * radii
+        self._ray_indices = np.arange(RAY_COUNT)
+        self._ray_steps = np.arange(radii.shape[1])[None, :]
         self._fov_surf = pygame.Surface((VIEW_W, VIEW_H))
         self._fov_full_mask = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
         self._base_block_grid = None
@@ -68,6 +73,8 @@ class Dungeon:
         self.geometry_revision = getattr(self, "geometry_revision", 0) + 1
         self._light_cache = {}
         self._base_block_grid = None
+        self._fov_key = None
+        self._sight_doors = None
 
     @property
     def width(self):
@@ -94,6 +101,7 @@ class Dungeon:
         self.jungle_starter_cache = None
         self.jungle_bag_cache = None
         self.explored_tiles = {}
+        self.exploration_revision = 0
         self.map_landmarks = {}
         self.interior = interior
         self.jungle_route_variant = route_variant
@@ -629,6 +637,8 @@ class Dungeon:
         previous = None
         start_tile = (math.floor(x0), math.floor(y0))
         thickets = self.thickets
+        grid, doors = self.grid, self.doors
+        width, height = self.width, self.height
         for i in range(1, steps + (target_thicket is not None)):
             t = i / steps
             x, y = x0 + dx * t, y0 + dy * t
@@ -636,7 +646,10 @@ class Dungeon:
             tile = cx, cy
             if tile != previous:
                 # Walls and doors occupy their entire tile. Only roots need sub-tile checks.
-                if self.is_blocking_sight(cx, cy, include_thickets=False):
+                if not (0 <= cx < width and 0 <= cy < height) or grid[cy][cx] in OPAQUE_WALL_TILES:
+                    return False
+                door = doors.get(tile)
+                if door and not door.is_open:
                     return False
                 if target_thicket is not None:
                     px, py = previous if previous is not None else start_tile
@@ -759,16 +772,8 @@ class Dungeon:
                         allowed_grid[wx, wy] = 1.0
         return allowed_grid
 
-    def compute_nox_fov(self, world_ox, world_oy, cam_x, cam_y):
-        self._last_viewer_pos = (world_ox / TILE_W, world_oy / TILE_H)
-        cam_ix, cam_iy = int(round(cam_x)), int(round(cam_y))
-
-        fov_surf = self._fov_surf
-        fov_surf.fill((0, 0, 0))
-
-        start_tx = max(0, min(self.width - 1, int(world_ox) // TILE_W))
-        start_ty = max(0, min(self.height - 1, int(world_oy) // TILE_H))
-
+    def _sight_geometry(self, closed_doors):
+        """Tile obstacles and sub-tile root geometry shared by visibility passes."""
         if self._base_block_grid is None:
             base_bg = np.zeros((self.width, self.height), dtype=bool)
             for ry in range(self.height):
@@ -785,21 +790,42 @@ class Dungeon:
             self._fov_roots = roots
             self._base_block_grid = base_bg
 
-        block_grid = self._base_block_grid.copy()
-        for (dx, dy), door in self.doors.items():
-            if not door.is_open:
-                block_grid[dx, dy] = True
+        if closed_doors != self._sight_doors:
+            walls = self._base_block_grid.copy()
+            for dx, dy in closed_doors:
+                walls[dx, dy] = True
+            self._closed_sight_grid = walls
+            self._sight_doors = closed_doors
+        return self._closed_sight_grid, self._fov_roots
+
+    def compute_nox_fov(self, world_ox, world_oy, cam_x, cam_y):
+        self._last_viewer_pos = (world_ox / TILE_W, world_oy / TILE_H)
+        cam_ix, cam_iy = int(round(cam_x)), int(round(cam_y))
+
+        closed_doors = tuple(point for point, door in self.doors.items() if not door.is_open)
+        key = world_ox, world_oy, cam_ix, cam_iy, closed_doors
+        if self._fov_key == key:
+            return self._fov_result
+
+        fov_surf = self._fov_surf
+        fov_surf.fill((0, 0, 0))
+
+        start_tx = max(0, min(self.width - 1, int(world_ox) // TILE_W))
+        start_ty = max(0, min(self.height - 1, int(world_oy) // TILE_H))
+
+        walls, roots_grid = self._sight_geometry(closed_doors)
+        block_grid = walls.copy()
         block_grid[start_tx, start_ty] = False
 
         # Векторный расчёт всех 280 лучей одновременно через NumPy!
-        wx = world_ox + self._ray_cos * self._ray_r
-        wy = world_oy + self._ray_sin * self._ray_r
-        tx = np.clip((wx // TILE_W).astype(np.int32), 0, self.width - 1)
-        ty = np.clip((wy // TILE_H).astype(np.int32), 0, self.height - 1)
+        wx = world_ox + self._ray_dx
+        wy = world_oy + self._ray_dy
+        tx = np.clip(np.floor(wx / TILE_W).astype(np.int32), 0, self.width - 1)
+        ty = np.clip(np.floor(wy / TILE_H).astype(np.int32), 0, self.height - 1)
 
         blocked = block_grid[tx, ty]
         if self.thickets:
-            roots = self._fov_roots[tx, ty]
+            roots = roots_grid[tx, ty]
             ox, oy = wx / TILE_W - tx - 0.5, wy / TILE_H - ty - 0.5
             trunks = (ox * ox + oy * oy <= 0.22 ** 2)
             branches_x = (np.abs(oy) <= 0.15) & np.where(ox > 0, roots & 2, roots & 4).astype(bool)
@@ -811,45 +837,49 @@ class Dungeon:
         blocked[:, 1:] |= diag_pinch
 
         has_hit = blocked.any(axis=1)
-        hit_idx = np.where(has_hit, np.argmax(blocked, axis=1), self._ray_r.shape[1] - 1)
+        hit_idx = np.where(has_hit, np.argmax(blocked, axis=1), self._ray_steps.size - 1)
 
-        ray_indices = np.arange(RAY_COUNT)
+        ray_indices = self._ray_indices
         end_wx = wx[ray_indices, hit_idx]
         end_wy = wy[ray_indices, hit_idx]
         poly_points = list(zip((end_wx - cam_ix).astype(int).tolist(), (end_wy - cam_iy).astype(int).tolist()))
 
-        step_indices = np.arange(self._ray_r.shape[1])[None, :]
-        open_mask = step_indices < hit_idx[:, None]
-        open_tx = tx[open_mask]
-        open_ty = ty[open_mask]
+        open_mask = self._ray_steps < hit_idx[:, None]
+        open_grid = np.zeros_like(block_grid)
+        open_grid[tx[open_mask], ty[open_mask]] = True
+        open_grid[start_tx, start_ty] = True
 
-        open_visible_tiles = set(zip(open_tx.tolist(), open_ty.tolist()))
-        open_visible_tiles.add((start_tx, start_ty))
-        visible_tiles = set(open_visible_tiles)
+        # Find wall faces in neighbouring cells without revisiting a tile for each ray.
+        width, height = open_grid.shape
+        nearby = np.zeros_like(open_grid)
+        padded = np.pad(open_grid, 1)
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+            nearby |= padded[1 + dx:1 + dx + width, 1 + dy:1 + dy + height]
+        visible_grid = open_grid | (nearby & block_grid)
+        visible_grid[tx[ray_indices[has_hit], hit_idx[has_hit]],
+                     ty[ray_indices[has_hit], hit_idx[has_hit]]] = True
 
-        hit_tx = tx[ray_indices[has_hit], hit_idx[has_hit]]
-        hit_ty = ty[ray_indices[has_hit], hit_idx[has_hit]]
-        visible_tiles.update(zip(hit_tx.tolist(), hit_ty.tolist()))
+        open_x, open_y = np.nonzero(open_grid)
+        visible_x, visible_y = np.nonzero(visible_grid)
+        open_visible_tiles = frozenset(zip(open_x.tolist(), open_y.tolist()))
+        visible_tiles = frozenset(zip(visible_x.tolist(), visible_y.tolist()))
 
         if len(poly_points) >= 3:
             pygame.draw.polygon(fov_surf, (255, 255, 255), poly_points)
 
-        for (ox, oy) in open_visible_tiles:
-            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
-                nx, ny = ox + dx, oy + dy
-                if 0 <= nx < self.width and 0 <= ny < self.height and block_grid[nx, ny]:
-                    visible_tiles.add((nx, ny))
-
-        for (vtx, vty) in visible_tiles:
-            if block_grid[vtx, vty]:
-                pygame.draw.rect(
-                    fov_surf,
-                    (255, 255, 255),
-                    (vtx * TILE_W - cam_ix, vty * TILE_H - cam_iy, TILE_W, TILE_H)
-                )
+        wall_x, wall_y = np.nonzero(visible_grid & block_grid)
+        for vtx, vty in zip(wall_x.tolist(), wall_y.tolist()):
+            pygame.draw.rect(
+                fov_surf, (255, 255, 255),
+                (vtx * TILE_W - cam_ix, vty * TILE_H - cam_iy, TILE_W, TILE_H),
+            )
 
         fov_red_view = pygame.surfarray.pixels3d(fov_surf)[:, :, 0]
         np.multiply(fov_red_view, 1.0 / 255.0, out=self._fov_full_mask[:, :VIEW_H], casting="unsafe")
         del fov_red_view
 
-        return self._fov_full_mask, visible_tiles, open_visible_tiles
+        mask = self._fov_full_mask.view()
+        mask.flags.writeable = False
+        self._fov_key = key
+        self._fov_result = mask, visible_tiles, open_visible_tiles
+        return self._fov_result

@@ -1,4 +1,5 @@
 """Pixel visibility for emissive overlays, shared by CPU and GPU rendering."""
+from functools import lru_cache
 import math
 
 import numpy as np
@@ -64,14 +65,15 @@ class CanopyVisibility:
         self.time = time
 
     def set_view(self, dungeon, x, y):
-        view = dungeon, dungeon.geometry_revision, x, y
+        closed_doors = tuple(point for point, door in dungeon.doors.items() if not door.is_open)
+        view = dungeon, dungeon.geometry_revision, x, y, closed_doors
         if view != self.view:
             self.view = view
             self.targets.clear()
 
     def target(self, tile):
         if tile not in self.targets:
-            dungeon, _, x, y = self.view
+            dungeon, _, x, y, _ = self.view
             self.targets[tile] = canopy_visibility(dungeon, x, y, *tile)
         return self.targets[tile]
 
@@ -153,19 +155,29 @@ def mask_overlay(surface, visibility, cache):
     surface.blit(scaled, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
 
-def visible_lit_tiles(lit_surface, fov_mask, visible_tiles, cam_x, cam_y):
-    """Use the lit scene before overlays, with a few samples inside each tile."""
-    if not visible_tiles:
-        return set()
-    tiles = np.array(list(visible_tiles), dtype=np.int32)
+@lru_cache(maxsize=2)
+def _survey_samples(visible_tiles, cam_x, cam_y):
+    coordinates = tuple(visible_tiles)
+    tiles = np.array(coordinates, dtype=np.int32)
     offsets = np.array((-4, 0, 4))
-    xs = tiles[:, 0, None, None] * TILE_W + TILE_W // 2 - round(cam_x) + offsets[None, :, None]
-    ys = tiles[:, 1, None, None] * TILE_H + TILE_H // 2 - round(cam_y) + offsets[None, None, :]
+    xs = tiles[:, 0, None, None] * TILE_W + TILE_W // 2 - cam_x + offsets[None, :, None]
+    ys = tiles[:, 1, None, None] * TILE_H + TILE_H // 2 - cam_y + offsets[None, None, :]
     on_screen = (0 <= xs) & (xs < VIEW_W) & (0 <= ys) & (ys < VIEW_H)
     xs = xs.clip(0, VIEW_W - 1)
     ys = ys.clip(0, VIEW_H - 1)
-    pixels = pygame.surfarray.pixels3d(lit_surface)
-    light = pixels[xs, ys].sum(axis=-1)
-    del pixels
-    readable = on_screen & (fov_mask[xs, ys] > 0.5) & (light >= 39)
-    return {tuple(tile) for tile in tiles[readable.sum(axis=(1, 2)) >= 2].tolist()}
+    return coordinates, xs, ys, on_screen
+
+
+def visible_lit_tiles(lit_surface, fov_mask, visible_tiles, cam_x, cam_y, *, brightness=None):
+    """Use the lit scene before overlays, with a few samples inside each tile."""
+    if not visible_tiles:
+        return set()
+    tiles, xs, ys, on_screen = _survey_samples(frozenset(visible_tiles), round(cam_x), round(cam_y))
+    if brightness is None:
+        pixels = pygame.surfarray.pixels3d(lit_surface)
+        lit = pixels[xs, ys].sum(axis=-1) >= 39
+        del pixels
+    else:
+        lit = brightness[xs, ys] > 0
+    readable = on_screen & (fov_mask[xs, ys] > 0.5) & lit
+    return {tiles[i] for i in np.flatnonzero(readable.sum(axis=(1, 2)) >= 2)}

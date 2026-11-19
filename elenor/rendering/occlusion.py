@@ -189,9 +189,9 @@ class LightOcclusion:
             np.maximum(max_shade, shade, out=max_shade)
         return 1 - max_shade * PROP_SHADOW_STRENGTH
 
-    def surface_visibility(self, dx, dy, x, y, lx, ly, radius, viewer, light_z=22.0, ground=True):
+    def surface_visibility(self, dx, dy, x, y, lx, ly, radius, viewer, light_z=22.0, ground=True, *, shadow_radius=None):
         """Shadow mask for software rendering, including the lit faces of walls."""
-        stops = self.distances(lx, ly, radius)
+        stops = self.distances(lx, ly, radius if shadow_radius is None else shadow_radius)
         has_hard = stops.min() < radius + 2.0
         if not has_hard and not self.has_props:
             return 1.0
