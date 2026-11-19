@@ -1,4 +1,5 @@
 import math
+from time import perf_counter
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, COIN_TEXT_COLOR, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
@@ -526,6 +527,7 @@ class Renderer(UIRendererMixin):
         return self.emissive_cache[key]
 
     def render_frame(self, screen, dungeon, player, mobs, objects, projectiles, particles, popups, cam_x, cam_y, fov_mask, visible_tiles, lights, shown_thought, ui_texts, inv_open, hover_pos, drag_item, hover_target=None, levelup_choices=None, hud_lights=None):
+        scene_start = perf_counter() if "_frame_timings" in ui_texts else 0.0
         # Привязываем камеру к целым пикселям буфера, чтобы полностью убрать субпиксельное дрожание тайлов!
         cam_x = float(round(cam_x))
         cam_y = float(round(cam_y))
@@ -924,9 +926,15 @@ class Renderer(UIRendererMixin):
                 radius = cloud["radius"]*TILE_W
                 if -radius <= sx <= VIEW_W+radius and -radius <= sy <= VIEW_H+radius:
                     clouds.append(cloud)
+        timings = ui_texts.get("_frame_timings")
         self.light_occlusion.update(dungeon, objects)
         viewer = (player.x * TILE_W, player.y * TILE_H)
-        bounce_color = bounce_color_for(dungeon)
+        flags = fx_mgr.flags if fx_mgr else {}
+        bounce_color = bounce_color_for(dungeon) if flags.get("reflected_light", True) else (0.0, 0.0, 0.0)
+        tonemap = flags.get("tonemap", True)
+        if timings is not None:
+            light_start = perf_counter()
+            timings["scene"] = (light_start - scene_start) * 1000
         temple_exposure = dungeon.interior == "temple"
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
@@ -938,6 +946,7 @@ class Renderer(UIRendererMixin):
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
                 temple_exposure=temple_exposure, bounce_color=bounce_color,
+                tonemap=tonemap, timings=timings,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
             )
             r_mult = g_mult = b_mult = None
@@ -963,6 +972,7 @@ class Renderer(UIRendererMixin):
             ty_screen = np.clip(((self.py[0, :VIEW_H] + cam_y) // TILE_H).astype(np.int32), 0, dungeon.height - 1)
 
 
+            reflected_light = any(bounce_color)
             r_mult[:, VIEW_H:] = 0.74
             g_mult[:, VIEW_H:] = 0.74
             b_mult[:, VIEW_H:] = 0.80
@@ -1019,7 +1029,7 @@ class Renderer(UIRendererMixin):
                 front_shade = 1.0 - behind_ratio * (1.0 - sub_rim) * 0.65
                 intensity = ndotl * atten * 1.45 * front_shade
 
-                bounce = atten * np.maximum(1.0 - ndotl, 0.0) if local else 0.0
+                bounce = atten * np.maximum(1.0 - ndotl, 0.0) if local and reflected_light else 0.0
                 r_mult[x0:x1, y0:y1] += (intensity + bounce * bounce_color[0]) * cr
                 g_mult[x0:x1, y0:y1] += (intensity + bounce * bounce_color[1]) * cg
                 b_mult[x0:x1, y0:y1] += (intensity + bounce * bounce_color[2]) * cb
@@ -1045,8 +1055,15 @@ class Renderer(UIRendererMixin):
             out[:, :, 0] = np.where(rim_add_r > 0.5, np.minimum(228.0, base_r * 1.25 + rim_add_r * scene_fov), base_r)
             out[:, :, 1] = np.where(rim_add_g > 0.5, np.minimum(222.0, base_g * 1.25 + rim_add_g * scene_fov), base_g)
             out[:, :, 2] = np.where(rim_add_b > 0.5, np.minimum(220.0, base_b * 1.25 + rim_add_b * scene_fov), base_b)
-            tone_map_world(out[:, :VIEW_H], is_ent[:, :VIEW_H], temple_exposure)
+            if tonemap:
+                tone_map_world(out[:, :VIEW_H], is_ent[:, :VIEW_H], temple_exposure)
+            elif temple_exposure:
+                tone_map_world(out[:, :VIEW_H], is_ent[:, :VIEW_H], True, temple_only=True)
             lit_surf = pygame.surfarray.make_surface(out.clip(0,255).astype(np.uint8))
+
+        if timings is not None:
+            post_start = perf_counter()
+            timings["light_cpu"] = (post_start - light_start) * 1000 - timings.get("read", 0.0)
 
         if ui_texts.get("_survey_map"):
             from elenor.rendering.visibility import visible_lit_tiles
@@ -1054,10 +1071,15 @@ class Renderer(UIRendererMixin):
             seen = visible_lit_tiles(lit_surf, fov_mask, visible_tiles, cam_x, cam_y)
             remember_tiles(dungeon, seen, objects)
 
+        if timings is not None:
+            fog_start = perf_counter()
         if clouds:
             fog_lights = [light for light in lights if not light.get("ambient", False)]
             self.fog_renderer.render(lit_surf, dungeon, clouds, fog_lights, fov_mask,
                                      self.entity_y_canvas, cam_x, cam_y, now_sec)
+        if timings is not None:
+            overlay_start = perf_counter()
+            timings["fog"] = (overlay_start - fog_start) * 1000
         scaled_view = pygame.transform.scale(lit_surf, (VIEW_W * SCALE, CANVAS_H * SCALE))
         screen.blit(scaled_view, (0, 0))
 
@@ -1795,3 +1817,5 @@ class Renderer(UIRendererMixin):
         elif world_hover_item:
             self._render_item_tooltip(screen, player, world_hover_item, ui_texts, hover_pos, compare=True, world_item=True)
 
+        if timings is not None:
+            timings["overlay"] = (perf_counter() - overlay_start + fog_start - post_start) * 1000

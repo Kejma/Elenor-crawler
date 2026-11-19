@@ -11,6 +11,7 @@ from elenor.profile import apply_display_mode, map_window_to_logical, present_lo
 
 
 from elenor.game.controller import GameController
+from elenor.game.frame_profile import FrameProfile
 from elenor.game.targeting import is_cursor_on_mob
 
 from elenor.minigames.fishing import press_fishing, start_fishing, update_fishing
@@ -43,8 +44,9 @@ def main():
     fps_start = None
     fps_frames = 0
     fps_label = None
+    profile = FrameProfile()
 
-    def present_frame():
+    def present_frame(gameplay=False):
         nonlocal fps_start, fps_frames, fps_label
         if game.profile["show_performance"]:
             now = perf_counter()
@@ -55,7 +57,8 @@ def main():
                 elapsed = now - fps_start
                 if elapsed >= 0.25:
                     fps = fps_frames / elapsed
-                    fps_label = game.renderer.font_small.render(f"{fps:.0f} FPS", True, (246, 225, 178))
+                    details = f" · {profile.label}" if gameplay and profile.label else ""
+                    fps_label = game.renderer.font_small.render(f"{fps:.0f} FPS{details}", True, (246, 225, 178))
                     fps_start, fps_frames = now, 0
             if fps_label is not None:
                 rect = fps_label.get_rect(midtop=(SCREEN_W // 2, 12))
@@ -63,10 +66,18 @@ def main():
                 screen.blit(fps_label, rect)
         else:
             fps_start, fps_frames, fps_label = None, 0, None
+        present_start = perf_counter() if gameplay and profile.active else None
         present_logical_canvas(game.display_surface, screen, game.viewport_rect)
         pygame.display.flip()
+        if present_start is not None:
+            gpu = game.renderer.gpu_shader
+            place = f"{game.campaign}/{game.dungeon.floor_num}/{game.dungeon.interior or 'surface'}"
+            disabled = ",".join(key for key, enabled in game.fx.flags.items() if not enabled) or "-"
+            backend = "gl" if gpu else "cpu"
+            profile.end(f"{place} seed={game.run_seed} backend={backend} off={disabled}", present_start)
 
     while running:
+        profile.begin(game.profile["show_performance"])
         dt = min(0.05, clock.tick(0) / 1000.0)
         t = pygame.time.get_ticks() * 0.005
         mouse_pos = map_window_to_logical(pygame.mouse.get_pos(), game.viewport_rect)
@@ -691,9 +702,15 @@ def main():
 
         world_ox = game.player.x * TILE_W
         world_oy = game.player.y * TILE_H
+        if profile.active:
+            fov_start = perf_counter()
+            profile.stages["game"] = (fov_start - profile.started) * 1000
         fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(
             world_ox, world_oy, game.cam_x, game.cam_y
         )
+        if profile.active:
+            fov_end = perf_counter()
+            profile.stages["fov"] = (fov_end - fov_start) * 1000
         game.current_visible_tiles = visible_tiles
         if (game.world_active and not game.inv_open and not game.levelup_choices
                 and not dev_open and game.player.hp > 0):
@@ -967,6 +984,10 @@ def main():
 
         hover_target = game.get_precision_hover_target(world_mx, target_wy=world_my)
         shown_str = game.target_thought[:int(game.shown_chars)]
+        if profile.active:
+            render_start = perf_counter()
+            profile.stages["light_setup"] = (render_start - fov_end) * 1000
+            ui_bundle["_frame_timings"] = profile.stages
         game.renderer.render_frame(
             screen=screen,
             dungeon=game.dungeon,
@@ -991,6 +1012,9 @@ def main():
             hud_lights=hud_lights
         )
 
+        if profile.active:
+            overlay_start = perf_counter()
+
         if game.campaign == "jungle" and not game.inv_open:
             draw_fishing(screen, game, (world_mx, world_my), fov_mask)
 
@@ -1009,8 +1033,11 @@ def main():
         if hasattr(game, "dev_panel") and game.dev_panel:
             game.dev_panel.render(screen, game, mouse_pos)
 
-        present_frame()
+        if profile.active:
+            profile.stages["overlay"] += (perf_counter() - overlay_start) * 1000
+        present_frame(gameplay=True)
 
+    profile.flush()
     pygame.quit()
 
 

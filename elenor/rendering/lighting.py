@@ -1,3 +1,5 @@
+from time import perf_counter
+
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS
@@ -9,7 +11,7 @@ WORLD_HIGHLIGHTS = (195.0, 60.0)
 TEMPLE_HIGHLIGHTS = (164.0, 77.0)
 
 
-def tone_map_world(rgb, is_entity, temple_exposure):
+def tone_map_world(rgb, is_entity, temple_exposure, *, temple_only=False):
     """Compress world highlights in place, in the renderer's 0–255 range."""
     knee, headroom = WORLD_HIGHLIGHTS
     if temple_exposure:
@@ -19,6 +21,8 @@ def tone_map_world(rgb, is_entity, temple_exposure):
     excess = np.maximum(peak - knee, 0.0)
     # 1 - (peak - mapped_peak) / peak, with zero change below the knee.
     scale = 1.0 - excess / (headroom + excess) * (excess / np.maximum(peak, 1.0))
+    if temple_only:
+        scale[is_entity] = 1.0
     rgb *= scale[..., None]
 
 
@@ -38,10 +42,11 @@ class GPULightShader:
     MAX_LIGHTS = 48
     MAX_HUD_LIGHTS = 32
 
-    def __init__(self):
+    def __init__(self, context=None):
         import moderngl
         self.moderngl = moderngl
-        self.ctx = moderngl.create_standalone_context()
+        self.ctx = context if context is not None else moderngl.create_standalone_context()
+        self.timers = None
 
         self.tex_diff = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
         self.tex_norm = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
@@ -81,6 +86,8 @@ class GPULightShader:
             uniform sampler2D u_props;
             uniform bool u_has_props;
             uniform bool u_temple_exposure;
+            uniform bool u_tonemap;
+            uniform bool u_reflected_light;
             uniform vec3 u_bounce_color;
             uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
             uniform int u_num_lights;
@@ -285,8 +292,9 @@ class GPULightShader:
                         float front_shade = 1.0 - behind_ratio * (1.0 - sub_rim) * 0.65;
                         float intensity = ndotl * atten * 1.45 * front_shade;
                         // Approximate diffuse fill with the same occlusion and range as its source.
-                        vec3 bounce = u_bounce_color * (flags.w * atten * max(1.0 - ndotl, 0.0));
-                        mult += (vec3(intensity) + bounce) * col_foot.rgb;
+                        mult += intensity * col_foot.rgb;
+                        if (u_reflected_light && flags.w > 0.5)
+                            mult += u_bounce_color * (atten * max(1.0 - ndotl, 0.0)) * col_foot.rgb;
 
                         if (flags.x < 0.5 && sub_rim > 0.5 && behind_ratio > 0.01) {{
                             float dist_2d = sqrt(dx * dx + dy * dy);
@@ -333,7 +341,7 @@ class GPULightShader:
                     float headroom = (temple_ground ? {TEMPLE_HIGHLIGHTS[1]} : {WORLD_HIGHLIGHTS[1]}) / 255.0;
                     float peak = max(lit_out.r, max(lit_out.g, lit_out.b));
                     float excess = max(peak - knee, 0.0);
-                    lit_out *= 1.0 - excess / (headroom + excess) * (excess / max(peak, 1.0 / 255.0));
+                    if (u_tonemap || temple_ground) lit_out *= 1.0 - excess / (headroom + excess) * (excess / max(peak, 1.0 / 255.0));
                     fragColor = clamp(lit_out, 0.0, 1.0);
                 }} else {{
                     vec3 mult = vec3(0.74, 0.74, 0.80);
@@ -457,7 +465,11 @@ class GPULightShader:
             self.ctx.viewport = (0, row, SHADOW_RAYS, 1)
             self.shadow_vao.render(self.moderngl.TRIANGLE_STRIP)
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0)):
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
+                           timings=None, readback=True):
+        if timings is not None and self.timers is None:
+            self.timers = self.ctx.query(time=True), self.ctx.query(time=True)
+        timers = self.timers if timings is not None else None
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
@@ -481,8 +493,14 @@ class GPULightShader:
         self.col_foot_buf.fill(0.0)
         self.flags_buf.fill(0.0)
 
+        shadow_timer = None
         if occlusion is not None:
-            self._render_shadows(occlusion, lights, cam_x, cam_y)
+            if timers is None:
+                self._render_shadows(occlusion, lights, cam_x, cam_y)
+            else:
+                shadow_timer = timers[0]
+                with shadow_timer:
+                    self._render_shadows(occlusion, lights, cam_x, cam_y)
         any_masks = False
         for i in range(n_lgt):
             lgt = lights[i]
@@ -517,6 +535,8 @@ class GPULightShader:
         self.prog["u_has_props"].value = occlusion is not None and occlusion.has_props
         self.prog["u_temple_exposure"].value = temple_exposure
         self.prog["u_bounce_color"].value = bounce_color
+        self.prog["u_reflected_light"].value = any(bounce_color)
+        self.prog["u_tonemap"].value = tonemap
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
         self.prog["u_num_lights"].value = n_lgt
         self.prog["u_light_pos_rad"].write(self.pos_rad_buf.tobytes())
@@ -540,8 +560,22 @@ class GPULightShader:
         self.tex_shadows.use(7)
         if self.tex_props is not None:
             self.tex_props.use(8)
-        self.vao.render(self.moderngl.TRIANGLE_STRIP)
+        if timers is None:
+            self.vao.render(self.moderngl.TRIANGLE_STRIP)
+        else:
+            with timers[1]:
+                self.vao.render(self.moderngl.TRIANGLE_STRIP)
+        if not readback:
+            return self.tex_out
 
+        read_start = perf_counter() if timings is not None else 0.0
         raw_rgb = self.fbo.read(components=3, alignment=1)
+        if timings is not None:
+            # Readback already waits for both draws, so retrieving results adds no GPU wait.
+            timings["read"] = (perf_counter() - read_start) * 1000
+            elapsed = (timers[1].elapsed, shadow_timer.elapsed if shadow_timer is not None else 0)
+            # Some drivers return an invalid 32-bit timer result on the first draw.
+            if 0xFFFFFFFF not in elapsed:
+                timings["gpu"] = sum(elapsed) / 1e6
         return pygame.image.frombuffer(raw_rgb, (VIEW_W, CANVAS_H), "RGB")
 

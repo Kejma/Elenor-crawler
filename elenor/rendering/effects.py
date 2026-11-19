@@ -13,8 +13,10 @@ class FXManager:
         self.f3_open = False
         self.f3_btn_rects = {}
 
-        # 9 тумблеров графических улучшений
+        # Тумблеры графических улучшений
         self.flags = {
+            "tonemap": True,
+            "reflected_light": True,
             "ao": True,             # 1. Fake Ambient Occlusion (угловые тени у стен и объектов в шейдере)
             "bloom": True,          # 2. Shader Bloom / Emissive (свечение огня, магии и глаз в темноте)
             "volumetric_fog": True, # 3. 2.5D Объёмный туман и Ядовитые облака
@@ -539,7 +541,7 @@ class FXManager:
         if not self.panel_open:
             return
 
-        pw, ph = 376, 545
+        pw, ph = 376, 628
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
         r.draw_pixel_frame(screen, panel_rect, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
@@ -548,6 +550,8 @@ class FXManager:
         screen.blit(title, (px + (pw - title.get_width()) // 2, py + 12))
 
         items = [
+            ("tonemap", "Тонмаппинг"),
+            ("reflected_light", "Отражённый свет"),
             ("ao",             "1. Ambient Occlusion (Угловые тени)"),
             ("bloom",          "2. Shader Bloom (Свечение огня/магии)"),
             ("volumetric_fog", "3. 2.5D Объёмный туман / Ядовитый газ"),
