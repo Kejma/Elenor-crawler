@@ -25,7 +25,7 @@ class Lever:
 
 
 class Dungeon:
-    revealed_fov = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
+    revealed_fov = np.ones((CANVAS_H, VIEW_W), dtype=np.float32).T
     revealed_fov.flags.writeable = False
 
     def __init__(self, puzzle_profile="procedural", puzzle_chance=0.12, merchant_chance=MERCHANT_ROOM_CHANCE):
@@ -54,7 +54,7 @@ class Dungeon:
         self._ray_indices = np.arange(RAY_COUNT)
         self._ray_steps = np.arange(radii.shape[1])[None, :]
         self._fov_surf = pygame.Surface((VIEW_W, VIEW_H), depth=8)
-        self._fov_full_mask = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)
+        self._fov_full_mask = np.ones((CANVAS_H, VIEW_W), dtype=np.float32).T
         self._base_block_grid = None
         self.forest_rect = pygame.Rect(3, 12, 14, 16)
         self.start_pos = (8, 20)

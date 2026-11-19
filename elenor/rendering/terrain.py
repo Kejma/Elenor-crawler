@@ -284,6 +284,29 @@ class TerrainCache:
                 for x in columns:
                     self._get_chunk(dungeon, x, y, width, height)
 
+    def collect_visible(self, dungeon, left, top, right, bottom):
+        if left >= right or top >= bottom:
+            return [], [], []
+        width, height = dungeon.width, dungeon.height
+        if not self._refresh_map(dungeon):
+            return None
+        visible_pixels = pygame.Rect(left * TILE_W, top * TILE_H, (right - left) * TILE_W, (bottom - top) * TILE_H)
+        chunks = []
+        trees = []
+        for y in range(top // CHUNK_TILES * CHUNK_TILES, bottom, CHUNK_TILES):
+            for x in range(left // CHUNK_TILES * CHUNK_TILES, right, CHUNK_TILES):
+                chunk = self._get_chunk(dungeon, x, y, width, height)
+                self._animate(chunk)
+                visible = visible_pixels.clip(chunk.pixels)
+                chunks.append((chunk, visible))
+                trees.extend(tree for tree in chunk.trees if left <= tree[0] < right and top <= tree[1] < bottom)
+        doors = [
+            (x, y, door)
+            for (x, y), door in dungeon.doors.items()
+            if left <= x < right and top <= y < bottom
+        ]
+        return chunks, doors, trees
+
     def draw(self, dungeon, left, top, right, bottom, cam_x, cam_y, diffuse, normals):
         trees = []
         if left >= right or top >= bottom:

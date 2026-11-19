@@ -20,7 +20,8 @@ class _CanopyOcclusion:
 
     def __init__(self, dungeon, closed_doors):
         walls, roots = dungeon.sight_geometry(closed_doors)
-        self.rows = tuple(row.tobytes() for row in (roots | (walls.astype(np.uint8) << 5)).T)
+        self.grid = (roots | (walls.astype(np.uint8) << 5)).astype(np.uint8, copy=False)
+        self.rows = tuple(row.tobytes() for row in self.grid.T)
         self.width, self.height = walls.shape
         self.rate = 8 if dungeon.thickets else 3
         self.exposed_sides = {}
@@ -80,6 +81,67 @@ class _CanopyOcclusion:
                     return False
         return True
 
+    def trace_batch(self, x0, y0, x1s, y1s, target_xs, target_ys, max_dist):
+        count = len(x1s)
+        out = np.zeros(count, dtype=bool)
+        if not count:
+            return out
+        dx = x1s - x0
+        dy = y1s - y0
+        dist = np.hypot(dx, dy)
+        idx = np.flatnonzero(dist <= max_dist)
+        if not idx.size:
+            return out
+
+        steps = (dist[idx] * self.rate).astype(np.int32) + 1
+        max_steps = int(steps.max())
+        step_idx = np.arange(1, max_steps + 1, dtype=np.float64)[None, :]
+        active = step_idx <= steps[:, None]
+        t = np.minimum(step_idx, steps[:, None]) / steps[:, None]
+        xs = x0 + dx[idx, None] * t
+        ys = y0 + dy[idx, None] * t
+        cx = np.floor(xs).astype(np.int32)
+        cy = np.floor(ys).astype(np.int32)
+
+        w, h = self.width, self.height
+        oob = (cx < 0) | (cx >= w) | (cy < 0) | (cy >= h)
+        cx_c = cx.clip(0, w - 1)
+        cy_c = cy.clip(0, h - 1)
+        flags = self.grid[cx_c, cy_c]
+        blocked = oob | ((flags & 32) != 0)
+
+        prev_x = np.empty_like(cx)
+        prev_y = np.empty_like(cy)
+        prev_x[:, 0] = math.floor(x0)
+        prev_y[:, 0] = math.floor(y0)
+        prev_x[:, 1:] = cx[:, :-1]
+        prev_y[:, 1:] = cy[:, :-1]
+        diag = (cx != prev_x) & (cy != prev_y) & active
+        if diag.any():
+            r_i, s_i = np.nonzero(diag)
+            c_x, c_y = cx[r_i, s_i], cy[r_i, s_i]
+            p_x, p_y = prev_x[r_i, s_i], prev_y[r_i, s_i]
+            side1 = (p_y < 0) | (p_y >= h) | (c_x < 0) | (c_x >= w) | (self.grid[c_x.clip(0, w - 1), p_y.clip(0, h - 1)] != 0)
+            side2 = (p_x < 0) | (p_x >= w) | (c_y < 0) | (c_y >= h) | (self.grid[p_x.clip(0, w - 1), c_y.clip(0, h - 1)] != 0)
+            blocked[r_i, s_i] |= side1 & side2
+
+        in_target = (cx == target_xs[idx, None]) & (cy == target_ys[idx, None])
+        need_root = active & (~blocked) & (flags != 0) & (~in_target)
+        if need_root.any():
+            r_i, s_i = np.nonzero(need_root)
+            fl = flags[r_i, s_i]
+            ox = xs[r_i, s_i] - cx[r_i, s_i] - .5
+            oy = ys[r_i, s_i] - cy[r_i, s_i] - .5
+            hit_r = (
+                (ox * ox + oy * oy <= .22 ** 2)
+                | ((np.abs(oy) <= .15) & ((fl & np.where(ox > 0, 2, 4)) != 0))
+                | ((np.abs(ox) <= .15) & ((fl & np.where(oy > 0, 8, 16)) != 0))
+            )
+            blocked[r_i, s_i] |= hit_r
+
+        blocked &= active
+        out[idx] = ~blocked.any(axis=1)
+        return out
 
 def canopy_visibility(dungeon, player_x, player_y, x, y, *, obstacles=None):
     """Trace to the exposed faces of a tree independently of the floor ray fan."""
@@ -151,6 +213,94 @@ class CanopyVisibility:
             self.view = view
             self.targets.clear()
 
+    def prefetch(self, trees):
+        targets = self.targets
+        missing = [(t[0], t[1]) for t in trees if (t[0], t[1]) not in targets]
+        if not missing:
+            return
+        dungeon, _, px, py, closed_doors = self.view
+        if self.obstacles is None:
+            self.obstacles = _CanopyOcclusion(dungeon, closed_doors)
+        obs = self.obstacles
+        max_dist = LOS_MAX_RADIUS / TILE_W
+        max_r2 = (max_dist + 1.0) ** 2
+
+        center_tiles = []
+        center_faces = []
+        c_x1, c_y1, c_tx, c_ty = [], [], [], []
+        tile_faces = {}
+        for x, y in missing:
+            tile = (x, y)
+            cx, cy = x + 0.5, y + 0.5
+            dx, dy = px - cx, py - cy
+            if dx * dx + dy * dy > max_r2:
+                targets[tile] = 0.0
+                continue
+            exposed = obs.exposed(tile)
+            if not exposed:
+                targets[tile] = 0.0
+                continue
+            h_f = (1 if dx > 0 else -1, 0)
+            v_f = (0, 1 if dy > 0 else -1)
+            faces = [f for f in ((h_f, v_f) if abs(dx) > abs(dy) else (v_f, h_f)) if f in exposed]
+            if not faces:
+                targets[tile] = 0.0
+                continue
+            tile_faces[tile] = faces
+            for fx, fy in faces:
+                center_tiles.append(tile)
+                center_faces.append((fx, fy))
+                c_x1.append(cx + fx * .42)
+                c_y1.append(cy + fy * .42)
+                c_tx.append(x)
+                c_ty.append(y)
+
+        if not center_tiles:
+            return
+        hits = obs.trace_batch(
+            px, py,
+            np.asarray(c_x1, dtype=np.float64), np.asarray(c_y1, dtype=np.float64),
+            np.asarray(c_tx, dtype=np.int32), np.asarray(c_ty, dtype=np.int32),
+            max_dist,
+        )
+        for tile, hit in zip(center_tiles, hits):
+            if hit:
+                targets[tile] = 1.0
+
+        unresolved = [tile for tile in tile_faces if tile not in targets]
+        if not unresolved:
+            return
+        g_tiles = []
+        g_x1, g_y1, g_tx, g_ty = [], [], [], []
+        for tile in unresolved:
+            x, y = tile
+            cx, cy = x + 0.5, y + 0.5
+            for fx, fy in tile_faces[tile]:
+                face_x, face_y = cx + fx * .42, cy + fy * .42
+                g_tiles.append(tile)
+                g_x1.append(face_x - fy * .24)
+                g_y1.append(face_y - fx * .24)
+                g_tx.append(x)
+                g_ty.append(y)
+                g_x1.append(face_x + fy * .24)
+                g_y1.append(face_y + fx * .24)
+                g_tx.append(x)
+                g_ty.append(y)
+
+        g_hits = obs.trace_batch(
+            px, py,
+            np.asarray(g_x1, dtype=np.float64), np.asarray(g_y1, dtype=np.float64),
+            np.asarray(g_tx, dtype=np.int32), np.asarray(g_ty, dtype=np.int32),
+            max_dist,
+        )
+        best = {}
+        for k, tile in enumerate(g_tiles):
+            score = int(g_hits[2 * k]) + int(g_hits[2 * k + 1])
+            if score > best.get(tile, 0):
+                best[tile] = score
+        for tile in unresolved:
+            targets[tile] = .32 * best.get(tile, 0)
+
     def target(self, tile):
         if tile not in self.targets:
             dungeon, _, x, y, closed_doors = self.view
@@ -161,7 +311,7 @@ class CanopyVisibility:
 
     def sample(self, tile, target):
         old = self.previous.get(tile, 0.0)
-        value = old + (target - old) * self.blend
+        value = target if abs(target - old) < 0.004 else old + (target - old) * self.blend
         if value > 0.006 or target > 0.0:
             self.current[tile] = value
         return value

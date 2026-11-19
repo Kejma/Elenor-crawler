@@ -6,7 +6,7 @@ import pygame
 from elenor.config import (
     CANVAS_H, COIN_TEXT_COLOR, HUD_HEIGHT, SCALE, SCREEN_W, THOUGHT_BOX_H, THOUGHT_BOX_W,
     THOUGHT_BOX_X, THOUGHT_BOX_Y, UI_BG_DARK, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT,
-    UI_BORDER_WOOD, UI_PANEL_BG, UI_SLOT_BG, UI_TEXT_MAIN,
+    UI_BORDER_WOOD, UI_PANEL_BG, UI_SLOT_BG, UI_TEXT_MAIN, VIEW_H,
 )
 from elenor.data.abilities import VECTOR_COLORS, perk_branch
 from elenor.data.economy import format_copper_Trigger
@@ -25,6 +25,7 @@ class HudLayers:
     def __init__(self):
         self.thought_key = None
         self.thought_blits = ()
+        self.thought_screen_key = None
         self.bottom_key = None
         self.bottom = None
         self.light_tick = None
@@ -32,8 +33,17 @@ class HudLayers:
         self.portrait = None
         self.portrait_image = None
         self.cooldown_overlay = None
+        self._bottom_pool = None
+        self._bottom_masks = None
+        self._bottom_idx = 0
 
-    def draw_thought(self, screen, renderer, text):
+    def draw_thought(self, screen, renderer, text, window=None):
+        if window is not None:
+            if text == self.thought_screen_key and not window.prev_full_dirty:
+                return
+            screen.fill((0, 0, 0, 0), (0, VIEW_H * SCALE, SCREEN_W, HUD_Y - VIEW_H * SCALE))
+            window.thought_dirty = True
+            self.thought_screen_key = text
         if not text:
             return
         if text != self.thought_key:
@@ -49,10 +59,10 @@ class HudLayers:
             self.thought_key = text
         screen.blits(self.thought_blits, doreturn=False)
 
-    def draw_bottom(self, screen, renderer, player, ui_texts, hover_pos, drag_item, inv_open, ticks):
+    def draw_bottom(self, screen, renderer, player, ui_texts, hover_pos, drag_item, inv_open, ticks, window=None):
         # Decorative light can flicker every game frame. Sample it at 20 Hz,
         # while changes to health, input and ability state take effect immediately.
-        light_tick = ticks // 50
+        light_tick = ticks // 100
         torch_on = player.has_lit_torch
         light_sources = renderer.current_hud_lights
         light_key = light_tick, torch_on, bool(player.ignite_timer), bool(player.shine_timer), bool(light_sources)
@@ -106,18 +116,32 @@ class HudLayers:
         bag_hovered = inv_open or renderer.bag_btn_rect.collidepoint(hover_pos)
         illumination = 1.0 if self.lights else player.illumination
         masks = screen.get_masks()
-        key = (masks, self.lights, illumination, portrait, xp_width, player.level,
+        light_sig = tuple(
+            (round(l["pos"][0] * 0.25), round(l["pos"][1] * 0.25), round(l["radius"] * 0.125),
+             round(l["color"][0] * 10), round(l["color"][1] * 10), round(l["color"][2] * 10))
+            for l in self.lights
+        )
+        key = (masks, light_sig, round(illumination, 2), portrait, xp_width, player.level,
                hp, mp, torch_on, player.gold, tuple(slots), tuple(passives),
                bag_hovered, ui_texts["bag_btn"], used, capacity)
         if key != self.bottom_key:
-            # Surface identity is also the display backend's upload revision.
-            bottom = pygame.Surface((SCREEN_W, HUD_HEIGHT), pygame.SRCALPHA, 32, masks)
+            if self._bottom_pool is None or self._bottom_masks != masks:
+                self._bottom_pool = (
+                    pygame.Surface((SCREEN_W, HUD_HEIGHT), pygame.SRCALPHA, 32, masks),
+                    pygame.Surface((SCREEN_W, HUD_HEIGHT), pygame.SRCALPHA, 32, masks),
+                )
+                for surf in self._bottom_pool:
+                    surf.set_alpha(None)
+                self._bottom_masks = masks
+            self._bottom_idx ^= 1
+            bottom = self._bottom_pool[self._bottom_idx]
+            bottom.fill((0, 0, 0, 255))
             self._paint_bottom(bottom, renderer, illumination, xp_width, player.level, hp, mp, torch_on,
                                player.gold, slots, passives, bag_hovered, ui_texts["bag_btn"], used, capacity)
-            bottom.set_alpha(None)  # The frame fills the entire HUD with opaque pixels.
             self.bottom = bottom
             self.bottom_key = key
-        screen.blit(self.bottom, (0, HUD_Y))
+        if window is None or self.bottom is not window.uploaded_hud or window.prev_full_dirty:
+            screen.blit(self.bottom, (0, HUD_Y))
         return self.bottom, hovered_item, hovered_passive
 
     def _paint_bottom(self, screen, renderer, illumination, xp_width, level, hp, mp, torch_on,

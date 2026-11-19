@@ -30,10 +30,16 @@ class FXManager:
         }
 
         self.decal_surf = pygame.Surface((MAP_COLS * TILE_W, MAP_ROWS * TILE_H), pygame.SRCALPHA)
+        self.decal_revision = 0
+
         self.wall_grid_np = np.zeros((MAP_COLS, MAP_ROWS), dtype=np.float32)
 
         self.ripples = []
         self.dust_motes = []
+        self._mote_chunks = {}
+        self._free_motes = []
+        self._mote_view_key = None
+        self._mote_view_list = ()
         self.mote_rng = random.Random()
         self.active_clouds = []
 
@@ -50,6 +56,10 @@ class FXManager:
 
     def _spawn_dust_in_zones(self, dungeon, count=55):
         self.dust_motes = []
+        self._mote_chunks = {}
+        self._free_motes = []
+        self._mote_view_key = None
+        self._mote_view_list = ()
         if getattr(dungeon, "campaign", None) == "jungle":
             self._spawn_jungle_motes(dungeon)
             return
@@ -69,6 +79,7 @@ class FXManager:
                 "zone_rect": r,
                 "kind": z.get("kind", "dust")
             })
+        self._free_motes = self.dust_motes
 
     def _spawn_jungle_motes(self, dungeon):
         rng = self.mote_rng
@@ -77,18 +88,41 @@ class FXManager:
             for x, tile in enumerate(row):
                 if rng.random() >= 0.24 or dungeon.is_blocking_move(x, y):
                     continue
-                # Fireflies favor vegetated openings and banks. Interiors get drifting dust.
                 kind = ("firefly" if outdoors and tile in (10, 11, 23, 37, 40, 45, 46)
                         and rng.random() < .35 else "dust")
                 anchor = (x + rng.uniform(.30, .70), y + rng.uniform(.30, .70))
-                self.dust_motes.append({
+                mote = {
                     "wx": anchor[0], "wy": anchor[1], "anchor": anchor, "kind": kind,
                     "phase": rng.uniform(0, math.tau), "size": 1,
                     "rate": rng.uniform(.5, 1.5),
-                })
+                }
+                self.dust_motes.append(mote)
+                self._mote_chunks.setdefault((x // 8, y // 8), []).append(mote)
+
+    def motes_in_view(self, cam_x, cam_y):
+        if not self._mote_chunks:
+            return self._free_motes
+        x0 = (int(cam_x) // TILE_W - 1) // 8
+        x1 = ((int(cam_x) + VIEW_W) // TILE_W + 1) // 8
+        y0 = (int(cam_y) // TILE_H - 1) // 8
+        y1 = ((int(cam_y) + VIEW_H) // TILE_H + 1) // 8
+        key = (x0, y0, x1, y1)
+        if key != self._mote_view_key:
+            out = list(self._free_motes)
+            chunks = self._mote_chunks
+            for cy in range(y0, y1 + 1):
+                for cx in range(x0, x1 + 1):
+                    bucket = chunks.get((cx, cy))
+                    if bucket:
+                        out.extend(bucket)
+            self._mote_view_key = key
+            self._mote_view_list = out
+        return self._mote_view_list
 
     def clear_floor_decals(self):
         self.decal_surf.fill((0, 0, 0, 0))
+        self.has_decals = False
+        self.decal_revision += 1
         self.ripples.clear()
 
     def rebuild_wall_grid(self, dungeon):
@@ -97,6 +131,8 @@ class FXManager:
         if self.wall_grid_np.shape != size:
             self.wall_grid_np = np.zeros(size, dtype=np.float32)
             self.decal_surf = pygame.Surface((size[0]*TILE_W, size[1]*TILE_H), pygame.SRCALPHA)
+            self.has_decals = False
+            self.decal_revision += 1
         self.wall_grid_np.fill(0.0)
         for ry in range(dungeon.height):
             for rx in range(dungeon.width):
@@ -142,6 +178,8 @@ class FXManager:
     def add_blood_splatter(self, wx, wy, count=5, is_kill=False):
         if not self.flags["battle_memory"]:
             return
+        self.has_decals = True
+        self.decal_revision += 1
         cx = int(wx * TILE_W)
         cy = int((wy + 0.25) * TILE_H)
         n_drops = count * 2 if is_kill else count
@@ -160,6 +198,8 @@ class FXManager:
     def add_barrel_debris(self, tx, ty):
         if not self.flags["battle_memory"]:
             return
+        self.has_decals = True
+        self.decal_revision += 1
         cx = int((tx + 0.5) * TILE_W)
         cy = int((ty + 0.5) * TILE_H)
         pygame.draw.ellipse(self.decal_surf, (95, 18, 36, 175), (cx - 6, cy - 3, 12, 7))
@@ -173,6 +213,8 @@ class FXManager:
     def add_scorch_mark(self, wx, wy, radius_tiles=0.55):
         if not self.flags["battle_memory"]:
             return
+        self.has_decals = True
+        self.decal_revision += 1
         cx = int(wx * TILE_W)
         cy = int(wy * TILE_H)
         r_px = max(3, int(radius_tiles * TILE_W * 0.65))
@@ -248,10 +290,10 @@ class FXManager:
 
         # Пылинки и споры летают ТОЛЬКО внутри разрешённых тематических зон (`zone_rect`)!
         if self.flags["dust_motes"] and self.dust_motes:
-            for dm in self.dust_motes:
+            for dm in self.motes_in_view(getattr(self.game, "cam_x", 0.0), getattr(self.game, "cam_y", 0.0)):
                 if "anchor" in dm:
-                    dm["phase"] += dt * dm["rate"]
                     x, y = dm["anchor"]
+                    dm["phase"] += dt * dm["rate"]
                     amplitude = .27 if dm["kind"] == "firefly" else .13
                     dm["wx"] = x + math.cos(dm["phase"]) * amplitude
                     dm["wy"] = y + math.sin(dm["phase"] * 1.38) * amplitude
@@ -532,7 +574,8 @@ class FXManager:
     def render_panel(self, screen, mouse_pos):
         r = self.game.renderer
         hint_txt = "[F2] FX-Лаб | [F3] Телеметрия билда"
-        h_s = r.font_small.render(hint_txt, True, (255, 225, 95) if (self.panel_open or self.f3_open) else UI_TEXT_DIM)
+        from elenor.ui.hud import hud_label
+        h_s = hud_label(r.font_small, hint_txt, (255, 225, 95) if (self.panel_open or self.f3_open) else UI_TEXT_DIM)
         pygame.draw.rect(screen, (16, 14, 22), (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), border_radius=4)
         pygame.draw.rect(screen, UI_BORDER_WOOD, (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), 1, border_radius=4)
         screen.blit(h_s, (SCREEN_W - h_s.get_width() - 14, 11))

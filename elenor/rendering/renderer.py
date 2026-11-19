@@ -43,14 +43,22 @@ class Renderer(UIRendererMixin):
         self.light_occlusion = LightOcclusion()
         self.fog_renderer = FogRenderer(self.light_occlusion)
         self.init_standalone_shader()
-        self.diff_canvas = pygame.Surface((VIEW_W, CANVAS_H))
-        self.norm_canvas = pygame.Surface((VIEW_W, CANVAS_H))
-        self.emissive_canvas = pygame.Surface((VIEW_W, CANVAS_H))
+        self._diff_pixels = bytearray(VIEW_W * CANVAS_H * 4)
+        self._norm_pixels = bytearray(VIEW_W * CANVAS_H * 4)
+        self._emissive_pixels = bytearray(VIEW_W * CANVAS_H * 4)
+        self.diff_canvas = pygame.image.frombuffer(self._diff_pixels, (VIEW_W, CANVAS_H), "BGRA")
+        self.norm_canvas = pygame.image.frombuffer(self._norm_pixels, (VIEW_W, CANVAS_H), "BGRA")
+        self.emissive_canvas = pygame.image.frombuffer(self._emissive_pixels, (VIEW_W, CANVAS_H), "BGRA")
         self.terrain = TerrainCache(self.assets, self.anim_bank, self.log_sections)
 
         self.px = np.arange(VIEW_W, dtype=np.float32)[:, None]
         self.py = np.arange(CANVAS_H, dtype=np.float32)[None, :]
-        self.entity_y_canvas = np.full((VIEW_W, CANVAS_H), -9999.0, dtype=np.float32)
+        self._entity_y_gl = np.full((CANVAS_H, VIEW_W), -9999.0, dtype=np.float32)
+        self.entity_y_canvas = self._entity_y_gl.T
+        self._scene_fov_buf = np.ones((CANVAS_H, VIEW_W), dtype=np.float32).T
+        self._emissive_dirty = True
+        self._scene_fov_key = None
+        self._cached_scene_fov = None
         self.current_hud_lights = []
 
         self.font_thought = pygame.font.SysFont("consolas", 19, bold=True)
@@ -542,290 +550,354 @@ class Renderer(UIRendererMixin):
         ticks = pygame.time.get_ticks()
         now_sec = ticks * 0.001
         self.canopy_visibility.begin_frame(dungeon.grid, now_sec)
-        self.canopy_visibility.set_view(dungeon, player.x, player.y)
+        self.canopy_visibility.set_view(dungeon, round(player.x * 8) * 0.125, round(player.y * 8) * 0.125)
         reveal_map = ui_texts.get("_reveal_map", False)
         for role_id, anim_info in self.anim_bank.items():
             fr_list = anim_info["frames"]
             if len(fr_list) > 1:
                 self.assets[role_id] = fr_list[int(now_sec * anim_info["fps"]) % len(fr_list)]
 
+        self.combat_pixels.clear()
         self.current_hud_lights = hud_lights or []
-        self.diff_canvas.fill(DIFFUSE_CLEAR)
-        self.norm_canvas.fill(NORMAL_CLEAR)
-        self.emissive_canvas.fill((0, 0, 0))
-        self.entity_y_canvas.fill(-9999.0)
-
         c0 = max(0, int(cam_x) // TILE_W)
         c1 = min(dungeon.width, (int(cam_x) + VIEW_W) // TILE_W + 2)
         r0 = max(0, int(cam_y) // TILE_H)
         r1 = min(dungeon.height, (int(cam_y) + VIEW_H) // TILE_H + 2)
 
         timings = ui_texts.get("_frame_timings")
-        terrain_start = perf_counter() if timings is not None else 0.0
-        trees = self.terrain.draw(dungeon, c0, r0, c1, r1, int(cam_x), int(cam_y),
-                                  self.diff_canvas, self.norm_canvas)
-        if timings is not None:
-            canopy_start = perf_counter()
-            timings["terrain"] = (canopy_start - terrain_start) * 1000
-
-        tall_trees_to_draw = []
-        for c, r, tree_asset_key in trees:
-            tile = (c, r)
-            target = 1.0 if reveal_map else self.canopy_visibility.target(tile)
-            visible_base = self.canopy_visibility.sample(tile, target)
-            if visible_base > .006:
-                tall_trees_to_draw.append((c, r, tree_asset_key, visible_base))
-        if timings is not None:
-            timings["canopy"] = (perf_counter() - canopy_start) * 1000
-
         fx_mgr = ui_texts.get("_fx_mgr")
-        # 1. Наложение «Памяти поля боя» (вечная кровь, обломки бочек, вино и копоть на полу)
-        if fx_mgr and fx_mgr.flags.get("battle_memory", True):
-            self.diff_canvas.blit(fx_mgr.decal_surf, (0, 0), area=pygame.Rect(int(cam_x), int(cam_y), VIEW_W, VIEW_H))
-
-        # 2. Круги на воде при ходьбе по лужам
-        if fx_mgr and fx_mgr.flags.get("water_ripples", True):
-            for rp in fx_mgr.ripples:
-                prog_r = 1.0 - (rp["timer"] / rp["max_timer"])
-                rx_s = int(rp["wx"] * TILE_W - cam_x)
-                ry_s = int(rp["wy"] * TILE_H - cam_y)
-                rad_w = max(2, int(2 + prog_r * 7))
-                rad_h = max(1, int(1 + prog_r * 4))
-                palette = ((128, 214, 102), (62, 137, 70)) if rp["green"] else ((85, 165, 210), (50, 110, 150))
-                col_r = palette[prog_r >= 0.5]
-                pygame.draw.ellipse(self.diff_canvas, col_r, (rx_s - rad_w, ry_s - rad_h, rad_w * 2, rad_h * 2), 1)
-
+        flags = fx_mgr.flags if fx_mgr else {}
         game_ref = ui_texts.get("_game_ref")
         physical_states = getattr(game_ref, "physical_effects", ())
-        if physical_states:
-            render_ground_traps(self.diff_canvas, self.norm_canvas, physical_states, cam_x, cam_y)
-
-        hero_pair = self.get_hero_pair(player)
-        misted = player.stealth_timer > 0
-        if misted:
-            hero_pair = (misted_actor(hero_pair[0], now_sec, min(1.0, player.stealth_timer / .24)), hero_pair[1])
-        render_list = [{
-            "wx": player.x - 0.5 + player.bump_x,
-            "wy": player.y - 0.5 + player.bump_y,
-            "actor_wx": player.x,
-            "actor_wy": player.y,
-            "is_player": True,
-            "is_actor": True,
-            "emissive_role": "hero" if player.has_lit_torch and not misted else None,
-            "pair": hero_pair,
-            "misted": misted,
-            "alpha": 255
-        }]
-
-        for (tc, tr, tree_asset_key, visible_base) in tall_trees_to_draw:
-            t_alpha = canopy_opacity(tc, tr, player.x, player.y)
-            render_list.append({
-                "wx": float(tc), "wy": float(tr),
-                "is_tree": True,
-                "canopy_visibility": visible_base,
-                "pair": self.assets.get(tree_asset_key, self.assets["tall_tree"]),
-                "alpha": t_alpha
-            })
-
-        for (lx, ly), lev in dungeon.levers.items():
-            if (lx, ly) in visible_tiles:
-                render_list.append({
-                    "wx": float(lx), "wy": float(ly),
-                    "pair": self.assets["lever_on" if lev.pulled else "lever_off"],
-                    "alpha": 255
-                })
-        for br in dungeon.braziers:
-            if (br["x"], br["y"]) in visible_tiles:
-                render_list.append({
-                    "wx": float(br["x"]), "wy": float(br["y"]),
-                    "is_light_source": True,
-                    "emissive_role": "fire_prop",
-                    "pair": self.assets["brazier"], "alpha": 255
-                })
-        for obj in objects:
-            if not obj.used and (obj.x, obj.y) in visible_tiles:
-                passage = dungeon.passages.get((obj.x, obj.y))
-                ground_key = {"up": "jungle_passage_up", "onward": "jungle_passage_up",
-                              "back": "jungle_passage_down"}.get(passage, obj.kind)
-                if ground_key in ("jungle_passage_up", "jungle_passage_down", "ceramic_shards"):
-                    fd, fn = self.assets[ground_key]
-                    position = (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y))
-                    self.diff_canvas.blit(fd, position)
-                    self.norm_canvas.blit(fn, position)
-                    continue
-                if obj.kind in ("woven_rug", "stairs", "trap", "mirror_rail_h", "mirror_rail_v"):
-                    fd, fn = self.assets[obj.kind]
-                    self.diff_canvas.blit(fd, (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y - 4)))
-                    self.norm_canvas.blit(fn, (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y - 4)))
-                    continue
-                pair = self.get_world_loot_pair(obj.item) if obj.kind == "loot" else self.assets.get(obj.kind, self.assets["loot"])
-                is_npc = (obj.kind in ("npc_innkeeper", "npc_merchant"))
-                is_fire = (obj.kind in ("campfire", "fireplace", "light_emitter", "light_receiver_on"))
-                render_list.append({
-                    "wx": float(obj.x), "wy": float(obj.y),
-                    "actor_wx": obj.x + 0.5, "actor_wy": obj.y + 0.5,
-                    "is_actor": is_npc,
-                    "is_light_source": is_fire,
-                    "emissive_role": "fire_prop" if is_fire else None,
-                    "pair": pair, "alpha": 255
-                })
-
-        use_hit_flash = fx_mgr.flags.get("hit_flash", True) if fx_mgr else True
-        for m in mobs:
-            mx_i, my_i = int(m.x), int(m.y)
-            if getattr(m, "size_tiles", 1) >= 2:
-                mob_vis = any((mx_i + dx, my_i + dy) in visible_tiles for dx in (-1, 0, 1) for dy in (-1, 0, 1))
-            else:
-                mob_vis = (mx_i, my_i) in visible_tiles
-            if mob_vis:
-                chilled = getattr(m, "slow_timer", 0.0) > 0.0
-                f_mode = None
-                if use_hit_flash and getattr(m, "hit_flash_timer", 0.0) > 0.0:
-                    f_mode = "crit" if getattr(m, "hit_flash_crit", False) else "hit"
-                render_list.append({
-                    "wx": m.x - 0.5 + m.bump_x,
-                    "wy": m.y - 0.5 + m.bump_y,
-                    "actor_wx": m.x,
-                    "actor_wy": m.y,
-                    "is_actor": True,
-                    "emissive_role": "mob",
-                    "pair": self.get_mob_pair(m.sprite, getattr(m, "facing", -1), is_chilled=chilled, flash_mode=f_mode),
-                    "alpha": 255
-                })
-
-        render_list.sort(key=lambda item: item["wy"])
-
-        use_shadows = fx_mgr.flags.get("drop_shadows", True) if fx_mgr else True
-        scene_fov = fov_mask.copy() if tall_trees_to_draw else fov_mask
-        world_shadow_lights = [(br["x"] + 0.5, br["y"] + 0.5, br["radius"] / TILE_W) for br in dungeon.braziers]
-        for obj in objects:
-            if obj.kind in ("campfire", "fireplace"):
-                world_shadow_lights.append((obj.x + 0.5, obj.y + 0.5, 7.2))
-
-        for ent in render_list:
-            d_surf, n_surf = ent["pair"]
-            ew, eh = d_surf.get_size()
-            draw_x = int(round(ent["wx"] * TILE_W - cam_x - (ew - TILE_W) // 2))
-            draw_y = int(round(ent["wy"] * TILE_H - cam_y - (eh - TILE_H)))
-            sole_sy = float(draw_y + eh - 2)
-            if draw_y + eh > 0 and draw_y < VIEW_H:
-                if use_shadows and ent.get("is_actor", False) and not ent.get("misted", False):
-                    awx = ent.get("actor_wx", ent["wx"] + 0.5)
-                    awy = ent.get("actor_wy", ent["wy"] + 0.5)
-                    vec_x, vec_y, w_sum = 0.0, 0.0, 0.0
-                    for lwx, lwy, lrad in world_shadow_lights:
-                        dx_w = awx - lwx
-                        dy_w = awy - lwy
-                        dist_w = math.hypot(dx_w, dy_w)
-                        if 0.1 < dist_w < lrad:
-                            w_l = (1.0 - dist_w / lrad) ** 1.5
-                            vec_x += (dx_w / dist_w) * w_l
-                            vec_y += (dy_w / dist_w) * w_l
-                            w_sum += w_l
-                    if not ent.get("is_player", False) and player.has_lit_torch:
-                        dx_p = awx - player.x
-                        dy_p = awy - player.y
-                        dist_p = math.hypot(dx_p, dy_p)
-                        if 0.1 < dist_p < 7.5:
-                            w_p = (1.0 - dist_p / 7.5) ** 1.4 * 1.5
-                            vec_x += (dx_p / dist_p) * w_p
-                            vec_y += (dy_p / dist_p) * w_p
-                            w_sum += w_p
-
-                    if w_sum > 0.01:
-                        sh_dx = max(-3.5, min(3.5, (vec_x / w_sum) * 3.0))
-                        sh_dy = max(-2.0, min(2.5, (vec_y / w_sum) * 1.8))
-                    else:
-                        sh_dx, sh_dy = 0.0, 0.5
-
-                    if ew > 20:
-                        sh_stamp, sh_w, sh_h = self._shadow_big, 20, 6
-                    else:
-                        sh_stamp, sh_w, sh_h = self._shadow_small, 10, 4
-                    foot_cx = draw_x + ew * 0.5
-                    self.diff_canvas.blit(sh_stamp, (int(round(foot_cx - sh_w * 0.5 + sh_dx)), int(round(sole_sy - sh_h * 0.5 + sh_dy))))
-
-                is_tree = ent.get("is_tree", False)
-                if is_tree:
-                    opacity = ent["alpha"]
-                    for canvas, sprite in ((self.diff_canvas, d_surf), (self.norm_canvas, n_surf)):
-                        if opacity < 255:
-                            sprite = sprite.copy()
-                            sprite.set_alpha(opacity)
-                        canvas.blit(sprite, (draw_x, draw_y))
-                    x0, x1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
-                    y0, y1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
-                    if x0 < x1 and y0 < y1:
-                        key = id(d_surf)
-                        mask = self.alpha_mask_cache.get(key)
-                        if mask is None:
-                            mask = pygame.surfarray.array_alpha(d_surf) > 220
-                            self.alpha_mask_cache[key] = mask
-                        alpha = mask[x0 - draw_x:x1 - draw_x, y0 - draw_y:y1 - draw_y]
-                        view = scene_fov[x0:x1, y0:y1]
-                        coverage = ent["canopy_visibility"]
-                        strength = opacity / 255.0
-                        np.copyto(view, view * (1.0 - strength) + coverage * strength, where=alpha)
-                    continue
-
-                if ent.get("misted", False):
-                    self.diff_canvas.blit(d_surf, (draw_x, draw_y))
-                    continue
-                if ent["alpha"] < 255:
-                    d_tmp = d_surf.copy()
-                    d_tmp.set_alpha(ent["alpha"])
-                    self.diff_canvas.blit(d_tmp, (draw_x, draw_y))
-                else:
-                    self.diff_canvas.blit(d_surf, (draw_x, draw_y))
-                    self.norm_canvas.blit(n_surf, (draw_x, draw_y))
-                    if scene_fov is not fov_mask:
-                        cx0, cx1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
-                        cy0, cy1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
-                        if cx0 < cx1 and cy0 < cy1:
-                            mask = self.alpha_mask_cache.get(id(d_surf))
-                            if mask is None:
-                                mask = pygame.surfarray.array_alpha(d_surf) > 15
-                                self.alpha_mask_cache[id(d_surf)] = mask
-                            alpha = mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
-                            source = fov_mask[cx0:cx1, cy0:cy1]
-                            np.copyto(scene_fov[cx0:cx1, cy0:cy1], source, where=alpha)
-                    em_role = ent.get("emissive_role")
-                    if em_role:
-                        em_s = self._get_entity_emissive_surf(d_surf, em_role)
-                        self.emissive_canvas.blit(em_s, (draw_x, draw_y))
-
-                    if not ent.get("is_light_source", False):
-                        cx0, cx1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
-                        cy0, cy1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
-                        if cx0 < cx1 and cy0 < cy1:
-                            s_id = id(d_surf)
-                            a_mask = self.alpha_mask_cache.get(s_id)
-                            if a_mask is None:
-                                a_mask = pygame.surfarray.array_alpha(d_surf) > 15
-                                self.alpha_mask_cache[s_id] = a_mask
-                            mask_slice = a_mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
-                            np.copyto(self.entity_y_canvas[cx0:cx1, cy0:cy1], sole_sy, where=mask_slice)
-
         cast = getattr(game_ref, "fishing_cast", None)
-        if cast is not None:
-            from elenor.rendering.fishing_cast import draw_fishing_cast
-            draw_fishing_cast(self.diff_canvas, self.norm_canvas, cast, cam_x, cam_y, now_sec)
-
-        tz_diff, tz_norm = self.assets["thought_zone"]
-        self.diff_canvas.blit(tz_diff, (0, VIEW_H))
-        self.norm_canvas.blit(tz_norm, (0, VIEW_H))
 
         clouds = []
-        volume_enabled = fx_mgr is None or fx_mgr.flags.get("volumetric_fog", True)
+        volume_enabled = fx_mgr is None or flags.get("volumetric_fog", True)
         if volume_enabled:
             for cloud in fx_mgr.active_clouds if fx_mgr else ():
-                sx, sy = cloud["wx"]*TILE_W-cam_x, cloud["wy"]*TILE_H-cam_y
-                radius = cloud["radius"]*TILE_W
-                if -radius <= sx <= VIEW_W+radius and -radius <= sy <= VIEW_H+radius:
+                sx, sy = cloud["wx"] * TILE_W - cam_x, cloud["wy"] * TILE_H - cam_y
+                radius = cloud["radius"] * TILE_W
+                if -radius <= sx <= VIEW_W + radius and -radius <= sy <= VIEW_H + radius:
                     clouds.append(cloud)
+        gpu_fog = (bool(clouds) and flags.get("gpu_fog", True)
+                   and self.gpu_shader is not None and self.gpu_shader.fog is not None
+                   and len(clouds) <= self.gpu_shader.fog.MAX_CLOUDS and len(lights) <= self.gpu_shader.MAX_LIGHTS)
+
+        gpu_scene = (self.gpu_shader.scene
+                     if (self.gpu_shader is not None and self.gpu_shader.scene is not None and not (clouds and not gpu_fog))
+                     else None)
+        terrain_start = perf_counter() if timings is not None else 0.0
+        terrain_pack = self.terrain.collect_visible(dungeon, c0, r0, c1, r1) if gpu_scene is not None else None
+        scene_on_gpu = terrain_pack is not None
+        gpu_scene_fov = None
+        if scene_on_gpu:
+            if timings is not None:
+                timings["terrain"] = (perf_counter() - terrain_start) * 1000
+            self.gpu_shader.upload_fov(fov_mask)
+            gpu_scene_fov, self._emissive_dirty = gpu_scene.render_world(
+                self, dungeon, player, mobs, objects, cam_x, cam_y, fov_mask,
+                visible_tiles, fx_mgr, physical_states, cast, reveal_map, now_sec,
+                timings, terrain_pack,
+            )
+            scene_fov = fov_mask
+        else:
+            if cam_x < 0 or cam_y < 0 or cam_x + VIEW_W > dungeon.width * TILE_W or cam_y + VIEW_H > dungeon.height * TILE_H:
+                self.diff_canvas.fill(DIFFUSE_CLEAR)
+                self.norm_canvas.fill(NORMAL_CLEAR)
+            if self._emissive_dirty:
+                self.emissive_canvas.fill((0, 0, 0), (0, 0, VIEW_W, VIEW_H))
+                self._emissive_dirty = False
+            self._entity_y_gl[:VIEW_H].fill(-9999.0)
+            trees = self.terrain.draw(dungeon, c0, r0, c1, r1, int(cam_x), int(cam_y),
+                                    self.diff_canvas, self.norm_canvas)
+            if timings is not None:
+                canopy_start = perf_counter()
+                timings["terrain"] = (canopy_start - terrain_start) * 1000
+
+            if not reveal_map and trees:
+                self.canopy_visibility.prefetch(trees)
+            tall_trees_to_draw = []
+            for c, r, tree_asset_key in trees:
+                tile = (c, r)
+                target = 1.0 if reveal_map else self.canopy_visibility.target(tile)
+                visible_base = self.canopy_visibility.sample(tile, target)
+                if visible_base > .006:
+                    tall_trees_to_draw.append((c, r, tree_asset_key, visible_base))
+            if timings is not None:
+                timings["canopy"] = (perf_counter() - canopy_start) * 1000
+
+            fx_mgr = ui_texts.get("_fx_mgr")
+            # 1. Наложение «Памяти поля боя» (вечная кровь, обломки бочек, вино и копоть на полу)
+            if fx_mgr and fx_mgr.flags.get("battle_memory", True) and fx_mgr.has_decals:
+                self.diff_canvas.blit(fx_mgr.decal_surf, (0, 0), area=pygame.Rect(int(cam_x), int(cam_y), VIEW_W, VIEW_H))
+
+            # 2. Круги на воде при ходьбе по лужам
+            if fx_mgr and fx_mgr.flags.get("water_ripples", True):
+                for rp in fx_mgr.ripples:
+                    prog_r = 1.0 - (rp["timer"] / rp["max_timer"])
+                    rx_s = int(rp["wx"] * TILE_W - cam_x)
+                    ry_s = int(rp["wy"] * TILE_H - cam_y)
+                    rad_w = max(2, int(2 + prog_r * 7))
+                    rad_h = max(1, int(1 + prog_r * 4))
+                    palette = ((128, 214, 102), (62, 137, 70)) if rp["green"] else ((85, 165, 210), (50, 110, 150))
+                    col_r = palette[prog_r >= 0.5]
+                    pygame.draw.ellipse(self.diff_canvas, col_r, (rx_s - rad_w, ry_s - rad_h, rad_w * 2, rad_h * 2), 1)
+
+            game_ref = ui_texts.get("_game_ref")
+            physical_states = getattr(game_ref, "physical_effects", ())
+            if physical_states:
+                render_ground_traps(self.diff_canvas, self.norm_canvas, physical_states, cam_x, cam_y)
+
+            hero_pair = self.get_hero_pair(player)
+            misted = player.stealth_timer > 0
+            if misted:
+                hero_pair = (misted_actor(hero_pair[0], now_sec, min(1.0, player.stealth_timer / .24)), hero_pair[1])
+            render_list = [{
+                "wx": player.x - 0.5 + player.bump_x,
+                "wy": player.y - 0.5 + player.bump_y,
+                "actor_wx": player.x,
+                "actor_wy": player.y,
+                "is_player": True,
+                "is_actor": True,
+                "emissive_role": "hero" if player.has_lit_torch and not misted else None,
+                "pair": hero_pair,
+                "misted": misted,
+                "alpha": 255
+            }]
+
+            for (tc, tr, tree_asset_key, visible_base) in tall_trees_to_draw:
+                t_alpha = canopy_opacity(tc, tr, player.x, player.y)
+                render_list.append({
+                    "wx": float(tc), "wy": float(tr),
+                    "is_tree": True,
+                    "canopy_visibility": visible_base,
+                    "pair": self.assets.get(tree_asset_key, self.assets["tall_tree"]),
+                    "alpha": t_alpha
+                })
+
+            for (lx, ly), lev in dungeon.levers.items():
+                if (lx, ly) in visible_tiles:
+                    render_list.append({
+                        "wx": float(lx), "wy": float(ly),
+                        "pair": self.assets["lever_on" if lev.pulled else "lever_off"],
+                        "alpha": 255
+                    })
+            for br in dungeon.braziers:
+                if (br["x"], br["y"]) in visible_tiles:
+                    render_list.append({
+                        "wx": float(br["x"]), "wy": float(br["y"]),
+                        "is_light_source": True,
+                        "emissive_role": "fire_prop",
+                        "pair": self.assets["brazier"], "alpha": 255
+                    })
+            for obj in objects:
+                if not obj.used and (obj.x, obj.y) in visible_tiles:
+                    passage = dungeon.passages.get((obj.x, obj.y))
+                    ground_key = {"up": "jungle_passage_up", "onward": "jungle_passage_up",
+                                "back": "jungle_passage_down"}.get(passage, obj.kind)
+                    if ground_key in ("jungle_passage_up", "jungle_passage_down", "ceramic_shards"):
+                        fd, fn = self.assets[ground_key]
+                        position = (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y))
+                        self.diff_canvas.blit(fd, position)
+                        self.norm_canvas.blit(fn, position)
+                        continue
+                    if obj.kind in ("woven_rug", "stairs", "trap", "mirror_rail_h", "mirror_rail_v"):
+                        fd, fn = self.assets[obj.kind]
+                        self.diff_canvas.blit(fd, (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y - 4)))
+                        self.norm_canvas.blit(fn, (int(obj.x * TILE_W - cam_x), int(obj.y * TILE_H - cam_y - 4)))
+                        continue
+                    pair = self.get_world_loot_pair(obj.item) if obj.kind == "loot" else self.assets.get(obj.kind, self.assets["loot"])
+                    is_npc = (obj.kind in ("npc_innkeeper", "npc_merchant"))
+                    is_fire = (obj.kind in ("campfire", "fireplace", "light_emitter", "light_receiver_on"))
+                    render_list.append({
+                        "wx": float(obj.x), "wy": float(obj.y),
+                        "actor_wx": obj.x + 0.5, "actor_wy": obj.y + 0.5,
+                        "is_actor": is_npc,
+                        "is_light_source": is_fire,
+                        "emissive_role": "fire_prop" if is_fire else None,
+                        "pair": pair, "alpha": 255
+                    })
+
+            use_hit_flash = fx_mgr.flags.get("hit_flash", True) if fx_mgr else True
+            for m in mobs:
+                mx_i, my_i = int(m.x), int(m.y)
+                if getattr(m, "size_tiles", 1) >= 2:
+                    mob_vis = any((mx_i + dx, my_i + dy) in visible_tiles for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+                else:
+                    mob_vis = (mx_i, my_i) in visible_tiles
+                if mob_vis:
+                    chilled = getattr(m, "slow_timer", 0.0) > 0.0
+                    f_mode = None
+                    if use_hit_flash and getattr(m, "hit_flash_timer", 0.0) > 0.0:
+                        f_mode = "crit" if getattr(m, "hit_flash_crit", False) else "hit"
+                    render_list.append({
+                        "wx": m.x - 0.5 + m.bump_x,
+                        "wy": m.y - 0.5 + m.bump_y,
+                        "actor_wx": m.x,
+                        "actor_wy": m.y,
+                        "is_actor": True,
+                        "emissive_role": "mob",
+                        "pair": self.get_mob_pair(m.sprite, getattr(m, "facing", -1), is_chilled=chilled, flash_mode=f_mode),
+                        "alpha": 255
+                    })
+
+            render_list.sort(key=lambda item: item["wy"])
+
+            use_shadows = fx_mgr.flags.get("drop_shadows", True) if fx_mgr else True
+            if tall_trees_to_draw:
+                fov_sig = [id(fov_mask), getattr(dungeon, "_fov_key", None), cam_x, cam_y]
+                for ent in render_list:
+                    d_surf = ent["pair"][0]
+                    ew, eh = d_surf.get_size()
+                    draw_y = int(round(ent["wy"] * TILE_H - cam_y - (eh - TILE_H)))
+                    if draw_y + eh > 0 and draw_y < VIEW_H:
+                        if ent.get("is_tree", False):
+                            draw_x = int(round(ent["wx"] * TILE_W - cam_x - (ew - TILE_W) // 2))
+                            fov_sig.append((id(d_surf), draw_x, draw_y, ent["alpha"], ent["canopy_visibility"]))
+                        elif not ent.get("misted", False) and ent["alpha"] == 255:
+                            draw_x = int(round(ent["wx"] * TILE_W - cam_x - (ew - TILE_W) // 2))
+                            fov_sig.append((id(d_surf), draw_x, draw_y))
+                fov_key = tuple(fov_sig)
+                rebuild_scene_fov = fov_key != self._scene_fov_key
+                if rebuild_scene_fov:
+                    np.copyto(self._scene_fov_buf, fov_mask)
+                    self._scene_fov_key = fov_key
+                scene_fov = self._scene_fov_buf
+            else:
+                rebuild_scene_fov = False
+                scene_fov = fov_mask
+            world_shadow_lights = [(br["x"] + 0.5, br["y"] + 0.5, br["radius"] / TILE_W) for br in dungeon.braziers]
+            for obj in objects:
+                if obj.kind in ("campfire", "fireplace"):
+                    world_shadow_lights.append((obj.x + 0.5, obj.y + 0.5, 7.2))
+
+            for ent in render_list:
+                d_surf, n_surf = ent["pair"]
+                ew, eh = d_surf.get_size()
+                draw_x = int(round(ent["wx"] * TILE_W - cam_x - (ew - TILE_W) // 2))
+                draw_y = int(round(ent["wy"] * TILE_H - cam_y - (eh - TILE_H)))
+                sole_sy = float(draw_y + eh - 2)
+                if draw_y + eh > 0 and draw_y < VIEW_H:
+                    if use_shadows and ent.get("is_actor", False) and not ent.get("misted", False):
+                        awx = ent.get("actor_wx", ent["wx"] + 0.5)
+                        awy = ent.get("actor_wy", ent["wy"] + 0.5)
+                        vec_x, vec_y, w_sum = 0.0, 0.0, 0.0
+                        for lwx, lwy, lrad in world_shadow_lights:
+                            dx_w = awx - lwx
+                            dy_w = awy - lwy
+                            dist_w = math.hypot(dx_w, dy_w)
+                            if 0.1 < dist_w < lrad:
+                                w_l = (1.0 - dist_w / lrad) ** 1.5
+                                vec_x += (dx_w / dist_w) * w_l
+                                vec_y += (dy_w / dist_w) * w_l
+                                w_sum += w_l
+                        if not ent.get("is_player", False) and player.has_lit_torch:
+                            dx_p = awx - player.x
+                            dy_p = awy - player.y
+                            dist_p = math.hypot(dx_p, dy_p)
+                            if 0.1 < dist_p < 7.5:
+                                w_p = (1.0 - dist_p / 7.5) ** 1.4 * 1.5
+                                vec_x += (dx_p / dist_p) * w_p
+                                vec_y += (dy_p / dist_p) * w_p
+                                w_sum += w_p
+
+                        if w_sum > 0.01:
+                            sh_dx = max(-3.5, min(3.5, (vec_x / w_sum) * 3.0))
+                            sh_dy = max(-2.0, min(2.5, (vec_y / w_sum) * 1.8))
+                        else:
+                            sh_dx, sh_dy = 0.0, 0.5
+
+                        if ew > 20:
+                            sh_stamp, sh_w, sh_h = self._shadow_big, 20, 6
+                        else:
+                            sh_stamp, sh_w, sh_h = self._shadow_small, 10, 4
+                        foot_cx = draw_x + ew * 0.5
+                        self.diff_canvas.blit(sh_stamp, (int(round(foot_cx - sh_w * 0.5 + sh_dx)), int(round(sole_sy - sh_h * 0.5 + sh_dy))))
+
+                    is_tree = ent.get("is_tree", False)
+                    if is_tree:
+                        opacity = ent["alpha"]
+                        for canvas, sprite in ((self.diff_canvas, d_surf), (self.norm_canvas, n_surf)):
+                            if opacity < 255:
+                                sprite.set_alpha(opacity)
+                                canvas.blit(sprite, (draw_x, draw_y))
+                                sprite.set_alpha(None)
+                            else:
+                                canvas.blit(sprite, (draw_x, draw_y))
+                        x0, x1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
+                        y0, y1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
+                        if rebuild_scene_fov and x0 < x1 and y0 < y1:
+                            key = id(d_surf)
+                            mask = self.alpha_mask_cache.get(key)
+                            if mask is None:
+                                mask = pygame.surfarray.array_alpha(d_surf) > 220
+                                self.alpha_mask_cache[key] = mask
+                            alpha = mask[x0 - draw_x:x1 - draw_x, y0 - draw_y:y1 - draw_y]
+                            view = scene_fov[x0:x1, y0:y1]
+                            coverage = ent["canopy_visibility"]
+                            if opacity == 255:
+                                np.copyto(view, coverage, where=alpha)
+                            else:
+                                strength = opacity / 255.0
+                                np.copyto(view, view * (1.0 - strength) + coverage * strength, where=alpha)
+                        continue
+
+                    if ent.get("misted", False):
+                        self.diff_canvas.blit(d_surf, (draw_x, draw_y))
+                        continue
+                    if ent["alpha"] < 255:
+                        d_tmp = d_surf.copy()
+                        d_tmp.set_alpha(ent["alpha"])
+                        self.diff_canvas.blit(d_tmp, (draw_x, draw_y))
+                    else:
+                        self.diff_canvas.blit(d_surf, (draw_x, draw_y))
+                        self.norm_canvas.blit(n_surf, (draw_x, draw_y))
+                        if rebuild_scene_fov:
+                            cx0, cx1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
+                            cy0, cy1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
+                            if cx0 < cx1 and cy0 < cy1:
+                                mask = self.alpha_mask_cache.get(id(d_surf))
+                                if mask is None:
+                                    mask = pygame.surfarray.array_alpha(d_surf) > 15
+                                    self.alpha_mask_cache[id(d_surf)] = mask
+                                alpha = mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
+                                source = fov_mask[cx0:cx1, cy0:cy1]
+                                np.copyto(scene_fov[cx0:cx1, cy0:cy1], source, where=alpha)
+                        em_role = ent.get("emissive_role")
+                        if em_role:
+                            em_s = self._get_entity_emissive_surf(d_surf, em_role)
+                            self.emissive_canvas.blit(em_s, (draw_x, draw_y))
+                            self._emissive_dirty = True
+
+                        if not ent.get("is_light_source", False):
+                            cx0, cx1 = max(0, draw_x), min(VIEW_W, draw_x + ew)
+                            cy0, cy1 = max(0, draw_y), min(VIEW_H, draw_y + eh)
+                            if cx0 < cx1 and cy0 < cy1:
+                                s_id = id(d_surf)
+                                a_mask = self.alpha_mask_cache.get(s_id)
+                                if a_mask is None:
+                                    a_mask = pygame.surfarray.array_alpha(d_surf) > 15
+                                    self.alpha_mask_cache[s_id] = a_mask
+                                mask_slice = a_mask[cx0 - draw_x:cx1 - draw_x, cy0 - draw_y:cy1 - draw_y]
+                                np.copyto(self.entity_y_canvas[cx0:cx1, cy0:cy1], sole_sy, where=mask_slice)
+
+            if tall_trees_to_draw:
+                if rebuild_scene_fov:
+                    ro_fov = self._scene_fov_buf.view()
+                    ro_fov.flags.writeable = False
+                    self._cached_scene_fov = ro_fov
+                scene_fov = self._cached_scene_fov
+            cast = getattr(game_ref, "fishing_cast", None)
+            if cast is not None:
+                from elenor.rendering.fishing_cast import draw_fishing_cast
+                draw_fishing_cast(self.diff_canvas, self.norm_canvas, cast, cam_x, cam_y, now_sec)
+
+            tz_diff, tz_norm = self.assets["thought_zone"]
+            self.diff_canvas.blit(tz_diff, (0, VIEW_H))
+            self.norm_canvas.blit(tz_norm, (0, VIEW_H))
+
         self.light_occlusion.update(dungeon, objects)
         viewer = (player.x * TILE_W, player.y * TILE_H)
-        flags = fx_mgr.flags if fx_mgr else {}
         bounce_color = bounce_color_for(dungeon) if flags.get("reflected_light", True) else (0.0, 0.0, 0.0)
         tonemap = flags.get("tonemap", True)
         if timings is not None:
@@ -833,16 +905,13 @@ class Renderer(UIRendererMixin):
             timings["scene"] = (light_start - scene_start) * 1000
         temple_exposure = dungeon.interior == "temple"
         window = ui_texts.get("_gl_window")
-        gpu_fog = (bool(clouds) and flags.get("gpu_fog", True)
-                   and self.gpu_shader is not None and self.gpu_shader.fog is not None
-                   and len(clouds) <= self.gpu_shader.fog.MAX_CLOUDS and len(lights) <= self.gpu_shader.MAX_LIGHTS)
         slot = None
         if window is not None:
             profile_key = (gpu_fog, tuple(flags.items())) if timings is not None else None
             slot = window.begin_world(dungeon, timings, profile_key)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
-            en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
+            en_bloom = (fx_mgr.flags.get("bloom", True) if fx_mgr else True) and self._emissive_dirty
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
@@ -854,6 +923,7 @@ class Renderer(UIRendererMixin):
                 fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,
                 timer_queries=slot.timers if slot is not None and slot.timed else None,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
+                scene_on_gpu=scene_on_gpu, gpu_scene_fov=gpu_scene_fov,
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -1010,12 +1080,16 @@ class Renderer(UIRendererMixin):
             timings["scale"] = (scale_end - overlay_start) * 1000
 
         if game_ref is not None and getattr(game_ref, "mirror_puzzles", None):
+            if window is not None:
+                window.middle_dirty = True
             from elenor.rendering.mirrors import render_mirror_puzzles_beams
             from elenor.rendering.visibility import overlay_visibility
             visibility = overlay_visibility(fov_mask, lights, cam_x, cam_y)
             render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, visibility)
 
         if any(state["kind"] not in ("trap", "trap_snap") for state in physical_states):
+            if window is not None:
+                window.middle_dirty = True
             from elenor.rendering.visibility import overlay_visibility
             render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask, lights, cam_x, cam_y))
 
@@ -1025,12 +1099,19 @@ class Renderer(UIRendererMixin):
             and mob.jungle_windup[0].form not in ("strike", "sweep", "lunge")
         ]
         if windups:
+            if window is not None:
+                window.middle_dirty = True
             from elenor.rendering.jungle_attacks import render_jungle_attacks
             render_jungle_attacks(screen, windups, cam_x, cam_y, fov_mask, lights, self.jungle_attack_cache)
 
         # 5. Пылинки и споры, видимые ТОЛЬКО когда они пролетают сквозь лучи света!
         if fx_mgr and fx_mgr.flags.get("dust_motes", True):
-            for dm in fx_mgr.dust_motes:
+            mote_lights = [
+                (lgt["pos"][0], lgt["pos"][1], lgt["radius"] * 0.85, (lgt["radius"] * 0.85) ** 2,
+                 lgt.get("allowed_tiles"), lgt["color"])
+                for lgt in lights[1:]
+            ]
+            for dm in fx_mgr.motes_in_view(cam_x, cam_y):
                 mtx, mty = int(dm["wx"]), int(dm["wy"])
                 if (mtx, mty) not in visible_tiles:
                     continue
@@ -1046,33 +1127,30 @@ class Renderer(UIRendererMixin):
                     pulse = max(0.0, math.sin(dm["phase"] * 2.2)) ** 3
                     brightness = pulse * max(0.0, min(1.0, (8.0 - distance) / 3.0))
                     if brightness > .12:
-                        edge = tuple(round(c * brightness) for c in (86, 128, 44))
-                        core = tuple(round(c * brightness) for c in (233, 247, 123))
-                        pygame.draw.rect(screen, edge, ((nx - 1) * SCALE, ny * SCALE, 3 * SCALE, SCALE))
-                        pygame.draw.rect(screen, core, (nx * SCALE, ny * SCALE, SCALE, SCALE))
+                        edge = (round(86 * brightness), round(128 * brightness), round(44 * brightness))
+                        core = (round(233 * brightness), round(247 * brightness), round(123 * brightness))
+                        self.combat_pixels.rect(edge, ((nx - 1) * SCALE, ny * SCALE, 3 * SCALE, SCALE))
+                        self.combat_pixels.rect(core, (nx * SCALE, ny * SCALE, SCALE, SCALE))
                     continue
-                # Проверяем освещённость точки пылинки от реальных источников света (пропуская базовое ночное зрение lights[0])
                 m_lum = 0.0
-                m_col = [180, 170, 140]
-                for lgt in lights[1:]:
-                    lx, ly, lz = lgt["pos"]
-                    rad = lgt["radius"]
-                    d2 = math.hypot(msx - lx, msy - ly)
-                    if d2 < rad * 0.85:
-                        alw = lgt.get("allowed_tiles")
+                m_col = (180, 170, 140)
+                for lx, ly, rad85, rad2, alw, (cr, cg, cb) in mote_lights:
+                    dx_m = msx - lx
+                    dy_m = msy - ly
+                    d_sq = dx_m * dx_m + dy_m * dy_m
+                    if d_sq < rad2:
                         if isinstance(alw, np.ndarray) and alw[mtx, mty] < 0.5:
                             continue
-                        inten = (1.0 - d2 / (rad * 0.85)) ** 1.4
+                        inten = (1.0 - math.sqrt(d_sq) / rad85) ** 1.4
                         if inten > m_lum:
                             m_lum = inten
-                            cr, cg, cb = lgt["color"]
-                            m_col = [min(255, int(195 * cr)), min(255, int(185 * cg)), min(255, int(165 * cb))]
+                            m_col = (min(255, int(195 * cr)), min(255, int(185 * cg)), min(255, int(165 * cb)))
                 if m_lum > 0.18:
                     twinkle = 0.65 + 0.35 * math.sin(dm["phase"] * 2.5)
                     br_factor = min(1.0, m_lum * twinkle * 1.3)
                     final_c = (int(m_col[0] * br_factor), int(m_col[1] * br_factor), int(m_col[2] * br_factor))
                     sz_p = SCALE if "anchor" in dm else dm["size"] * 2
-                    pygame.draw.rect(screen, final_c, (nx * SCALE, ny * SCALE, sz_p, sz_p))
+                    self.combat_pixels.rect(final_c, (nx * SCALE, ny * SCALE, sz_p, sz_p))
 
         # Precision targeting works silently under the hood (visual reticle removed as requested)
 
@@ -1145,7 +1223,8 @@ class Renderer(UIRendererMixin):
                     self.combat_pixels.circle(pr.color, (sx, sy), 8)
                     self.combat_pixels.rect(core, (sx - 2, sy - 4, 4, 4))
 
-        self.combat_pixels.flush(screen, fov_mask)
+        if window is None:
+            self.combat_pixels.flush(screen, fov_mask)
 
         # Enemy Awareness, HP, Ground Roots & Chattering Speech Bubbles (with Darkness Camouflage!)
         for m in mobs:
@@ -1182,6 +1261,18 @@ class Renderer(UIRendererMixin):
 
             dist_to_p = math.hypot(m.x - player.x, m.y - player.y)
             if is_lit or (m.current_speech and dist_to_p <= 11.5):
+                if window is not None and (
+                    m.current_speech or (is_lit and (
+                        m.hp < m.max_hp or m.state in ("sleeping", "eating")
+                        or (m.state != "combat" and m.awareness > 2.0)
+                        or getattr(m, "alert_bang_timer", 0.0) > 0.0
+                        or getattr(m, "cast_windup_timer", 0.0) > 0.0
+                        or getattr(m, "root_timer", 0.0) > 0.0
+                        or getattr(m, "burn_timer", 0.0) > 0.0
+                        or getattr(m, "stun_timer", 0.0) > 0.0
+                    ))
+                ):
+                    window.middle_dirty = True
                 head_off = 1.65 if getattr(m, "size_tiles", 1) >= 2 else 0.85
                 sx = int((m.x * TILE_W - cam_x) * SCALE)
                 sy = int(((m.y - head_off) * TILE_H - cam_y) * SCALE)
@@ -1328,12 +1419,18 @@ class Renderer(UIRendererMixin):
                 self.combat_pixels.polygon((255, 145, 35), [(fx_s - 3, fy_s), (fx_s, fy_s - h_fl), (fx_s + 3, fy_s)])
                 self.combat_pixels.polygon((255, 240, 125), [(fx_s - 2, fy_s), (fx_s, fy_s - h_fl // 2), (fx_s + 2, fy_s)])
 
-        self.combat_pixels.flush(screen, fov_mask)
+        if window is None:
+            self.combat_pixels.flush(screen, fov_mask)
 
         for p in popups:
             sx = int((p.wx * TILE_W - cam_x) * SCALE)
             sy = int((p.wy * TILE_H - cam_y) * SCALE)
             if 0 <= sy < VIEW_H * SCALE:
+                if window is not None:
+                  if sy > VIEW_H * SCALE - 32:
+                      window.full_dirty = True
+                  else:
+                      window.middle_dirty = True
                 f_use = self.font_popup_big if getattr(p, "big", False) else self.font_popup
                 txt_surf = f_use.render(p.text, True, p.color)
                 sh_surf = f_use.render(p.text, True, (10, 8, 14))
@@ -1343,6 +1440,8 @@ class Renderer(UIRendererMixin):
         # Render NPC Quest Marker & Speech Bubble (Innkeeper Hugo & Dungeon Merchant)
         for obj in objects:
             if not obj.used and obj.kind in ("npc_innkeeper", "npc_merchant") and (obj.x, obj.y) in visible_tiles:
+                if window is not None:
+                  window.middle_dirty = True
                 sx = int(((obj.x + 0.5) * TILE_W - cam_x) * SCALE)
                 sy = int(((obj.y - 0.35) * TILE_H - cam_y) * SCALE)
                 if getattr(obj, "speech_text", None):
@@ -1563,23 +1662,25 @@ class Renderer(UIRendererMixin):
                 for vx_p, vy_p in verts:
                     self.combat_pixels.circle((255, 220, 120), (vx_p, vy_p), 3)
 
-        self.combat_pixels.flush(screen, fov_mask)
+        self.combat_pixels.flush(screen, fov_mask, window=window)
 
         if timings is not None:
             hud_start = perf_counter()
             timings["world_fx"] = (hud_start - scale_end) * 1000
-        self.hud.draw_thought(screen, self, shown_thought)
+        self.hud.draw_thought(screen, self, shown_thought, window=window)
         hud, hovered_hud_item, hovered_passive = self.hud.draw_bottom(
-            screen, self, player, ui_texts, hover_pos, drag_item, inv_open, ticks
+            screen, self, player, ui_texts, hover_pos, drag_item, inv_open, ticks, window=window
         )
         if timings is not None:
             timings["hud"] = (perf_counter() - hud_start) * 1000
         if window is not None:
-            # Tooltips for world items are clipped to the world. HUD tooltips and
-            # modals can cover the bottom rows and invalidate their GPU copy.
-            window.hud_surface = None if (
-                levelup_choices or inv_open or hovered_hud_item or hovered_passive
-            ) else hud
+            if levelup_choices or inv_open or hovered_hud_item or hovered_passive:
+                window.hud_surface = None
+                window.full_dirty = True
+            else:
+                window.hud_surface = hud
+                if ui_texts.get("_world_hover_item"):
+                    window.middle_dirty = True
 
         world_hover_item = ui_texts.get("_world_hover_item")
         if timings is not None:

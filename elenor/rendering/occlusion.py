@@ -40,14 +40,31 @@ class LightOcclusion:
         self.version = 0
         self.blockers = None
         self.rays = OrderedDict()
+        self._fast_key = None
+        self._door_states = ()
+        self._prop_states = ()
 
     def update(self, dungeon, objects=()):
+        obj_len = len(objects)
+        fast_key = (
+            dungeon, dungeon.geometry_revision, obj_len,
+            objects[0] if obj_len else None,
+            objects[-1] if obj_len else None,
+            len(dungeon.doors), id(dungeon.solid_props), len(dungeon.solid_props),
+        )
+        if fast_key == self._fast_key:
+            if (all(d.is_open == op and d.locked == lk for d, op, lk in self._door_states)
+                    and all(o.used == us and o.x == ox and o.y == oy for o, us, ox, oy in self._prop_states)):
+                return
         doors = tuple((point, door.locked) for point, door in dungeon.doors.items()
                       if not door.is_open and 0 <= point[0] < dungeon.width and 0 <= point[1] < dungeon.height)
         seen_props = {
             (obj.x, obj.y): obj for obj in objects
             if obj.kind in _FURNITURE or (obj.x, obj.y) in dungeon.solid_props
         }
+        self._door_states = tuple((d, d.is_open, d.locked) for d in dungeon.doors.values())
+        self._prop_states = tuple((o, o.used, o.x, o.y) for o in seen_props.values())
+        self._fast_key = fast_key
         furniture = frozenset((x, y, obj.kind) for (x, y), obj in seen_props.items() if not obj.used)
         furniture |= frozenset((x, y, None) for x, y in dungeon.solid_props - seen_props.keys())
         key = dungeon, dungeon.geometry_revision, doors, furniture

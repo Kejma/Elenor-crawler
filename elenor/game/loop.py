@@ -722,7 +722,7 @@ def main():
             fov_start = perf_counter()
             profile.stages["game"] = (fov_start - profile.started) * 1000
         fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(
-            world_ox, world_oy, game.cam_x, game.cam_y
+            round(world_ox), round(world_oy), game.cam_x, game.cam_y
         )
         if profile.active:
             fov_end = perf_counter()
@@ -1012,7 +1012,7 @@ def main():
             ui_bundle["_frame_timings"] = profile.stages
         if game.gl_window is not None:
             ui_bundle["_gl_window"] = game.gl_window
-            screen.fill((0, 0, 0, 0))
+            game.gl_window.begin_ui_frame()
         game.renderer.render_frame(
             screen=screen,
             dungeon=game.dungeon,
@@ -1044,13 +1044,18 @@ def main():
         if window is not None and (dev_open or game.fx.panel_open or game.fx.f3_open
                                    or game.catch_display or game.fishing_cast):
             window.hud_surface = None
+            window.full_dirty = True
 
         if game.campaign == "jungle" and not game.inv_open:
+            if window is not None and (int(game.player.x), int(game.player.y)) in game.dungeon.fishing_edges:
+                window.middle_dirty = True
             draw_fishing(screen, game, (world_mx, world_my), fov_mask)
 
         if not game.inv_open and not game.levelup_choices and game.fishing_cast is None and not dev_open:
             passage = game.nearby_passage()
             if passage:
+                if window is not None:
+                    window.middle_dirty = True
                 _, action = passage
                 label = hud_label(game.renderer.font_ui, game.loc["jungle_passages"][action], (246, 225, 178))
                 rect = label.get_rect(midbottom=(VIEW_W * SCALE // 2, VIEW_H * SCALE - 16))

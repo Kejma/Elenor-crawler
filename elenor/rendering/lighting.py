@@ -51,13 +51,13 @@ class GPULightShader:
         self.uploaded_structure = None
         self.uploaded_fov = None
 
-        self.tex_diff = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
-        self.tex_norm = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
+        self.tex_diff = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
+        self.tex_norm = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
         self.tex_ent_y = self.ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.tex_fov = self.ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.tex_masks = self.ctx.texture((MAP_COLS, MAP_ROWS * self.MAX_LIGHTS), 1, dtype="f4")
         self.tex_walls = self.ctx.texture((MAP_COLS, MAP_ROWS), 1, dtype="f4")
-        self.tex_emissive = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
+        self.tex_emissive = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
         self.tex_out = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
 
         for tex in (self.tex_diff, self.tex_norm, self.tex_ent_y, self.tex_fov, self.tex_masks, self.tex_walls, self.tex_emissive, self.tex_out):
@@ -441,10 +441,11 @@ class GPULightShader:
 
         self.survey_brightness = None
         try:
-            self.fog = GPUFog(self.ctx, self.MAX_LIGHTS, self.vbo, moderngl.LINEAR, moderngl.NEAREST)
-        except moderngl.Error as exc:
-            print(f"[GL] Туман использует CPU ({exc})")
-            self.fog = None
+            from elenor.rendering.gpu_scene import GPUSceneRenderer
+            self.scene = GPUSceneRenderer(self)
+        except Exception as exc:
+            print(f"[GL] 2D-сцена использует CPU ({exc})")
+            self.scene = None
 
     def _render_shadows(self, occlusion, lights, cam_x, cam_y, radius_scale):
         geometry = occlusion, occlusion.version
@@ -476,18 +477,22 @@ class GPULightShader:
             self.ctx.viewport = (0, row, SHADOW_RAYS, 1)
             self.shadow_vao.render(self.moderngl.TRIANGLE_STRIP)
 
+    def upload_fov(self, fov_mask):
+        if fov_mask is not self.uploaded_fov or fov_mask.flags.writeable:
+            self.tex_fov.write(np.ascontiguousarray(fov_mask.T, dtype=np.float32))
+            self.uploaded_fov = None if fov_mask.flags.writeable else fov_mask
+
     def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
-                           timings=None, readback=True, fog=None, timer_queries=None):
+                           timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None):
         self.survey_brightness = None
         if timings is not None and self.timers is None:
             self.timers = tuple(self.ctx.query(time=True) for _ in range(3))
         timers = self.timers if timings is not None else timer_queries
-        self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
-        self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
-        self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32))
-        if fov_mask is not self.uploaded_fov or fov_mask.flags.writeable:
-            self.tex_fov.write(np.ascontiguousarray(fov_mask.T, dtype=np.float32))
-            self.uploaded_fov = None if fov_mask.flags.writeable else fov_mask
+        if not scene_on_gpu:
+            self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGBA"))
+            self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGBA"))
+            self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32))
+        self.upload_fov(fov_mask)
         if occlusion is not None:
             wall_grid_np = occlusion.structure
         if wall_grid_np is not None and (occlusion is None or wall_grid_np is not self.uploaded_structure):
@@ -500,8 +505,8 @@ class GPULightShader:
                 self.masks_buf = np.zeros((self.MAX_LIGHTS, height, width), dtype=np.float32)
             self.tex_walls.write(np.ascontiguousarray(wall_grid_np.T, dtype=np.float32))
             self.uploaded_structure = wall_grid_np if occlusion is not None else None
-        if emissive_canvas is not None:
-            self.tex_emissive.write(pygame.image.tobytes(emissive_canvas, "RGB"))
+        if not scene_on_gpu and enable_bloom and emissive_canvas is not None:
+            self.tex_emissive.write(pygame.image.tobytes(emissive_canvas, "RGBA"))
 
         n_lgt = min(len(lights), self.MAX_LIGHTS)
         self.pos_rad_buf.fill(0.0)
@@ -555,21 +560,20 @@ class GPULightShader:
         self.prog["u_tonemap"].value = tonemap
         self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
         self.prog["u_num_lights"].value = n_lgt
-        self.prog["u_light_pos_rad"].write(self.pos_rad_buf.tobytes())
-        self.prog["u_light_col_foot"].write(self.col_foot_buf.tobytes())
-        self.prog["u_light_flags"].write(self.flags_buf.tobytes())
-
+        self.prog["u_light_pos_rad"].write(self.pos_rad_buf)
+        self.prog["u_light_col_foot"].write(self.col_foot_buf)
+        self.prog["u_light_flags"].write(self.flags_buf)
 
         self.prog["u_num_hud_lights"].value = n_hud
-        self.prog["u_hud_pos_rad"].write(self.hud_pos_buf.tobytes())
-        self.prog["u_hud_col"].write(self.hud_col_buf.tobytes())
+        self.prog["u_hud_pos_rad"].write(self.hud_pos_buf)
+        self.prog["u_hud_col"].write(self.hud_col_buf)
 
         self.fbo.use()
         self.ctx.viewport = (0, 0, VIEW_W, CANVAS_H)
         self.tex_diff.use(0)
         self.tex_norm.use(1)
         self.tex_ent_y.use(2)
-        self.tex_fov.use(3)
+        (gpu_scene_fov if gpu_scene_fov is not None else self.tex_fov).use(3)
         self.tex_masks.use(4)
         self.tex_walls.use(5)
         self.tex_emissive.use(6)

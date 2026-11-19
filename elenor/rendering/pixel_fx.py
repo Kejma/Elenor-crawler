@@ -23,7 +23,8 @@ def _stroke(width):
 
 class PixelLayer:
     def __init__(self):
-        self.surface = pygame.Surface((VIEW_W, VIEW_H), pygame.SRCALPHA)
+        self.pixels = bytearray(VIEW_W * VIEW_H * 4)
+        self.surface = pygame.image.frombuffer(self.pixels, (VIEW_W, VIEW_H), "BGRA")
         self.dirty = pygame.Rect(0, 0, 0, 0)
 
     def mark(self, rect):
@@ -66,7 +67,12 @@ class PixelLayer:
     def rect(self, color, box):
         self.mark(pygame.draw.rect(self.surface, color, _bounds(box)))
 
-    def flush(self, screen, visibility=None):
+    def clear(self):
+        if self.dirty.width:
+            self.surface.fill((0, 0, 0, 0), self.dirty)
+            self.dirty = pygame.Rect(0, 0, 0, 0)
+
+    def flush(self, screen, visibility=None, window=None):
         rect = self.dirty
         if not rect.width:
             return
@@ -76,8 +82,10 @@ class PixelLayer:
             mask = visibility[rect.left:rect.right, rect.top:rect.bottom]
             np.multiply(active, mask, out=active, casting="unsafe")
             del active, alpha
+        if window is not None:
+            window.native_fx_pixels = self.pixels
+            return
         chunk = self.surface.subsurface(rect)
         scaled = pygame.transform.scale(chunk, (rect.width * SCALE, rect.height * SCALE))
         screen.blit(scaled, (rect.left * SCALE, rect.top * SCALE))
-        self.surface.fill((0, 0, 0, 0), rect)
-        self.dirty = pygame.Rect(0, 0, 0, 0)
+        self.clear()

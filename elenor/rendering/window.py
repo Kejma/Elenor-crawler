@@ -23,6 +23,10 @@ _QUAD = """#version 330 core
 _PROBE_WIDTH = VIEW_W // TILE_W + 2
 _PROBE_ROWS = VIEW_H // TILE_H + 2
 _PROBE_SIZE = (_PROBE_WIDTH, _PROBE_ROWS + 1)
+_TOP_BAND_H = 212
+_THOUGHT_Y = VIEW_H * SCALE
+_HUD_Y = CANVAS_H * SCALE
+_ROW_BYTES = SCREEN_W * 4
 
 
 class _Fences:
@@ -67,9 +71,22 @@ class GLWindow:
         self.canvas = pygame.image.frombuffer(self.ui_pixels, (SCREEN_W, SCREEN_H), "BGRA")
         self.ui = ctx.texture((SCREEN_W, SCREEN_H), 4)
         self.ui.swizzle = "BGRA"
-        self.ui_above_hud = memoryview(self.ui_pixels)[:SCREEN_W * CANVAS_H * SCALE * 4]
+        view = memoryview(self.ui_pixels)
+        self.ui_top = view[:_TOP_BAND_H * _ROW_BYTES]
+        self.ui_middle = view[_TOP_BAND_H * _ROW_BYTES:_THOUGHT_Y * _ROW_BYTES]
+        self.ui_thought = view[_THOUGHT_Y * _ROW_BYTES:_HUD_Y * _ROW_BYTES]
+        self.ui_hud = view[_HUD_Y * _ROW_BYTES:]
         self.hud_surface = None
         self.uploaded_hud = None
+        self.middle_dirty = False
+        self.thought_dirty = True
+        self.full_dirty = True
+        self.prev_middle_dirty = True
+        self.prev_full_dirty = True
+        self.native_fx = ctx.texture((VIEW_W, VIEW_H), 4)
+        self.native_fx.swizzle = "BGRA"
+        self.native_fx.filter = (self.gl.NEAREST, self.gl.NEAREST)
+        self.native_fx_pixels = None
         self.software_fog = ctx.texture((VIEW_W, VIEW_H), 4)
         self.visibility = ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.last_visibility = None
@@ -86,17 +103,18 @@ class GLWindow:
         self.present_program = ctx.program(vertex_shader=_QUAD, fragment_shader=f"""#version 330 core
             uniform sampler2D world;
             uniform sampler2D fog;
+            uniform sampler2D native_fx;
             uniform sampler2D overlay;
             uniform ivec3 viewport;
             uniform vec2 logical_scale;
             uniform bool has_scene;
             uniform bool has_fog;
+            uniform bool has_native_fx;
             out vec4 color;
 
             void main() {{
                 ivec2 p = ivec2(gl_FragCoord.xy) - viewport.xy;
                 p.y = viewport.z - p.y - 1;
-                // Both layers derive their coordinates from the same logical pixel.
                 ivec2 logical = ivec2(vec2(p) * logical_scale);
                 ivec2 native_px = logical / {SCALE};
                 vec3 base = vec3(0.0);
@@ -106,12 +124,16 @@ class GLWindow:
                         vec4 mist = texelFetch(fog, native_px, 0);
                         base = mix(base, mist.rgb, mist.a);
                     }}
+                    if (has_native_fx && native_px.y < {VIEW_H}) {{
+                        vec4 fx = texelFetch(native_fx, native_px, 0);
+                        base = mix(base, fx.rgb, fx.a);
+                    }}
                 }}
                 vec4 ui = texelFetch(overlay, logical, 0);
                 color = vec4(mix(base, ui.rgb, ui.a), 1.0);
             }}
         """)
-        for unit, name in enumerate(("world", "fog", "overlay")):
+        for unit, name in enumerate(("world", "fog", "native_fx", "overlay")):
             self.present_program[name].value = unit
         self.quad = ctx.vertex_array(self.present_program, [])
 
@@ -220,16 +242,54 @@ class GLWindow:
             slot.fog = gpu_fog
             self.pending.append(slot)
 
+    def begin_ui_frame(self):
+        if self.prev_full_dirty:
+            self.canvas.fill((0, 0, 0, 0))
+            self.uploaded_hud = None
+            self.thought_dirty = True
+        else:
+            self.canvas.fill((0, 0, 0, 0), (0, 0, SCREEN_W, _TOP_BAND_H))
+            if self.prev_middle_dirty:
+                self.canvas.fill((0, 0, 0, 0), (0, _TOP_BAND_H, SCREEN_W, _THOUGHT_Y - _TOP_BAND_H))
+        self.middle_dirty = False
+        self.full_dirty = False
+        self.native_fx_pixels = None
+
     def present(self, viewport_rect, window_size, gameplay, timings=None):
         started = perf_counter() if timings is not None else 0.0
         hud = self.hud_surface if gameplay else None
-        if hud is not None and hud is self.uploaded_hud:
-            self.ui.write(self.ui_above_hud, viewport=(0, 0, SCREEN_W, CANVAS_H * SCALE))
-        else:
+        if not gameplay:
             self.ui.write(self.ui_pixels)
-            self.uploaded_hud = hud
+            self.uploaded_hud = None
+            self.prev_full_dirty = True
+            self.prev_middle_dirty = False
+            self.thought_dirty = True
+        elif self.full_dirty or self.prev_full_dirty:
+            self.ui.write(self.ui_pixels)
+            self.uploaded_hud = hud if not self.full_dirty else None
+            self.prev_middle_dirty = self.middle_dirty
+            self.prev_full_dirty = self.full_dirty
+            self.thought_dirty = False
+        else:
+            self.ui.write(self.ui_top, viewport=(0, 0, SCREEN_W, _TOP_BAND_H))
+            if self.middle_dirty or self.prev_middle_dirty:
+                self.ui.write(self.ui_middle, viewport=(0, _TOP_BAND_H, SCREEN_W, _THOUGHT_Y - _TOP_BAND_H))
+            if self.thought_dirty:
+                self.ui.write(self.ui_thought, viewport=(0, _THOUGHT_Y, SCREEN_W, _HUD_Y - _THOUGHT_Y))
+            if hud is None:
+                self.ui.write(self.ui_hud, viewport=(0, _HUD_Y, SCREEN_W, SCREEN_H - _HUD_Y))
+                self.uploaded_hud = None
+            elif hud is not self.uploaded_hud:
+                self.ui.write(self.ui_hud, viewport=(0, _HUD_Y, SCREEN_W, SCREEN_H - _HUD_Y))
+                self.uploaded_hud = hud
+            self.prev_middle_dirty = self.middle_dirty
+            self.prev_full_dirty = False
+            self.thought_dirty = False
         if gameplay and self.upload_fog is not None:
             self.software_fog.write(pygame.image.tobytes(self.upload_fog, "RGBA"))
+        has_nfx = gameplay and self.native_fx_pixels is not None
+        if has_nfx:
+            self.native_fx.write(self.native_fx_pixels)
         if timings is not None:
             timings["ui_upload"] = (perf_counter() - started) * 1000
         self.ctx.screen.use()
@@ -246,9 +306,11 @@ class GLWindow:
         scene = self.scene if gameplay else None
         self.present_program["has_scene"].value = scene is not None
         self.present_program["has_fog"].value = scene is not None and self.upload_fog is not None
+        self.present_program["has_native_fx"].value = scene is not None and has_nfx
         (scene if scene is not None else self.probe).use(0)
         self.software_fog.use(1)
-        self.ui.use(2)
+        self.native_fx.use(2)
+        self.ui.use(3)
         self.quad.render(self.gl.TRIANGLE_STRIP, vertices=4)
 
     def close(self):
