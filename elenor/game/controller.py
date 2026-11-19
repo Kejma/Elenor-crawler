@@ -51,6 +51,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.world_active = False
         self.fx = FXManager(self)
         self.display_surface = None
+        self.gl_window = None
         self.viewport_rect = (0, 0, SCREEN_W, SCREEN_H)
         self.in_main_menu = True
         self.main_menu = MainMenuController(self)

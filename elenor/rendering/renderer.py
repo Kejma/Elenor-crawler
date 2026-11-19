@@ -41,12 +41,7 @@ class Renderer(UIRendererMixin):
         pygame.draw.ellipse(self._shadow_big, (8, 6, 12, 120), (0, 0, 20, 6))
         self.light_occlusion = LightOcclusion()
         self.fog_renderer = FogRenderer(self.light_occlusion)
-        self.gpu_shader = None
-        try:
-            self.gpu_shader = GPULightShader()
-            print("[GPU] Аппаратный 2.5D-шейдер ModernGL успешно активирован!")
-        except Exception as e:
-            print(f"[CPU Fallback] ModernGL не найден ({e}), используем CPU-рендер.")
+        self.init_standalone_shader()
         self.diff_canvas = pygame.Surface((VIEW_W, CANVAS_H))
         self.norm_canvas = pygame.Surface((VIEW_W, CANVAS_H))
         self.emissive_canvas = pygame.Surface((VIEW_W, CANVAS_H))
@@ -85,6 +80,14 @@ class Renderer(UIRendererMixin):
         self.journal_btn_rect = pygame.Rect(0, 0, 0, 0)
         self.journal_seed_rect = pygame.Rect(0, 0, 0, 0)
         self.journal_filter_rects = {}
+
+    def init_standalone_shader(self):
+        self.gpu_shader = None
+        try:
+            self.gpu_shader = GPULightShader()
+            print("[GPU] Аппаратный 2.5D-шейдер ModernGL успешно активирован!")
+        except Exception as e:
+            print(f"[CPU Fallback] ModernGL не найден ({e}), используем CPU-рендер.")
 
     def get_hero_pair(self, player):
         from elenor.rendering.appearance import build_custom_hero_sprite
@@ -954,9 +957,14 @@ class Renderer(UIRendererMixin):
             light_start = perf_counter()
             timings["scene"] = (light_start - scene_start) * 1000
         temple_exposure = dungeon.interior == "temple"
+        window = ui_texts.get("_gl_window")
         gpu_fog = (bool(clouds) and flags.get("gpu_fog", True)
                    and self.gpu_shader is not None and self.gpu_shader.fog is not None
                    and len(clouds) <= self.gpu_shader.fog.MAX_CLOUDS and len(lights) <= self.gpu_shader.MAX_LIGHTS)
+        slot = None
+        if window is not None:
+            profile_key = (gpu_fog, tuple(flags.items())) if timings is not None else None
+            slot = window.begin_world(dungeon, timings, profile_key)
         if self.gpu_shader is not None:
             en_ao = fx_mgr.flags.get("ao", True) if fx_mgr else True
             en_bloom = fx_mgr.flags.get("bloom", True) if fx_mgr else True
@@ -967,7 +975,9 @@ class Renderer(UIRendererMixin):
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
                 enable_ao=en_ao, enable_bloom=en_bloom,
                 temple_exposure=temple_exposure, bounce_color=bounce_color,
-                tonemap=tonemap, timings=timings, fog=(clouds, now_sec, fov_mask) if gpu_fog else None,
+                tonemap=tonemap, timings=timings if window is None else None,
+                fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,
+                timer_queries=slot.timers if slot is not None and slot.timed else None,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
             )
             r_mult = g_mult = b_mult = None
@@ -1087,7 +1097,11 @@ class Renderer(UIRendererMixin):
             post_start = perf_counter()
             timings["light_cpu"] = (post_start - light_start) * 1000 - timings.get("read", 0.0)
 
-        if ui_texts.get("_survey_map"):
+        if window is not None:
+            survey = visible_tiles if ui_texts.get("_survey_map") else ()
+            window.capture_survey(slot, self.gpu_shader, dungeon, objects, survey,
+                                  fov_mask, scene_fov, cam_x, cam_y, gpu_fog)
+        elif ui_texts.get("_survey_map"):
             from elenor.rendering.visibility import visible_lit_tiles
             from elenor.world.exploration import remember_tiles
             brightness = self.gpu_shader.survey_brightness if gpu_fog else None
@@ -1096,20 +1110,25 @@ class Renderer(UIRendererMixin):
 
         if timings is not None:
             fog_start = perf_counter()
+        cpu_fog = None
         if clouds and not gpu_fog:
             fog_lights = [light for light in lights if not light.get("ambient", False)]
-            self.fog_renderer.render(lit_surf, dungeon, clouds, fog_lights, fov_mask,
-                                     self.entity_y_canvas, cam_x, cam_y, now_sec)
+            cpu_fog = self.fog_renderer.render(lit_surf if window is None else None, dungeon, clouds,
+                                               fog_lights, fov_mask, self.entity_y_canvas, cam_x, cam_y, now_sec)
         if timings is not None:
             overlay_start = perf_counter()
             timings["fog"] = (overlay_start - fog_start) * 1000
-        viewport = screen.subsurface((0, 0, VIEW_W * SCALE, CANVAS_H * SCALE))
-        # Convert at native resolution, then expand directly into the logical canvas.
-        if lit_surf.get_masks() != viewport.get_masks() or lit_surf.get_bitsize() != viewport.get_bitsize():
-            lit_surf_for_scale = lit_surf.convert(viewport)
+        if window is not None:
+            window.scene = lit_surf
+            window.upload_fog = cpu_fog
         else:
-            lit_surf_for_scale = lit_surf
-        pygame.transform.scale(lit_surf_for_scale, viewport.get_size(), viewport)
+            viewport = screen.subsurface((0, 0, VIEW_W * SCALE, CANVAS_H * SCALE))
+            # Convert at native resolution, then expand directly into the logical canvas.
+            if lit_surf.get_masks() != viewport.get_masks() or lit_surf.get_bitsize() != viewport.get_bitsize():
+                lit_surf_for_scale = lit_surf.convert(viewport)
+            else:
+                lit_surf_for_scale = lit_surf
+            pygame.transform.scale(lit_surf_for_scale, viewport.get_size(), viewport)
         if timings is not None:
             scale_end = perf_counter()
             timings["survey"] = (fog_start - post_start) * 1000
@@ -1825,7 +1844,8 @@ class Renderer(UIRendererMixin):
             map_start = perf_counter()
         if ui_texts.get("_show_map_hud"):
             from elenor.ui.exploration_map import draw_map_hud
-            thought_bg = lit_surf.get_at((THOUGHT_BOX_X + 8, THOUGHT_BOX_Y + 8))[:3]
+            thought_bg = (window.thought_color if window is not None
+                          else lit_surf.get_at((THOUGHT_BOX_X + 8, THOUGHT_BOX_Y + 8))[:3])
             draw_map_hud(screen, ui_texts["_game_ref"], thought_bg)
         if timings is not None:
             map_end = perf_counter()

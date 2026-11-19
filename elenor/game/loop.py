@@ -37,9 +37,11 @@ def main():
 
     game = GameController()
     apply_display_mode(game.profile, game)
-    screen = pygame.Surface((SCREEN_W, SCREEN_H), 0, game.display_surface)
+    software_canvas = pygame.Surface((SCREEN_W, SCREEN_H), depth=32)
+    screen = software_canvas
     running = True
     map_chart = None
+    map_revision = None
     fps_start = None
     fps_frames = 0
     fps_label = None
@@ -66,19 +68,25 @@ def main():
         else:
             fps_start, fps_frames, fps_label = None, 0, None
         present_start = perf_counter() if gameplay and profile.active else None
-        present_logical_canvas(game.display_surface, screen, game.viewport_rect)
+        window = game.gl_window
+        if window is None:
+            present_logical_canvas(game.display_surface, screen, game.viewport_rect)
+        else:
+            window.present(game.viewport_rect, game.display_surface.get_size(), gameplay,
+                           profile.stages if present_start is not None else None)
         pygame.display.flip()
         if present_start is not None:
             gpu = game.renderer.gpu_shader
             place = f"{game.campaign}/{game.dungeon.floor_num}/{game.dungeon.interior or 'surface'}"
             disabled = ",".join(key for key, enabled in game.fx.flags.items() if not enabled) or "-"
-            backend = "gl" if gpu else "cpu"
+            backend = "gl-direct" if window is not None else ("gl" if gpu else "cpu")
             width, height = game.display_surface.get_size()
             profile.end(f"{place} seed={game.run_seed} backend={backend} res={width}x{height} off={disabled}",
                         present_start)
 
     while running:
         profile.begin(game.profile["show_performance"])
+        screen = game.gl_window.canvas if game.gl_window is not None else software_canvas
         dt = min(0.05, clock.tick(0) / 1000.0)
         t = pygame.time.get_ticks() * 0.005
         mouse_pos = map_window_to_logical(pygame.mouse.get_pos(), game.viewport_rect)
@@ -97,6 +105,7 @@ def main():
                 break
             if not game.in_main_menu:
                 continue
+            screen = game.gl_window.canvas if game.gl_window is not None else software_canvas
             game.main_menu.update(dt)
             game.main_menu.render(screen, dt, mouse_pos)
             present_frame()
@@ -126,7 +135,7 @@ def main():
                     and not game.inv_open and not game.levelup_choices and game.fishing_cast is None):
                 game.map_open = True
                 game.player.buffered_combat = None
-                map_chart = chart_surface(game.dungeon)
+                map_revision = None
                 game.sfx.play("ui")
                 continue
             if hasattr(event, "pos"):
@@ -423,6 +432,11 @@ def main():
         if game.in_main_menu:
             continue
         if game.map_open:
+            if game.gl_window is not None:
+                game.gl_window.collect(game.dungeon)
+            if map_chart is None or map_revision != game.dungeon.exploration_revision:
+                map_chart = chart_surface(game.dungeon)
+                map_revision = game.dungeon.exploration_revision
             draw_map(screen, game, map_chart, mouse_pos)
             present_frame()
             clock.tick(30)
@@ -995,6 +1009,9 @@ def main():
             render_start = perf_counter()
             profile.stages["light_setup"] = (render_start - fov_end) * 1000
             ui_bundle["_frame_timings"] = profile.stages
+        if game.gl_window is not None:
+            ui_bundle["_gl_window"] = game.gl_window
+            screen.fill((0, 0, 0, 0))
         game.renderer.render_frame(
             screen=screen,
             dungeon=game.dungeon,
@@ -1045,6 +1062,8 @@ def main():
         present_frame(gameplay=True)
 
     profile.flush()
+    if game.gl_window is not None:
+        game.gl_window.close()
     pygame.quit()
 
 

@@ -58,6 +58,7 @@ DEFAULT_PROFILE = {
     "thought_freq_mode": 2,
     "show_minimap": True,
     "show_performance": False,
+    "direct_gl": False,
     "window_mode": "windowed",
     "resolution_idx": None,
     "fullscreen": False,
@@ -98,7 +99,7 @@ def save_profile(prof):
 
 def reset_profile_progress(prof):
     keep_keys = (
-        "volume", "typewriter_mode", "thought_freq_mode", "show_minimap", "show_performance",
+        "volume", "typewriter_mode", "thought_freq_mode", "show_minimap", "show_performance", "direct_gl",
         "window_mode", "resolution_idx", "fullscreen",
     )
     saved_settings = {k: prof.get(k, DEFAULT_PROFILE[k]) for k in keep_keys}
@@ -135,10 +136,36 @@ def apply_display_mode(prof, game=None):
     elif w_mode == "fullscreen":
         flags = pygame.FULLSCREEN
 
-    try:
-        disp_surf = pygame.display.set_mode((target_w, target_h), flags)
-    except pygame.error:
-        disp_surf = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+    old_gl = getattr(game, "gl_window", None)
+    direct = game is not None and prof.get("direct_gl", False)
+    gl_window = None
+    if old_gl is not None:
+        old_gl.collect(game.dungeon)
+        game.renderer.gpu_shader = None
+        old_gl.close()
+        game.gl_window = None
+        pygame.display.quit()
+        pygame.display.init()
+
+    if direct:
+        if game.renderer.gpu_shader is not None:
+            game.renderer.gpu_shader.ctx.release()
+            game.renderer.gpu_shader = None
+        try:
+            disp_surf, gl_window = _open_gl_window((target_w, target_h), flags)
+            game.renderer.gpu_shader = gl_window.shader
+        except Exception as exc:
+            print(f"[GL] Прямой вывод недоступен ({exc}).")
+            pygame.display.quit()
+            pygame.display.init()
+    if gl_window is None:
+        try:
+            disp_surf = pygame.display.set_mode((target_w, target_h), flags)
+        except pygame.error:
+            disp_surf = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+        if old_gl is not None or direct:
+            game.renderer.init_standalone_shader()
+    pygame.display.set_caption("Elenor-crawler")
 
     real_w, real_h = disp_surf.get_size()
     # Считаем вписывание 1920x1080 в реальное окно с сохранением пропорций (чёткие пиксели без мыла!)
@@ -150,8 +177,32 @@ def apply_display_mode(prof, game=None):
 
     if game is not None:
         game.display_surface = disp_surf
+        game.gl_window = gl_window
         game.viewport_rect = (off_x, off_y, scaled_w, scaled_h)
     return disp_surf, (off_x, off_y, scaled_w, scaled_h)
+
+
+def _open_gl_window(size, flags):
+    import moderngl
+    from _moderngl import DefaultLoader
+
+    from elenor.rendering.lighting import GPULightShader
+    from elenor.rendering.window import GLWindow
+
+    pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MAJOR_VERSION, 3)
+    pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MINOR_VERSION, 3)
+    pygame.display.gl_set_attribute(pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_CORE)
+    display = pygame.display.set_mode(size, flags | pygame.OPENGL | pygame.DOUBLEBUF, vsync=0)
+    loader = DefaultLoader()
+    moderngl.init_context(loader)
+    ctx = moderngl.get_context()
+    try:
+        if ctx.version_code < 330:
+            raise RuntimeError("OpenGL 3.3 is required")
+        return display, GLWindow(ctx, loader, GPULightShader(ctx))
+    except Exception:
+        ctx.release()
+        raise
 
 
 def map_window_to_logical(pos, viewport_rect):

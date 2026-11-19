@@ -83,7 +83,7 @@ def compare(game, ctx, campaign, frames):
     samples = {False: [], True: []}
 
     def draw(readback):
-        lit = shader.render_lit_surface(*call.args, **call.kwargs, readback=readback)
+        lit = shader.render_lit_surface(*call.args, **{**call.kwargs, "readback": readback})
         if readback:
             copied_tex.write(pygame.image.tobytes(lit, "RGB"), alignment=1)
             lit = copied_tex

@@ -477,11 +477,11 @@ class GPULightShader:
             self.shadow_vao.render(self.moderngl.TRIANGLE_STRIP)
 
     def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
-                           timings=None, readback=True, fog=None):
+                           timings=None, readback=True, fog=None, timer_queries=None):
         self.survey_brightness = None
         if timings is not None and self.timers is None:
             self.timers = tuple(self.ctx.query(time=True) for _ in range(3))
-        timers = self.timers if timings is not None else None
+        timers = self.timers if timings is not None else timer_queries
         self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGB"))
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32))

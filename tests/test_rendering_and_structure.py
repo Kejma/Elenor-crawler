@@ -1,10 +1,11 @@
+from collections import deque
 import importlib
 import os
 import pkgutil
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -14,7 +15,7 @@ import elenor
 from elenor.config import VIEW_W, VIEW_H, CANVAS_H, SCALE
 from elenor.rendering.visibility import overlay_visibility, mask_overlay
 from elenor.rendering.mirrors import render_mirror_puzzles_beams
-from elenor.profile import present_logical_canvas, reset_profile_progress, resolution_index
+from elenor.profile import apply_display_mode, present_logical_canvas, reset_profile_progress, resolution_index
 from elenor.paths import PROJECT_ROOT
 
 
@@ -41,6 +42,7 @@ class RenderingTests(unittest.TestCase):
             rat_king_defeated=True,
             window_mode="borderless",
             resolution_idx=3,
+            direct_gl=True,
         )
         with patch("elenor.profile.save_profile"):
             reset_profile_progress(profile)
@@ -48,6 +50,7 @@ class RenderingTests(unittest.TestCase):
         self.assertFalse(profile["rat_king_defeated"])
         self.assertEqual(profile["window_mode"], "borderless")
         self.assertEqual(profile["resolution_idx"], 3)
+        self.assertTrue(profile["direct_gl"])
 
     def test_default_resolution_and_software_scaling(self):
         available = [(3840, 2160, ""), (2560, 1440, ""), (1920, 1080, ""), (1280, 720, "")]
@@ -62,6 +65,50 @@ class RenderingTests(unittest.TestCase):
         expected.fill((8, 6, 12))
         expected.blit(pygame.transform.scale(source, (16, 8)), (2, 2))
         self.assertEqual(pygame.image.tobytes(destination, "RGB"), pygame.image.tobytes(expected, "RGB"))
+
+    def test_unavailable_direct_gl_recovers_software_window(self):
+        profile = {"direct_gl": True}
+        renderer = Mock(gpu_shader=None)
+        game = SimpleNamespace(renderer=renderer, gl_window=None)
+        display = pygame.Surface((1280, 720))
+        with (
+            patch("elenor.profile.get_available_resolutions", return_value=[(1280, 720, "")]),
+            patch("elenor.profile._open_gl_window", side_effect=pygame.error("no GL")),
+            patch("pygame.display.set_mode", return_value=display),
+            patch("pygame.display.quit"),
+            patch("pygame.display.init"),
+            patch("pygame.display.set_caption"),
+        ):
+            apply_display_mode(profile, game)
+        self.assertIs(game.display_surface, display)
+        self.assertIsNone(game.gl_window)
+        self.assertTrue(profile["direct_gl"])
+        renderer.init_standalone_shader.assert_called_once()
+
+    def test_window_exploration_does_not_read_an_unfinished_gpu_transfer(self):
+        from elenor.rendering import window
+
+        presenter = window.GLWindow.__new__(window.GLWindow)
+        dungeon = SimpleNamespace(geometry_revision=3)
+        presenter.thought_location = dungeon
+        presenter.fences = Mock()
+        presenter.fences.ready.return_value = False
+        data = np.zeros((window._PROBE_SIZE[1], window._PROBE_WIDTH, 4), np.uint8)
+        data[2, 1, 0] = 255
+        data[-1, 0, :3] = (24, 42, 61)
+        slot = SimpleNamespace(fence=1, buffer=Mock(), timed=False,
+                               survey=(dungeon, 3, (4, 5), frozenset({(5, 7)}), ()))
+        slot.buffer.read.return_value = data.tobytes()
+        presenter.pending = deque([slot])
+        with patch.object(window, "remember_tiles") as remember:
+            presenter.collect(dungeon)
+            slot.buffer.read.assert_not_called()
+            remember.assert_not_called()
+            presenter.fences.ready.return_value = True
+            presenter.collect(dungeon)
+            remember.assert_called_once_with(dungeon, {(5, 7)}, ())
+        self.assertEqual(presenter.thought_color, (24, 42, 61))
+        self.assertFalse(presenter.pending)
 
     def test_visibility_masks_occlusion_and_soft_dark_edges(self):
         fov = np.ones((VIEW_W, CANVAS_H), dtype=np.float32)

@@ -136,4 +136,6 @@ class FogRenderer:
         visibility = fov_mask[left:right, top:bottom] * ~self.occlusion.blockers[sx[:, None], sy]
         np.multiply(active_alpha, visibility, out=active_alpha, casting="unsafe")
         del active_alpha, alpha
-        screen.blit(self.full, (left, top), (left, top, right - left, bottom - top))
+        if screen is not None:
+            screen.blit(self.full, (left, top), (left, top, right - left, bottom - top))
+        return self.full
