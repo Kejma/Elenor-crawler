@@ -76,6 +76,12 @@ class Dungeon:
         self._fov_key = None
         self._sight_doors = None
 
+    def invalidate_terrain(self, area=None):
+        """Mark a terrain edit. A tile rectangle limits the redraw to nearby chunks."""
+        self.terrain_revision = getattr(self, "terrain_revision", 0) + 1
+        self.terrain_dirty_area = None if area is None else pygame.Rect(area)
+        self.invalidate_light_cache()
+
     @property
     def width(self):
         return len(self.grid[0])
@@ -121,7 +127,7 @@ class Dungeon:
         self.boss_room = None
         self.pre_boss_puzzle_info = None
         self.mirror_puzzle_info = None
-        self.invalidate_light_cache()
+        self.invalidate_terrain()
 
         # =====================================================================
         # ЯРУС 1: ИНТРО — ДВОР У КОСТРА И ДОМ-ТАВЕРНА СО ВСЕМ ИНТЕРЬЕРОМ

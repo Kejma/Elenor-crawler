@@ -322,7 +322,7 @@ class FXManager:
         d.solid_props = set()
         d.overlays = {}
         d.invisible_bounds = set()
-        d.invalidate_light_cache()
+        d.invalidate_terrain()
 
         d.grid = [[1 for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
 

@@ -3,13 +3,12 @@ from time import perf_counter
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_W, THOUGHT_BOX_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, COIN_TEXT_COLOR, SCALE, SCREEN_W, HUD_HEIGHT, UI_BG_DARK, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
-from elenor.config import DEEP_WATER, FALLEN_LOG, PEBBLE_SHORE, PIER, SHALLOW_WATER
-from elenor.entities.objects import JUNGLE_KEY_COLORS
 from elenor.data.abilities import PASSIVE_SLOT_LIMIT, VECTOR_COLORS, perk_branch
 
 
-from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, get_carpet_autotile_key, create_placeholder_assets
+from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, create_placeholder_assets
 from elenor.rendering.fog import FogRenderer
+from elenor.rendering.terrain import DIFFUSE_CLEAR, NORMAL_CLEAR, TerrainCache
 from elenor.rendering.occlusion import LightOcclusion
 from elenor.rendering.lighting import GPULightShader, bounce_color_for, tone_map_world
 from elenor.rendering.pixel_fx import PixelLayer
@@ -27,7 +26,6 @@ class Renderer(UIRendererMixin):
         self.mana_icons = {}
         self.mana_slot_overlays = {}
         self.minimap_cache = None
-        self.rot_cache = {}
         self.flip_cache = {}
         self.chill_cache = {}
         self.emissive_cache = {}
@@ -45,6 +43,7 @@ class Renderer(UIRendererMixin):
         self.diff_canvas = pygame.Surface((VIEW_W, CANVAS_H))
         self.norm_canvas = pygame.Surface((VIEW_W, CANVAS_H))
         self.emissive_canvas = pygame.Surface((VIEW_W, CANVAS_H))
+        self.terrain = TerrainCache(self.assets, self.anim_bank, self.log_sections)
 
         self.px = np.arange(VIEW_W, dtype=np.float32)[:, None]
         self.py = np.arange(CANVAS_H, dtype=np.float32)[None, :]
@@ -126,24 +125,6 @@ class Renderer(UIRendererMixin):
             self.hero_cache[key] = (d_s, n_s)
         return self.hero_cache[key]
     
-    def get_tile_pair(self, key, c, r, salt=0):
-        """Возвращает (diff, norm) для тайла или оверлея с учётом случайного поворота 0/90/180/270° по координатам клетки!"""
-        base_pair = self.assets.get(key, self.assets["floor_0"])
-        a_info = self.anim_bank.get(key)
-        rrot = a_info.get("random_rot", False) if a_info else (key in ("floor_3", "floor_5", "ov_pebbles", "ov_moss", "ov_cracks", "ov_planks_wear"))
-        if not rrot or (a_info and len(a_info.get("frames", [])) > 1):
-            return base_pair
-
-        rot_k = ((c * 73 + r * 151 + (c ^ r) * 31 + salt * 19) >> 1) & 3
-        if rot_k == 0:
-            return base_pair
-
-        cache_key = (key, rot_k)
-        if cache_key not in self.rot_cache:
-            from elenor.rendering.normals import rotate_normal_pair
-            self.rot_cache[cache_key] = rotate_normal_pair(base_pair[0], base_pair[1], rot_k)
-        return self.rot_cache[cache_key]
-
     def get_mob_pair(self, sprite_key, facing, is_chilled=False, flash_mode=None):
         """Зеркалит спрайт моба, накладывает ледяной оттенок и Hit-Flash (красный или бело-золотой при крите)."""
         base_pair = self.assets.get(sprite_key, self.assets["rat"])
@@ -563,8 +544,8 @@ class Renderer(UIRendererMixin):
                 self.assets[role_id] = fr_list[int(now_sec * anim_info["fps"]) % len(fr_list)]
 
         self.current_hud_lights = hud_lights or []
-        self.diff_canvas.fill((12, 10, 16))
-        self.norm_canvas.fill((128, 128, 255))
+        self.diff_canvas.fill(DIFFUSE_CLEAR)
+        self.norm_canvas.fill(NORMAL_CLEAR)
         self.emissive_canvas.fill((0, 0, 0))
         self.entity_y_canvas.fill(-9999.0)
 
@@ -573,134 +554,23 @@ class Renderer(UIRendererMixin):
         r0 = max(0, int(cam_y) // TILE_H)
         r1 = min(dungeon.height, (int(cam_y) + VIEW_H) // TILE_H + 2)
 
-        tall_trees_to_draw = []
-        TILE_ROLE_MAP = {
-            # Базовые тайлы
-            1: "wall",
-            6: "wall_wood",
-            7: "wall_cave",
-            8: "floor_5",
-            9: "floor_6",
-            # Джунгли, Хижины и Мраморный Храм (Пак 1: 10..20)
-            10: "floor_jungle_grass",
-            11: "floor_jungle_mud",
-            12: "floor_jungle_soil",
-            13: "floor_tribal_wood",
-            14: "floor_marble_white",
-            15: "floor_marble_dark",
-            16: "floor_marble_mosaic",
-            17: "wall_mud_rock",
-            18: "wall_tribal_wood",
-            19: "wall_marble_temple",
-            20: "wall_marble_ruined",
-            # Джунгли и Мраморный Храм (Пак 2: 23..36)
-            23: "floor_jungle_swamp",
-            24: "floor_jungle_cobble",
-            25: "floor_river_sand",
-            26: "floor_cave_basalt",
-            27: "floor_tribal_mat",
-            28: "floor_marble_checker",
-            29: "floor_marble_rose",
-            30: "floor_marble_jade",
-            31: "floor_temple_gold",
-            32: "floor_temple_water",
-            33: "wall_bamboo_weave",
-            34: "wall_cave_crystal",
-            35: "wall_marble_obsidian",
-            36: "wall_temple_relief",
-            # Озеро и Рыбалка (37..42)
-            SHALLOW_WATER: "floor_lake_shallow",
-            DEEP_WATER: "floor_lake_deep",
-            PIER: "floor_wooden_pier",
-            PEBBLE_SHORE: "floor_pebble_shore",
-            41: "floor_wet_sand",
-            42: "floor_reed_mud",
-            # Костяные Джунгли и Глубокие Пещеры (43..55)
-            43: "floor_tar_pit",
-            44: "floor_acid_pool",
-            45: "floor_bone_grass",
-            46: "floor_bone_grave",
-            47: "floor_blood_marsh",
-            48: "floor_bone_bridge",
-            49: "floor_cave_fungus",
-            50: "floor_cave_obsidian",
-            51: "wall_bone_ribs",
-            52: "wall_skull_catacomb",
-            53: "wall_corrupted_wood",
-            54: "wall_cave_web",
-            55: "wall_cave_magma",
-        }
-        TALL_TREE_MAP = {
-            5: ("floor_3", "tall_tree"),
-            21: ("floor_jungle_grass", "tall_jungle_tree"),
-            22: ("floor_jungle_grass", "tall_palm_tree"),
-            56: ("floor_bone_grass", "tall_bone_tree"),
-            57: ("floor_blood_marsh", "tall_dead_mangrove"),
-        }
+        timings = ui_texts.get("_frame_timings")
+        terrain_start = perf_counter() if timings is not None else 0.0
+        trees = self.terrain.draw(dungeon, c0, r0, c1, r1, int(cam_x), int(cam_y),
+                                  self.diff_canvas, self.norm_canvas)
+        if timings is not None:
+            canopy_start = perf_counter()
+            timings["terrain"] = (canopy_start - terrain_start) * 1000
 
         tall_trees_to_draw = []
-        for r in range(r0, r1):
-            for c in range(c0, c1):
-                sx = int(c * TILE_W - cam_x)
-                sy = int(r * TILE_H - cam_y)
-                t_val = dungeon.grid[r][c]
-                if t_val == FALLEN_LOG:
-                    left = c > 0 and dungeon.grid[r][c - 1] == FALLEN_LOG
-                    right = c + 1 < dungeon.width and dungeon.grid[r][c + 1] == FALLEN_LOG
-                    end = left != right
-                    key = "floor_pebble_shore" if end else "floor_lake_deep"
-                elif t_val in TALL_TREE_MAP:
-                    key, tree_asset_key = TALL_TREE_MAP[t_val]
-                    # Hidden ground within the tree's own footprint is not a visibility test for its crown.
-                    tile = (c, r)
-                    target = 1.0 if reveal_map else self.canopy_visibility.target(tile)
-                    visible_base = self.canopy_visibility.sample(tile, target)
-                    if visible_base > 0.006:
-                        if t_val != 5 and (c*17 + r*23) % 9 == 0:
-                            tree_asset_key = {21:"tree_jungle",22:"tree_palm",56:"tree_bone",57:"tree_dead_mangrove"}[t_val]
-                        tall_trees_to_draw.append((c, r, tree_asset_key, visible_base))
-                else:
-                    key = TILE_ROLE_MAP.get(t_val, f"floor_{t_val}")
-                d_surf, n_surf = self.get_tile_pair(key, c, r)
-                self.diff_canvas.blit(d_surf, (sx, sy))
-                self.norm_canvas.blit(n_surf, (sx, sy))
-                if t_val == FALLEN_LOG:
-                    bark, bark_normal = self.log_sections[(left, right)]
-                    self.diff_canvas.blit(bark, (sx, sy))
-                    self.norm_canvas.blit(bark_normal, (sx, sy))
-
-                # Автотайлинг мха (13 базовых форм + 3 узкие полосы) поверх любого пола!
-                if hasattr(dungeon, "moss_tiles") and (c, r) in dungeon.moss_tiles:
-                    from elenor.rendering.jungle import get_moss_autotile_key
-                    m_key = get_moss_autotile_key(dungeon.moss_tiles, c, r)
-                    if m_key in self.assets:
-                        m_diff, m_norm = self.assets[m_key]
-                        self.diff_canvas.blit(m_diff, (sx, sy))
-                        self.norm_canvas.blit(m_norm, (sx, sy))
-
-                # Накладываем полупрозрачный оверлей (камушки, мох, папоротники, цветы, трещины) со случайным поворотом!
-                ov_key = getattr(dungeon, "overlays", {}).get((c, r))
-                if ov_key and ov_key in self.assets:
-                    ov_d, ov_n = self.get_tile_pair(ov_key, c, r, salt=77)
-                    self.diff_canvas.blit(ov_d, (sx, sy))
-                    self.norm_canvas.blit(ov_n, (sx, sy))
-
-                # Автотайлинг ковра: рисуется поверх досок, но строго под мебелью и персонажами
-                if hasattr(dungeon, "carpets") and (c, r) in dungeon.carpets:
-                    c_key = get_carpet_autotile_key(dungeon.carpets, c, r)
-                    if c_key in self.assets:
-                        c_diff, c_norm = self.assets[c_key]
-                        self.diff_canvas.blit(c_diff, (sx, sy))
-                        self.norm_canvas.blit(c_norm, (sx, sy))
-
-                door = dungeon.doors.get((c, r))
-                if door:
-                    d_key = "door_open" if door.is_open else ("door_locked" if door.locked else "door_closed")
-                    dd, dn = self.assets[d_key]
-                    self.diff_canvas.blit(dd, (sx, sy))
-                    self.norm_canvas.blit(dn, (sx, sy))
-                    if door.locked and door.key_color:
-                        pygame.draw.rect(self.diff_canvas, JUNGLE_KEY_COLORS[door.key_color], (sx + 10, sy + 8, 3, 4))
+        for c, r, tree_asset_key in trees:
+            tile = (c, r)
+            target = 1.0 if reveal_map else self.canopy_visibility.target(tile)
+            visible_base = self.canopy_visibility.sample(tile, target)
+            if visible_base > .006:
+                tall_trees_to_draw.append((c, r, tree_asset_key, visible_base))
+        if timings is not None:
+            timings["canopy"] = (perf_counter() - canopy_start) * 1000
 
         fx_mgr = ui_texts.get("_fx_mgr")
         # 1. Наложение «Памяти поля боя» (вечная кровь, обломки бочек, вино и копоть на полу)
@@ -947,7 +817,6 @@ class Renderer(UIRendererMixin):
                 radius = cloud["radius"]*TILE_W
                 if -radius <= sx <= VIEW_W+radius and -radius <= sy <= VIEW_H+radius:
                     clouds.append(cloud)
-        timings = ui_texts.get("_frame_timings")
         self.light_occlusion.update(dungeon, objects)
         viewer = (player.x * TILE_W, player.y * TILE_H)
         flags = fx_mgr.flags if fx_mgr else {}

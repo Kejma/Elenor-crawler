@@ -569,7 +569,7 @@ def setup_mirror_puzzle_in_room(
     for obj in [emitter_obj, receiver_obj] + mirror_objs:
         dungeon.solid_props.add((obj.x, obj.y))
 
-    dungeon.invalidate_light_cache()
+    dungeon.invalidate_terrain(room_rect)
     if hasattr(game, "fx") and game.fx:
         game.fx.rebuild_wall_grid(dungeon)
 

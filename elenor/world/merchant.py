@@ -77,7 +77,7 @@ def reserve_merchant_room(dungeon):
         dungeon.braziers.append(
             dict(x=x, y=room.bottom - 2, color=(1.15, 0.72, 0.30), radius=72.0)
         )
-    dungeon.invalidate_light_cache()
+    dungeon.invalidate_terrain(room)
 
 
 def populate_merchant_room(game, InteractableCls):
