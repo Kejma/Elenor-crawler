@@ -1,5 +1,6 @@
 import random
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import pygame
@@ -108,6 +109,10 @@ class FogTests(unittest.TestCase):
         visibility = renderer.surface_visibility(*query)
         self.assertGreater(visibility[0, 0], .82)
         self.assertLess(visibility[0, 0], .97)
+        with patch("elenor.rendering.occlusion.PROP_SHADOW_STRENGTH", 1):
+            original = renderer.surface_visibility(*query)
+        np.testing.assert_allclose(1 - visibility, (1 - original) * 4 / 3)
+        np.testing.assert_allclose(renderer.surface_visibility(*query, ground=False), 1)
         self.assertAlmostEqual(visibility[1, 0], 1)
         overhead = renderer.surface_visibility(*query, light_z=60.0)
         self.assertGreater(overhead[0, 0], visibility[0, 0])
@@ -115,7 +120,7 @@ class FogTests(unittest.TestCase):
         renderer.update(dungeon, [Interactable(5, 5, "bookshelf")])
         cabinet = renderer.surface_visibility(*query)
         self.assertLess(cabinet[0, 0], visibility[0, 0])
-        self.assertGreater(cabinet[0, 0], .40)
+        self.assertGreater(cabinet[0, 0], .25)
 
         bench.used = True
         renderer.update(dungeon, [bench])
@@ -139,6 +144,38 @@ class FogTests(unittest.TestCase):
         self.assertGreater(front.min(), .83)
         back = renderer.surface_visibility(*query, (120, 45))
         self.assertLess(back[:, 0].max(), .05)
+
+    def test_door_receives_light_on_the_room_side_without_lighting_the_floor_beyond(self):
+        dungeon = Dungeon()
+        dungeon.grid = [[0] * 12 for _ in range(12)]
+        dungeon.doors.clear()
+        dungeon.thickets.clear()
+        dungeon.solid_props.clear()
+        dungeon.doors[(4, 4)] = Door(4, 4)
+        occlusion = LightOcclusion()
+        occlusion.update(dungeon)
+        x, y = np.array([[72.]]), np.array([[58., 73.]])
+        result = occlusion.surface_visibility(72 - x, 106 - y, x, y, 72, 106, 120, (72, 110))
+        self.assertLess(result[0, 0], .05)
+        self.assertGreater(result[0, 1], .9)
+        back = occlusion.surface_visibility(72 - x, 106 - y, x, y, 72, 106, 120, (72, 50))
+        self.assertEqual(back[0, 1], 0)
+
+    def test_corner_face_is_selected_from_the_viewer_side(self):
+        dungeon = Dungeon()
+        dungeon.grid = [[0] * 12 for _ in range(12)]
+        dungeon.doors.clear()
+        dungeon.thickets.clear()
+        dungeon.solid_props.clear()
+        dungeon.grid[4][5] = dungeon.grid[3][5] = 1
+        occlusion = LightOcclusion()
+        occlusion.update(dungeon)
+        x, y = np.array([[86.]]), np.array([[71.]])
+        viewer = (49, 82)
+        south = occlusion.surface_visibility(92 - x, 105 - y, x, y, 92, 105, 110, viewer)
+        west = occlusion.surface_visibility(54 - x, 74 - y, x, y, 54, 74, 110, viewer)
+        self.assertEqual(south[0, 0], 0)
+        self.assertGreater(west[0, 0], .9)
 
     def test_penumbra_keeps_a_lit_core_and_softens_the_shadow_boundary(self):
         stops = np.full(720, 150, dtype=np.float32)

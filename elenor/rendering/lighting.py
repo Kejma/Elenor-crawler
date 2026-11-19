@@ -1,7 +1,7 @@
 import pygame
 import numpy as np
 from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, MAP_COLS, MAP_ROWS
-from elenor.rendering.occlusion import PROP_SAMPLE_STEPS, SHADOW_RAYS
+from elenor.rendering.occlusion import PROP_SAMPLE_STEPS, PROP_SHADOW_STRENGTH, SHADOW_RAYS
 
 
 class GPULightShader:
@@ -93,31 +93,31 @@ class GPULightShader:
             bool open_wall_face(vec2 point) {{
                 ivec2 cell = ivec2(floor(point / vec2({float(TILE_W)}, {float(TILE_H)})));
                 cell = clamp(cell, ivec2(0), textureSize(u_walls, 0) - 1);
-                return texelFetch(u_walls, cell, 0).r < .5;
+                return texelFetch(u_walls, cell, 0).r == 0.0;
             }}
 
             float wall_face_distance(vec2 pixel, vec2 world, vec2 to_light, float distance) {{
                 vec2 tile_size = vec2({float(TILE_W)}, {float(TILE_H)});
                 vec2 local = mod(world, tile_size);
-                bvec2 positive = greaterThan(to_light, vec2(0.0));
+                vec2 viewer_world = u_viewer + world - pixel;
+                vec2 view = viewer_world - (world - local + tile_size * .5);
+                bvec2 positive = greaterThan(view, vec2(0.0));
                 vec2 side = mix(vec2(-1.0), vec2(1.0), positive);
                 vec2 edge = world - local + mix(vec2(0.0), tile_size, positive);
                 vec2 exits = abs(edge - world) * distance / max(abs(to_light), vec2(.001));
-                vec2 viewer_world = u_viewer + world - pixel;
                 vec2 direction = to_light / distance;
-
-                // Internal tile seams have no exposed face and cannot terminate a ray.
-                bool face_x = exits.x <= distance && (viewer_world.x - edge.x) * side.x > 0.0
-                    && open_wall_face(vec2(edge.x + side.x * .75, world.y))
-                    && open_wall_face(vec2(edge.x + side.x * .75, world.y + direction.y * (exits.x + .75)));
-                bool face_y = exits.y <= distance && (viewer_world.y - edge.y) * side.y > 0.0
-                    && open_wall_face(vec2(world.x, edge.y + side.y * .75))
-                    && open_wall_face(vec2(world.x + direction.x * (exits.y + .75), edge.y + side.y * .75));
-                exits += 2.4 * distance / max(abs(to_light), vec2(.001));
-                if (face_x && face_y) return min(exits.x, exits.y);
-                if (face_x) return exits.x;
-                if (face_y) return exits.y;
-                return 0.0;
+                vec2 near = edge + side * .75;
+                bool face_x = (viewer_world.x - edge.x) * side.x >= 0.0 && open_wall_face(vec2(near.x, world.y));
+                bool face_y = (viewer_world.y - edge.y) * side.y >= 0.0 && open_wall_face(vec2(world.x, near.y));
+                if (face_x && (!face_y || abs(view.x) > abs(view.y))) {{
+                    if (to_light.x * side.x <= 0.0 || exits.x > distance
+                        || !open_wall_face(vec2(near.x, world.y + direction.y * (exits.x + .75)))) return -1.0;
+                    return exits.x + 2.4 * distance / max(abs(to_light.x), .001);
+                }}
+                if (face_y && to_light.y * side.y > 0.0 && exits.y <= distance
+                    && open_wall_face(vec2(world.x + direction.x * (exits.y + .75), near.y)))
+                    return exits.y + 2.4 * distance / max(abs(to_light.y), .001);
+                return -1.0;
             }}
 
             float prop_visibility(vec2 world, vec2 to_light, float distance, float light_height) {{
@@ -136,20 +136,24 @@ class GPULightShader:
                     float reach = clamp((distance - step_px - 4.0) / 6.0, 0.0, 1.0);
                     shade = max(shade, depth * min(.55, height * .045) * (1.0 - step_px / 22.0) * reach);
                 }}
-                return 1.0 - shade;
+                return 1.0 - shade * {PROP_SHADOW_STRENGTH};
             }}
 
-            float surface_shadow(int index, vec2 pixel, vec2 world, vec2 to_light, bool wall, float light_height) {{
+            float surface_shadow(int index, vec2 pixel, vec2 world, vec2 to_light, bool wall, bool ground, float light_height) {{
                 float distance = length(to_light);
                 if (distance < 0.5) return 1.0;
                 float angle = atan(-to_light.y, -to_light.x) * {SHADOW_RAYS / (2 * np.pi)};
                 float receiver = distance - 1.0;
-                if (wall) receiver -= wall_face_distance(pixel, world, to_light, distance);
+                if (wall) {{
+                    float face = wall_face_distance(pixel, world, to_light, distance);
+                    if (face < 0.0) return 0.0;
+                    receiver -= face;
+                }}
                 float spread = (.60 + min(distance * .013, 1.50)) * {SHADOW_RAYS / (2 * np.pi)} / max(distance, 7.0);
                 float visibility = .58 * shadow_coverage(index, angle, receiver)
                     + .21 * (shadow_coverage(index, angle - spread, receiver)
                            + shadow_coverage(index, angle + spread, receiver));
-                if (u_has_props && !wall && visibility > .008)
+                if (u_has_props && ground && !wall && visibility > .008)
                     visibility *= prop_visibility(world, to_light, distance, light_height);
                 return visibility;
             }}
@@ -232,7 +236,7 @@ class GPULightShader:
                         float dist = sqrt(dx * dx + dy * dy + lz * lz);
                         if (dist >= rad) continue;
                         if (flags.z > .5) {{
-                            mask_w *= surface_shadow(i, vec2(p), vec2(wx_px, wy_px), vec2(dx, -dy), is_wall_tile > .5, lz);
+                            mask_w *= surface_shadow(i, vec2(p), vec2(wx_px, wy_px), vec2(dx, -dy), is_wall_tile > 0.0, ent_y <= -9000.0, lz);
                             if (mask_w < .008) continue;
                         }}
 
@@ -425,6 +429,8 @@ class GPULightShader:
         self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGB"))
         self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32).tobytes())
         self.tex_fov.write(np.ascontiguousarray(fov_mask.T, dtype=np.float32).tobytes())
+        if occlusion is not None:
+            wall_grid_np = occlusion.structure
         if wall_grid_np is not None:
             if wall_grid_np.shape != self.tex_walls.size:
                 width, height = wall_grid_np.shape

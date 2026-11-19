@@ -29,6 +29,7 @@ _PROP_SHAPES = {
     "fireplace": (6.0, 4.0, 15.0),
 }
 _DEFAULT_PROP_SHAPE = (5.0, 4.5, 9.0)
+PROP_SHADOW_STRENGTH = 4 / 3
 PROP_SAMPLE_STEPS = (1.5, 4.5, 8.0, 12.0, 17.0)
 _PROP_X, _PROP_Y = np.ogrid[:TILE_W, :TILE_H]
 
@@ -41,7 +42,8 @@ class LightOcclusion:
         self.rays = OrderedDict()
 
     def update(self, dungeon, objects=()):
-        doors = tuple((point, door.locked) for point, door in dungeon.doors.items() if not door.is_open)
+        doors = tuple((point, door.locked) for point, door in dungeon.doors.items()
+                      if not door.is_open and 0 <= point[0] < dungeon.width and 0 <= point[1] < dungeon.height)
         seen_props = {
             (obj.x, obj.y): obj for obj in objects
             if obj.kind in _FURNITURE or (obj.x, obj.y) in dungeon.solid_props
@@ -73,6 +75,9 @@ class LightOcclusion:
         for x, y in zip(*np.nonzero(np.isin(tiles, (5, 21, 22, 56, 57)) & ~blocked)):
             self.blockers[x * TILE_W + 5:x * TILE_W + 11, y * TILE_H + 5:y * TILE_H + 11] = True
 
+        self.structure = walls.astype(np.float32)
+        for (x, y), _ in doors:
+            self.structure[x, y] = .5
         for (x, y), grate in doors:
             x0, y0 = x * TILE_W, y * TILE_H
             tile = self.blockers[x0:x0 + TILE_W, y0:y0 + TILE_H]
@@ -134,9 +139,11 @@ class LightOcclusion:
 
 
     def _wall_face_distance(self, dx, dy, x, y, distance, viewer):
-        nx = np.where(dx > 0, 1, -1)
-        ny = np.where(dy > 0, 1, -1)
         local_x, local_y = x % TILE_W, y % TILE_H
+        view_x = viewer[0] - (x - local_x + TILE_W * .5)
+        view_y = viewer[1] - (y - local_y + TILE_H * .5)
+        nx = np.where(view_x > 0, 1, -1)
+        ny = np.where(view_y > 0, 1, -1)
         edge_x = x - local_x + np.where(nx > 0, TILE_W, 0)
         edge_y = y - local_y + np.where(ny > 0, TILE_H, 0)
         exit_x = np.abs(edge_x - x) * distance / np.maximum(np.abs(dx), .001)
@@ -145,19 +152,22 @@ class LightOcclusion:
         def open_at(wx, wy):
             tx = (wx // TILE_W).astype(np.int32).clip(0, self.walls.shape[0] - 1)
             ty = (wy // TILE_H).astype(np.int32).clip(0, self.walls.shape[1] - 1)
-            return ~self.walls[tx, ty]
+            return self.structure[tx, ty] == 0
 
         inv_distance = 1 / np.maximum(distance, .001)
         near_x, near_y = edge_x + nx * .75, edge_y + ny * .75
-        open_x = open_at(near_x, y) & open_at(near_x, y + dy * inv_distance * (exit_x + .75))
-        open_y = open_at(x, near_y) & open_at(x + dx * inv_distance * (exit_y + .75), near_y)
-        face_x = (exit_x <= distance) & ((viewer[0] - edge_x) * nx > 0) & open_x
-        face_y = (exit_y <= distance) & ((viewer[1] - edge_y) * ny > 0) & open_y
-        # Put the receiver just outside its own wall, so penumbra taps cannot self-shadow the face.
-        exit_x = np.where(face_x, exit_x + 2.4 * distance / np.maximum(np.abs(dx), .001), 0)
-        exit_y = np.where(face_y, exit_y + 2.4 * distance / np.maximum(np.abs(dy), .001), 0)
-        # An invalid axis is zero. If both are exposed, use the first crossing.
-        return np.where((exit_x > 0) & (exit_y > 0), np.minimum(exit_x, exit_y), np.maximum(exit_x, exit_y))
+        visible_x = ((viewer[0] - edge_x) * nx >= 0) & open_at(near_x, y)
+        visible_y = ((viewer[1] - edge_y) * ny >= 0) & open_at(x, near_y)
+        # Pick the face from the viewer and geometry alone. The light cannot
+        # choose a different face around the corner of the same tile.
+        use_x = visible_x & (~visible_y | (np.abs(view_x) > np.abs(view_y)))
+        open_x = open_at(near_x, y + dy * inv_distance * (exit_x + .75))
+        open_y = open_at(x + dx * inv_distance * (exit_y + .75), near_y)
+        lit_x = (exit_x <= distance) & (dx * nx > 0) & open_x
+        lit_y = (exit_y <= distance) & (dy * ny > 0) & open_y
+        exit_x += 2.4 * distance / np.maximum(np.abs(dx), .001)
+        exit_y += 2.4 * distance / np.maximum(np.abs(dy), .001)
+        return np.where(use_x & lit_x, exit_x, np.where(~use_x & visible_y & lit_y, exit_y, -1.0))
 
     def _prop_visibility(self, dx, dy, x, y, distance, light_z):
         width, height = self.prop_heights.shape
@@ -177,9 +187,9 @@ class LightOcclusion:
             shade = np.clip((h - light_z * step * direction) * .34, 0, 1)
             shade *= np.minimum(.55, h * .045) * (1 - step / 22) * reach * inside
             np.maximum(max_shade, shade, out=max_shade)
-        return 1 - max_shade
+        return 1 - max_shade * PROP_SHADOW_STRENGTH
 
-    def surface_visibility(self, dx, dy, x, y, lx, ly, radius, viewer, light_z=22.0):
+    def surface_visibility(self, dx, dy, x, y, lx, ly, radius, viewer, light_z=22.0, ground=True):
         """Shadow mask for software rendering, including the lit faces of walls."""
         stops = self.distances(lx, ly, radius)
         has_hard = stops.min() < radius + 2.0
@@ -193,12 +203,14 @@ class LightOcclusion:
             receiver = distance - 1.0
             tx = (x // TILE_W).astype(np.int32).clip(0, self.walls.shape[0] - 1)
             ty = (y // TILE_H).astype(np.int32).clip(0, self.walls.shape[1] - 1)
-            wall = self.walls[tx, ty]
+            wall = self.structure[tx, ty] > 0
             if wall.any():
                 face = self._wall_face_distance(dx, dy, x, y, distance, viewer)
-                receiver -= np.where(wall, face, 0.0)
+                receiver -= np.where(wall, np.maximum(face, 0), 0.0)
             visibility = self.penumbra(stops, angle, distance, receiver)
-        if self.has_props:
+            if wall.any():
+                visibility *= ~wall | (face >= 0)
+        if self.has_props and np.any(ground):
             props = self._prop_visibility(dx, dy, x, y, distance, light_z)
-            visibility *= np.where(wall, 1.0, props) if wall is not None else props
+            visibility *= np.where(ground if wall is None else ground & ~wall, props, 1.0)
         return visibility
