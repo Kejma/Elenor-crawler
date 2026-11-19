@@ -72,21 +72,33 @@ class GLWindow:
         self.ui = ctx.texture((SCREEN_W, SCREEN_H), 4)
         self.ui.swizzle = "BGRA"
         view = memoryview(self.ui_pixels)
+        self.ui_view = view
         self.ui_top = view[:_TOP_BAND_H * _ROW_BYTES]
-        self.ui_middle = view[_TOP_BAND_H * _ROW_BYTES:_THOUGHT_Y * _ROW_BYTES]
         self.ui_thought = view[_THOUGHT_Y * _ROW_BYTES:_HUD_Y * _ROW_BYTES]
         self.ui_hud = view[_HUD_Y * _ROW_BYTES:]
         self.hud_surface = None
         self.uploaded_hud = None
         self.middle_dirty = False
+        self.top_dirty = True
         self.thought_dirty = True
         self.full_dirty = True
-        self.prev_middle_dirty = True
         self.prev_full_dirty = True
+        self.world_y0 = _THOUGHT_Y
+        self.world_y1 = 0
+        self.prev_world_y0 = _THOUGHT_Y
+        self.prev_world_y1 = 0
+        self._last_probe_time = 0.0
+        self._probe_dungeon = None
+        self._probe_revision = -1
         self.native_fx = ctx.texture((VIEW_W, VIEW_H), 4)
         self.native_fx.swizzle = "BGRA"
         self.native_fx.filter = (self.gl.NEAREST, self.gl.NEAREST)
         self.native_fx_pixels = None
+        self.native_fx_fov_mask = False
+        self.lit_fx = ctx.texture((VIEW_W, VIEW_H), 4)
+        self.lit_fx.swizzle = "BGRA"
+        self.lit_fx.filter = (self.gl.NEAREST, self.gl.NEAREST)
+        self.lit_fx_pixels = None
         self.software_fog = ctx.texture((VIEW_W, VIEW_H), 4)
         self.visibility = ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.last_visibility = None
@@ -105,11 +117,16 @@ class GLWindow:
             uniform sampler2D fog;
             uniform sampler2D native_fx;
             uniform sampler2D overlay;
+            uniform sampler2D fov_tex;
+            uniform sampler2D lit_fx;
+            uniform sampler2D light_vis;
             uniform ivec3 viewport;
             uniform vec2 logical_scale;
             uniform bool has_scene;
             uniform bool has_fog;
+            uniform bool has_lit_fx;
             uniform bool has_native_fx;
+            uniform bool mask_native_fx;
             out vec4 color;
 
             void main() {{
@@ -124,8 +141,14 @@ class GLWindow:
                         vec4 mist = texelFetch(fog, native_px, 0);
                         base = mix(base, mist.rgb, mist.a);
                     }}
+                    if (has_lit_fx && native_px.y < {VIEW_H}) {{
+                        vec4 lfx = texelFetch(lit_fx, native_px, 0);
+                        float vis = texelFetch(fov_tex, native_px, 0).r * texelFetch(light_vis, native_px, 0).a;
+                        base = mix(base, lfx.rgb, lfx.a * vis);
+                    }}
                     if (has_native_fx && native_px.y < {VIEW_H}) {{
                         vec4 fx = texelFetch(native_fx, native_px, 0);
+                        if (mask_native_fx) fx.a *= texelFetch(fov_tex, native_px, 0).r;
                         base = mix(base, fx.rgb, fx.a);
                     }}
                 }}
@@ -133,7 +156,7 @@ class GLWindow:
                 color = vec4(mix(base, ui.rgb, ui.a), 1.0);
             }}
         """)
-        for unit, name in enumerate(("world", "fog", "native_fx", "overlay")):
+        for unit, name in enumerate(("world", "fog", "native_fx", "overlay", "fov_tex", "lit_fx", "light_vis")):
             self.present_program[name].value = unit
         self.quad = ctx.vertex_array(self.present_program, [])
 
@@ -204,7 +227,15 @@ class GLWindow:
             timings["probe"] = (perf_counter() - started) * 1000
 
     def begin_world(self, dungeon, timings, profile_key):
-        self.collect(dungeon, timings, profile_key)
+        if self.pending or self.thought_location is not dungeon:
+            self.collect(dungeon, timings, profile_key)
+        elif timings is not None:
+            timings["probe"] = 0.0
+        now = perf_counter()
+        if (dungeon is self._probe_dungeon
+                and dungeon.geometry_revision == self._probe_revision
+                and now - self._last_probe_time < 0.05):
+            return None
         slot = next((entry for entry in self.slots if entry.fence is None), None)
         if slot is not None:
             slot.timed = timings is not None
@@ -216,6 +247,9 @@ class GLWindow:
     def capture_survey(self, slot, shader, dungeon, objects, tiles, fov, lit_fov, cam_x, cam_y, gpu_fog):
         if slot is None:
             return
+        self._last_probe_time = perf_counter()
+        self._probe_dungeon = dungeon
+        self._probe_revision = dungeon.geometry_revision
         camera = round(cam_x), round(cam_y)
         origin = camera[0] // TILE_W, camera[1] // TILE_H
         visibility = shader.tex_fov
@@ -242,18 +276,42 @@ class GLWindow:
             slot.fog = gpu_fog
             self.pending.append(slot)
 
-    def begin_ui_frame(self):
-        if self.prev_full_dirty:
+    def mark_world_y(self, y0, y1):
+        y0 = max(0, int(y0))
+        y1 = min(_THOUGHT_Y, int(y1))
+        if y0 < y1:
+            if y0 < self.world_y0:
+                self.world_y0 = y0
+            if y1 > self.world_y1:
+                self.world_y1 = y1
+            if y0 < _TOP_BAND_H:
+                self.top_dirty = True
+
+    def begin_ui_frame(self, full_clear=False):
+        if self.prev_full_dirty or full_clear:
             self.canvas.fill((0, 0, 0, 0))
             self.uploaded_hud = None
             self.thought_dirty = True
+            self.top_dirty = True
+            self.prev_world_y0 = _THOUGHT_Y
+            self.prev_world_y1 = 0
+            if full_clear:
+                self.prev_full_dirty = True
         else:
-            self.canvas.fill((0, 0, 0, 0), (0, 0, SCREEN_W, _TOP_BAND_H))
-            if self.prev_middle_dirty:
-                self.canvas.fill((0, 0, 0, 0), (0, _TOP_BAND_H, SCREEN_W, _THOUGHT_Y - _TOP_BAND_H))
+            self.top_dirty = False
+            if self.prev_world_y0 < self.prev_world_y1:
+                y0 = 0 if self.prev_world_y0 < _TOP_BAND_H else self.prev_world_y0
+                y1 = max(self.prev_world_y1, _TOP_BAND_H) if self.prev_world_y0 < _TOP_BAND_H else self.prev_world_y1
+                self.canvas.fill((0, 0, 0, 0), (0, y0, SCREEN_W, y1 - y0))
+                if y0 == 0:
+                    self.top_dirty = True
+        self.world_y0 = _THOUGHT_Y
+        self.world_y1 = 0
         self.middle_dirty = False
-        self.full_dirty = False
+        self.full_dirty = bool(full_clear)
         self.native_fx_pixels = None
+        self.native_fx_fov_mask = False
+        self.lit_fx_pixels = None
 
     def present(self, viewport_rect, window_size, gameplay, timings=None):
         started = perf_counter() if timings is not None else 0.0
@@ -291,18 +349,29 @@ class GLWindow:
             self.ui.write(self.ui_pixels)
             self.uploaded_hud = None
             self.prev_full_dirty = True
-            self.prev_middle_dirty = False
+            self.prev_world_y0 = _THOUGHT_Y
+            self.prev_world_y1 = 0
             self.thought_dirty = True
         elif self.full_dirty or self.prev_full_dirty:
             self.ui.write(self.ui_pixels)
             self.uploaded_hud = hud if not self.full_dirty else None
-            self.prev_middle_dirty = self.middle_dirty
+            self.prev_world_y0 = self.world_y0
+            self.prev_world_y1 = self.world_y1
             self.prev_full_dirty = self.full_dirty
             self.thought_dirty = False
         else:
-            self.ui.write(self.ui_top, viewport=(0, 0, SCREEN_W, _TOP_BAND_H))
-            if self.middle_dirty or self.prev_middle_dirty:
-                self.ui.write(self.ui_middle, viewport=(0, _TOP_BAND_H, SCREEN_W, _THOUGHT_Y - _TOP_BAND_H))
+            if self.middle_dirty:
+                self.mark_world_y(0, _THOUGHT_Y)
+            up_y0 = min(self.world_y0, self.prev_world_y0)
+            up_y1 = max(self.world_y1, self.prev_world_y1)
+            if self.top_dirty:
+                up_y0 = 0
+                up_y1 = max(up_y1, _TOP_BAND_H)
+            if up_y0 < up_y1:
+                self.ui.write(
+                    self.ui_view[up_y0 * _ROW_BYTES:up_y1 * _ROW_BYTES],
+                    viewport=(0, up_y0, SCREEN_W, up_y1 - up_y0),
+                )
             if self.thought_dirty:
                 self.ui.write(self.ui_thought, viewport=(0, _THOUGHT_Y, SCREEN_W, _HUD_Y - _THOUGHT_Y))
             if hud is None:
@@ -311,7 +380,8 @@ class GLWindow:
             elif hud is not self.uploaded_hud:
                 self.ui.write(self.ui_hud, viewport=(0, _HUD_Y, SCREEN_W, SCREEN_H - _HUD_Y))
                 self.uploaded_hud = hud
-            self.prev_middle_dirty = self.middle_dirty
+            self.prev_world_y0 = self.world_y0
+            self.prev_world_y1 = self.world_y1
             self.prev_full_dirty = False
             self.thought_dirty = False
         if gameplay and self.upload_fog is not None:
@@ -319,6 +389,9 @@ class GLWindow:
         has_nfx = gameplay and self.native_fx_pixels is not None
         if has_nfx:
             self.native_fx.write(self.native_fx_pixels)
+        has_lfx = gameplay and self.lit_fx_pixels is not None
+        if has_lfx:
+            self.lit_fx.write(self.lit_fx_pixels)
         if timings is not None:
             timings["ui_upload"] = (perf_counter() - started) * 1000
         self.ctx.screen.use()
@@ -335,11 +408,16 @@ class GLWindow:
         scene = self.scene if gameplay else None
         self.present_program["has_scene"].value = scene is not None
         self.present_program["has_fog"].value = scene is not None and self.upload_fog is not None
+        self.present_program["has_lit_fx"].value = scene is not None and has_lfx
         self.present_program["has_native_fx"].value = scene is not None and has_nfx
+        self.present_program["mask_native_fx"].value = self.native_fx_fov_mask
         (scene if scene is not None else self.probe).use(0)
         self.software_fog.use(1)
         self.native_fx.use(2)
         self.ui.use(3)
+        self.shader.tex_fov.use(4)
+        self.lit_fx.use(5)
+        self.shader.tex_out.use(6)
         self.quad.render(self.gl.TRIANGLE_STRIP, vertices=4)
 
     def close(self):

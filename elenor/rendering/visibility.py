@@ -95,7 +95,7 @@ class _CanopyOcclusion:
 
         steps = (dist[idx] * self.rate).astype(np.int32) + 1
         max_steps = int(steps.max())
-        step_idx = np.arange(1, max_steps + 1, dtype=np.float64)[None, :]
+        step_idx = np.arange(1, max_steps + 1, dtype=np.float32)[None, :]
         active = step_idx <= steps[:, None]
         t = np.minimum(step_idx, steps[:, None]) / steps[:, None]
         xs = x0 + dx[idx, None] * t
@@ -213,7 +213,7 @@ class CanopyVisibility:
             self.view = view
             self.targets.clear()
 
-    def prefetch(self, trees):
+    def prefetch(self, trees, visible_tiles=None):
         targets = self.targets
         missing = [(t[0], t[1]) for t in trees if (t[0], t[1]) not in targets]
         if not missing:
@@ -242,7 +242,10 @@ class CanopyVisibility:
                 continue
             h_f = (1 if dx > 0 else -1, 0)
             v_f = (0, 1 if dy > 0 else -1)
-            faces = [f for f in ((h_f, v_f) if abs(dx) > abs(dy) else (v_f, h_f)) if f in exposed]
+            faces = [
+                f for f in ((h_f, v_f) if abs(dx) > abs(dy) else (v_f, h_f))
+                if f in exposed and (visible_tiles is None or (x + f[0], y + f[1]) in visible_tiles)
+            ]
             if not faces:
                 targets[tile] = 0.0
                 continue
@@ -259,7 +262,7 @@ class CanopyVisibility:
             return
         hits = obs.trace_batch(
             px, py,
-            np.asarray(c_x1, dtype=np.float64), np.asarray(c_y1, dtype=np.float64),
+            np.asarray(c_x1, dtype=np.float64), np.asarray(c_y1, dtype=np.float32),
             np.asarray(c_tx, dtype=np.int32), np.asarray(c_ty, dtype=np.int32),
             max_dist,
         )
@@ -289,7 +292,7 @@ class CanopyVisibility:
 
         g_hits = obs.trace_batch(
             px, py,
-            np.asarray(g_x1, dtype=np.float64), np.asarray(g_y1, dtype=np.float64),
+            np.asarray(g_x1, dtype=np.float64), np.asarray(g_y1, dtype=np.float32),
             np.asarray(g_tx, dtype=np.int32), np.asarray(g_ty, dtype=np.int32),
             max_dist,
         )

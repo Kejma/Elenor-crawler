@@ -7,10 +7,12 @@ from elenor.rendering.visibility import overlay_visibility
 from elenor.rendering.pixel_fx import PixelLayer
 
 
-def render_jungle_attacks(screen, mobs, cam_x, cam_y, fov, lights, cache):
-    layer = cache.get("_jungle_attack_layer")
-    if layer is None:
-        layer = cache["_jungle_attack_layer"] = PixelLayer()
+def render_jungle_attacks(screen, mobs, cam_x, cam_y, fov, lights, cache, *, layer=None):
+    own_layer = layer is None
+    if own_layer:
+        layer = cache.get("_jungle_attack_layer")
+        if layer is None:
+            layer = cache["_jungle_attack_layer"] = PixelLayer()
 
     def pixel(x, y):
         return round((x * TILE_W - cam_x) * SCALE), round((y * TILE_H - cam_y) * SCALE)
@@ -54,4 +56,5 @@ def render_jungle_attacks(screen, mobs, cam_x, cam_y, fov, lights, cache):
         layer.arc((*color, 255), (end[0] - radius, end[1] - radius, 2 * radius, 2 * radius),
                         math.pi / 2, math.pi / 2 + progress * math.tau, 4)
 
-    layer.flush(screen, overlay_visibility(fov, lights, cam_x, cam_y))
+    if own_layer:
+        layer.flush(screen, overlay_visibility(fov, lights, cam_x, cam_y))

@@ -80,7 +80,7 @@ def draw_fishing(screen, game, aim, fov_mask):
     if cast_route(game.dungeon, (game.player.x, game.player.y), aim) is not None:
         x = round(aim[0] * TILE_W - game.cam_x)
         y = round(aim[1] * TILE_H - game.cam_y)
-        if 0 <= x < VIEW_W and 0 <= y < VIEW_H and fov_mask[x, y] > 0.3:
+        if 0 <= x < VIEW_W and 0 <= y < VIEW_H and (fov_mask is None or fov_mask[x, y] > 0.3):
             pygame.draw.ellipse(
                 screen, (202, 228, 184), (x * SCALE - 10, y * SCALE - 4, 20, 8), 2
             )

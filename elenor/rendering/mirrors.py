@@ -248,6 +248,7 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
             mcy = int(((m.y + 0.26) * TILE_H - cam_y) * SCALE)
             if not (0 <= mcy < VIEW_H * SCALE):
                 continue
+            any_drawn = True
 
             is_bs = (m.mirror_ori % 2 == 0)
             if is_bs:
@@ -277,6 +278,8 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
                 glint_c = (mcx + fnx * 8, mcy + fny * 8)
                 pygame.draw.line(beam_surf, (150, 240, 255), glint_c, (glint_c[0] + fnx * 4, glint_c[1]), 2)
                 pygame.draw.line(beam_surf, (150, 240, 255), glint_c, (glint_c[0], glint_c[1] + fny * 4), 2)
+    if not any_drawn:
+        return
     from elenor.rendering.visibility import mask_overlay
     mask_overlay(beam_surf, visibility, game.__dict__)
     screen.blit(beam_surf, (0, 0))

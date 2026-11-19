@@ -2,7 +2,7 @@ import math
 from time import perf_counter
 import pygame
 import numpy as np
-from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, UI_PANEL_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
+from elenor.config import TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, THOUGHT_BOX_X, THOUGHT_BOX_Y, SCALE, SCREEN_W, LOS_MAX_RADIUS, UI_PANEL_BG, UI_BORDER_OUTER, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN
 from elenor.data.abilities import PASSIVE_SLOT_LIMIT
 
 
@@ -35,6 +35,7 @@ class Renderer(UIRendererMixin):
         self.alpha_mask_cache = {}
         self.canopy_visibility = CanopyVisibility()
         self.combat_pixels = PixelLayer()
+        self.lit_pixels = PixelLayer()
         self.jungle_attack_cache = {}
         self._shadow_small = pygame.Surface((10, 4), pygame.SRCALPHA)
         pygame.draw.ellipse(self._shadow_small, (8, 6, 12, 120), (0, 0, 10, 4))
@@ -59,6 +60,7 @@ class Renderer(UIRendererMixin):
         self._emissive_dirty = True
         self._scene_fov_key = None
         self._cached_scene_fov = None
+        self._minimap_ui_key = None
         self.current_hud_lights = []
 
         self.font_thought = pygame.font.SysFont("consolas", 19, bold=True)
@@ -550,7 +552,7 @@ class Renderer(UIRendererMixin):
         ticks = pygame.time.get_ticks()
         now_sec = ticks * 0.001
         self.canopy_visibility.begin_frame(dungeon.grid, now_sec)
-        self.canopy_visibility.set_view(dungeon, round(player.x * 8) * 0.125, round(player.y * 8) * 0.125)
+        self.canopy_visibility.set_view(dungeon, round(player.x * 4) * 0.25, round(player.y * 4) * 0.25)
         reveal_map = ui_texts.get("_reveal_map", False)
         for role_id, anim_info in self.anim_bank.items():
             fr_list = anim_info["frames"]
@@ -558,6 +560,7 @@ class Renderer(UIRendererMixin):
                 self.assets[role_id] = fr_list[int(now_sec * anim_info["fps"]) % len(fr_list)]
 
         self.combat_pixels.clear()
+        self.lit_pixels.clear()
         self.current_hud_lights = hud_lights or []
         c0 = max(0, int(cam_x) // TILE_W)
         c1 = min(dungeon.width, (int(cam_x) + VIEW_W) // TILE_W + 2)
@@ -591,11 +594,18 @@ class Renderer(UIRendererMixin):
         terrain_start = perf_counter() if timings is not None else 0.0
         terrain_pack = self.terrain.collect_visible(dungeon, c0, r0, c1, r1) if gpu_scene is not None else None
         scene_on_gpu = terrain_pack is not None
+        shader_fov = getattr(self.gpu_shader, "fov", None)
+        fov_on_gpu = fov_mask is None and scene_on_gpu and shader_fov is not None
+        if fov_mask is None and not fov_on_gpu:
+            fov_mask = dungeon.compute_nox_fov(round(player.x * TILE_W), round(player.y * TILE_H), cam_x, cam_y)[0]
         gpu_scene_fov = None
         if scene_on_gpu:
             if timings is not None:
                 timings["terrain"] = (perf_counter() - terrain_start) * 1000
-            self.gpu_shader.upload_fov(fov_mask)
+            if fov_on_gpu:
+                shader_fov.render(dungeon, player.x * TILE_W, player.y * TILE_H, cam_x, cam_y)
+            else:
+                self.gpu_shader.upload_fov(fov_mask)
             gpu_scene_fov, self._emissive_dirty = gpu_scene.render_world(
                 self, dungeon, player, mobs, objects, cam_x, cam_y, fov_mask,
                 visible_tiles, fx_mgr, physical_states, cast, reveal_map, now_sec,
@@ -925,7 +935,7 @@ class Renderer(UIRendererMixin):
                 fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,
                 timer_queries=slot.timers if slot is not None and slot.timed else None,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
-                **({"scene_on_gpu": True, "gpu_scene_fov": gpu_scene_fov} if scene_on_gpu else {}),
+                **({"scene_on_gpu": True, "gpu_scene_fov": gpu_scene_fov, "fov_on_gpu": fov_on_gpu} if scene_on_gpu else {}),
             )
             r_mult = g_mult = b_mult = None
         else:
@@ -1081,30 +1091,50 @@ class Renderer(UIRendererMixin):
             timings["survey"] = (fog_start - post_start) * 1000
             timings["scale"] = (scale_end - overlay_start) * 1000
 
+        has_mirrors = False
         if game_ref is not None and getattr(game_ref, "mirror_puzzles", None):
-            if window is not None:
-                window.middle_dirty = True
-            from elenor.rendering.mirrors import render_mirror_puzzles_beams
-            from elenor.rendering.visibility import overlay_visibility
-            visibility = overlay_visibility(fov_mask, lights, cam_x, cam_y)
-            render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, visibility)
-
-        if any(state["kind"] not in ("trap", "trap_snap") for state in physical_states):
-            if window is not None:
-                window.middle_dirty = True
-            from elenor.rendering.visibility import overlay_visibility
-            render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask, lights, cam_x, cam_y))
-
+            for ctrl in game_ref.mirror_puzzles:
+                if (any((m.x, m.y) in visible_tiles for m in ctrl.mirrors)
+                        or any((em.x, em.y) in visible_tiles for em in ctrl.emitters)
+                        or any(max(p0[0], p1[0]) * TILE_W >= cam_x - 16 and min(p0[0], p1[0]) * TILE_W <= cam_x + VIEW_W + 16
+                               and max(p0[1], p1[1]) * TILE_H >= cam_y - 16 and min(p0[1], p1[1]) * TILE_H <= cam_y + VIEW_H + 16
+                               for p0, p1, _, _ in ctrl.beam_segments)):
+                    has_mirrors = True
+                    break
+        has_phys_fx = any(state["kind"] not in ("trap", "trap_snap") for state in physical_states)
         windups = [
             mob for mob in mobs
             if mob.jungle_impact_timer > 0 or mob.jungle_windup
             and mob.jungle_windup[0].form not in ("strike", "sweep", "lunge")
         ]
-        if windups:
+        use_gpu_lit_fx = window is not None and self.gpu_shader is not None
+        if fov_mask is None and (has_mirrors or (not use_gpu_lit_fx and (has_phys_fx or windups))):
+            fov_mask = dungeon.compute_nox_fov(round(player.x * TILE_W), round(player.y * TILE_H), cam_x, cam_y)[0]
+
+        if has_mirrors:
             if window is not None:
-                window.middle_dirty = True
-            from elenor.rendering.jungle_attacks import render_jungle_attacks
-            render_jungle_attacks(screen, windups, cam_x, cam_y, fov_mask, lights, self.jungle_attack_cache)
+                window.mark_world_y(0, VIEW_H * SCALE)
+            from elenor.rendering.mirrors import render_mirror_puzzles_beams
+            from elenor.rendering.visibility import overlay_visibility
+            visibility = overlay_visibility(fov_mask, lights, cam_x, cam_y)
+            render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, visibility)
+
+        if has_phys_fx:
+            if use_gpu_lit_fx:
+                render_physical(screen, game_ref, cam_x, cam_y, None, layer=self.lit_pixels)
+            else:
+                from elenor.rendering.visibility import overlay_visibility
+                render_physical(screen, game_ref, cam_x, cam_y, overlay_visibility(fov_mask, lights, cam_x, cam_y))
+
+        if windups:
+            if use_gpu_lit_fx:
+                render_jungle_attacks(screen, windups, cam_x, cam_y, None, lights, self.jungle_attack_cache, layer=self.lit_pixels)
+            else:
+                from elenor.rendering.jungle_attacks import render_jungle_attacks
+                render_jungle_attacks(screen, windups, cam_x, cam_y, fov_mask, lights, self.jungle_attack_cache)
+
+        if use_gpu_lit_fx and (has_phys_fx or windups):
+            self.lit_pixels.flush(screen, None, window=window, lit=True)
 
         # 5. Пылинки и споры, видимые ТОЛЬКО когда они пролетают сквозь лучи света!
         if fx_mgr and fx_mgr.flags.get("dust_motes", True):
@@ -1122,7 +1152,7 @@ class Renderer(UIRendererMixin):
                 if not (2 <= msx < VIEW_W - 2 and 2 <= msy < VIEW_H - 2):
                     continue
                 nx, ny = int(msx), int(msy)
-                if fov_mask[nx, ny] < .5:
+                if fov_mask is not None and fov_mask[nx, ny] < .5:
                     continue
                 if dm["kind"] == "firefly":
                     distance = math.hypot(dm["wx"] - player.x, dm["wy"] - player.y)
@@ -1236,33 +1266,41 @@ class Renderer(UIRendererMixin):
             else:
                 vis = (mx_i, my_i) in visible_tiles
 
-            # Check actual light intensity at the enemy's position on canvas so dark tiles NEVER leak enemy UI!
-            cx_canv = max(0, min(VIEW_W - 1, int(m.x * TILE_W - cam_x)))
-            cy_canv = max(0, min(VIEW_H - 1, int((m.y - 0.2) * TILE_H - cam_y)))
-            if r_mult is not None:
-                tile_lum = float(r_mult[cx_canv, cy_canv] + g_mult[cx_canv, cy_canv] + b_mult[cx_canv, cy_canv])
-            elif fov_mask[cx_canv, cy_canv] <= 0.05:
-                tile_lum = 0.0
+            if not vis:
+                is_lit = False
             else:
-                tile_lum = 0.0
-                mtx = max(0, min(dungeon.width - 1, int(m.x)))
-                mty = max(0, min(dungeon.height - 1, int(m.y)))
-                for lgt in lights:
-                    lx, ly, lz = lgt["pos"]
-                    rad = lgt["radius"]
-                    dist_l = math.sqrt((lx - cx_canv) ** 2 + (ly - cy_canv) ** 2 + lz ** 2)
-                    if dist_l < rad:
-                        alw = lgt.get("allowed_tiles")
-                        if isinstance(alw, np.ndarray) and alw[mtx, mty] < 0.5:
-                            continue
-                        cr, cg, cb = lgt["color"]
-                        tile_lum += (1.0 - (dist_l / rad) ** 1.65) * (cr + cg + cb)
-            is_lit = vis and (tile_lum > 0.16 or getattr(m, "glow_timer", 0.0) > 0.0)
+                cx_canv = max(0, min(VIEW_W - 1, int(m.x * TILE_W - cam_x)))
+                cy_canv = max(0, min(VIEW_H - 1, int((m.y - 0.2) * TILE_H - cam_y)))
+                if r_mult is not None:
+                    tile_lum = float(r_mult[cx_canv, cy_canv] + g_mult[cx_canv, cy_canv] + b_mult[cx_canv, cy_canv])
+                elif fov_mask is not None and fov_mask[cx_canv, cy_canv] <= 0.05:
+                    tile_lum = 0.0
+                elif fov_mask is None and not dungeon.has_line_of_sight(player.x, player.y, m.x, m.y, LOS_MAX_RADIUS / TILE_W):
+                    tile_lum = 0.0
+                else:
+                    tile_lum = 0.0
+                    mtx = max(0, min(dungeon.width - 1, int(m.x)))
+                    mty = max(0, min(dungeon.height - 1, int(m.y)))
+                    for lgt in lights:
+                        lx, ly, lz = lgt["pos"]
+                        rad = lgt["radius"]
+                        dist_l = math.sqrt((lx - cx_canv) ** 2 + (ly - cy_canv) ** 2 + lz ** 2)
+                        if dist_l < rad:
+                            alw = lgt.get("allowed_tiles")
+                            if isinstance(alw, np.ndarray) and alw[mtx, mty] < 0.5:
+                                continue
+                            cr, cg, cb = lgt["color"]
+                            tile_lum += (1.0 - (dist_l / rad) ** 1.65) * (cr + cg + cb)
+                is_lit = tile_lum > 0.16 or getattr(m, "glow_timer", 0.0) > 0.0
             if is_lit:
                 m.last_lit_pos = (m.x, m.y)
 
             dist_to_p = math.hypot(m.x - player.x, m.y - player.y)
             if is_lit or (m.current_speech and dist_to_p <= 11.5):
+                head_off = 1.65 if getattr(m, "size_tiles", 1) >= 2 else 0.85
+                sx = int((m.x * TILE_W - cam_x) * SCALE)
+                sy = int(((m.y - head_off) * TILE_H - cam_y) * SCALE)
+                foot_y = int((m.y * TILE_H - cam_y) * SCALE)
                 if window is not None and (
                     m.current_speech or (is_lit and (
                         m.hp < m.max_hp or m.state in ("sleeping", "eating")
@@ -1274,11 +1312,10 @@ class Renderer(UIRendererMixin):
                         or getattr(m, "stun_timer", 0.0) > 0.0
                     ))
                 ):
-                    window.middle_dirty = True
-                head_off = 1.65 if getattr(m, "size_tiles", 1) >= 2 else 0.85
-                sx = int((m.x * TILE_W - cam_x) * SCALE)
-                sy = int(((m.y - head_off) * TILE_H - cam_y) * SCALE)
-                foot_y = int((m.y * TILE_H - cam_y) * SCALE)
+                    if m.current_speech:
+                        window.mark_world_y(0, VIEW_H * SCALE)
+                    else:
+                        window.mark_world_y(sy - 44, foot_y + 24)
 
                 # Clear visual indication on the enemy model when it begins channeling a pentagram!
                 if is_lit and not m.jungle_windup and getattr(m, "cast_windup_timer", 0.0) > 0.0 and 0 <= foot_y < VIEW_H * SCALE:
@@ -1429,10 +1466,10 @@ class Renderer(UIRendererMixin):
             sy = int((p.wy * TILE_H - cam_y) * SCALE)
             if 0 <= sy < VIEW_H * SCALE:
                 if window is not None:
-                  if sy > VIEW_H * SCALE - 32:
-                      window.full_dirty = True
-                  else:
-                      window.middle_dirty = True
+                    if sy > VIEW_H * SCALE - 32:
+                        window.full_dirty = True
+                    else:
+                        window.mark_world_y(sy - 6, sy + 34)
                 f_use = self.font_popup_big if getattr(p, "big", False) else self.font_popup
                 txt_surf = f_use.render(p.text, True, p.color)
                 sh_surf = f_use.render(p.text, True, (10, 8, 14))
@@ -1442,10 +1479,10 @@ class Renderer(UIRendererMixin):
         # Render NPC Quest Marker & Speech Bubble (Innkeeper Hugo & Dungeon Merchant)
         for obj in objects:
             if not obj.used and obj.kind in ("npc_innkeeper", "npc_merchant") and (obj.x, obj.y) in visible_tiles:
-                if window is not None:
-                  window.middle_dirty = True
                 sx = int(((obj.x + 0.5) * TILE_W - cam_x) * SCALE)
                 sy = int(((obj.y - 0.35) * TILE_H - cam_y) * SCALE)
+                if window is not None:
+                    window.mark_world_y(sy - 120 if getattr(obj, "speech_text", None) else sy - 28, sy + 12)
                 if getattr(obj, "speech_text", None):
                     lines = self.wrap_text(obj.speech_text, self.font_small, 260)
                     rendered = [self.font_small.render(ln, True, (255, 235, 175)) for ln in lines]
@@ -1664,7 +1701,7 @@ class Renderer(UIRendererMixin):
                 for vx_p, vy_p in verts:
                     self.combat_pixels.circle((255, 220, 120), (vx_p, vy_p), 3)
 
-        self.combat_pixels.flush(screen, fov_mask, window=window)
+        self.combat_pixels.flush(screen, None if fov_on_gpu else fov_mask, window=window)
 
         if timings is not None:
             hud_start = perf_counter()
@@ -1691,7 +1728,16 @@ class Renderer(UIRendererMixin):
             from elenor.ui.exploration_map import draw_map_hud
             thought_bg = (window.thought_color if window is not None
                           else lit_surf.get_at((THOUGHT_BOX_X + 8, THOUGHT_BOX_Y + 8))[:3])
-            draw_map_hud(screen, ui_texts["_game_ref"], thought_bg)
+            map_key = (
+                id(dungeon), dungeon.exploration_revision,
+                round(player.x * 7), round(player.y * 7),
+                thought_bg, game_ref.profile["show_minimap"],
+            )
+            if window is None or window.top_dirty or map_key != self._minimap_ui_key:
+                draw_map_hud(screen, game_ref, thought_bg)
+                self._minimap_ui_key = map_key
+                if window is not None:
+                    window.top_dirty = True
         if timings is not None:
             map_end = perf_counter()
             timings["minimap"] = (map_end - map_start) * 1000

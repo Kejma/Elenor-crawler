@@ -130,8 +130,6 @@ class HudLayers:
                     pygame.Surface((SCREEN_W, HUD_HEIGHT), pygame.SRCALPHA, 32, masks),
                     pygame.Surface((SCREEN_W, HUD_HEIGHT), pygame.SRCALPHA, 32, masks),
                 )
-                for surf in self._bottom_pool:
-                    surf.set_alpha(None)
                 self._bottom_masks = masks
             self._bottom_idx ^= 1
             bottom = self._bottom_pool[self._bottom_idx]

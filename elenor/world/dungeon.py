@@ -53,6 +53,12 @@ class Dungeon:
         self._ray_dy = np.sin(angles)[:, None] * radii
         self._ray_indices = np.arange(RAY_COUNT)
         self._ray_steps = np.arange(radii.shape[1])[None, :]
+        c_ang = np.radians(np.arange(120, dtype=np.float32) * (360.0 / 120))
+        c_rad = np.arange(2.0, LOS_MAX_RADIUS, 4.0, dtype=np.float32)[None, :]
+        self._coarse_dx = np.cos(c_ang)[:, None] * c_rad
+        self._coarse_dy = np.sin(c_ang)[:, None] * c_rad
+        self._coarse_steps = np.arange(c_rad.shape[1])[None, :]
+        self._coarse_fov_key = None
         self._fov_surf = pygame.Surface((VIEW_W, VIEW_H), depth=8)
         self._fov_full_mask = np.ones((CANVAS_H, VIEW_W), dtype=np.float32).T
         self._base_block_grid = None
@@ -76,6 +82,7 @@ class Dungeon:
         self._fov_key = None
         self._world_fov_key = None
         self._sight_doors = None
+        self._coarse_fov_key = None
 
     def invalidate_terrain(self, area=None):
         """Mark a terrain edit. A tile rectangle limits the redraw to nearby chunks."""
@@ -937,3 +944,84 @@ class Dungeon:
         self._fov_key = key
         self._fov_result = mask, visible_tiles, open_tiles
         return self._fov_result
+    
+    def compute_coarse_visibility(self, world_ox, world_oy):
+        self._last_viewer_pos = (world_ox / TILE_W, world_oy / TILE_H)
+        qx = round(world_ox * 0.25) * 4.0
+        qy = round(world_oy * 0.25) * 4.0
+        closed_doors = tuple(point for point, door in self.doors.items() if not door.is_open)
+        key = (qx, qy, closed_doors)
+        if self._coarse_fov_key == key:
+            return self._coarse_fov_result
+
+        terrain, root_grid = self.sight_geometry(closed_doors)
+        width, height = terrain.shape
+        start_x = max(0, min(width - 1, int(qx) // TILE_W))
+        start_y = max(0, min(height - 1, int(qy) // TILE_H))
+        radius_x = math.ceil(LOS_MAX_RADIUS / TILE_W) + 1
+        radius_y = math.ceil(LOS_MAX_RADIUS / TILE_H) + 1
+        x0, x1 = max(0, start_x - radius_x), min(width, start_x + radius_x + 1)
+        y0, y1 = max(0, start_y - radius_y), min(height, start_y + radius_y + 1)
+        walls = terrain[x0:x1, y0:y1].copy()
+        roots = root_grid[x0:x1, y0:y1]
+        lw, lh = walls.shape
+        walls[start_x - x0, start_y - y0] = False
+
+        wx = qx + self._coarse_dx
+        wy = qy + self._coarse_dy
+        tx = (wx.astype(np.int32) // TILE_W - x0).clip(0, lw - 1)
+        ty = (wy.astype(np.int32) // TILE_H - y0).clip(0, lh - 1)
+        blocked = walls[tx, ty]
+        changed_x = tx[:, 1:] != tx[:, :-1]
+        changed_y = ty[:, 1:] != ty[:, :-1]
+        ray, step = np.nonzero(changed_x & changed_y)
+        blocked[ray, step + 1] |= walls[tx[ray, step + 1], ty[ray, step]] & walls[tx[ray, step], ty[ray, step + 1]]
+
+        if roots.any():
+            r_vals = roots[tx, ty]
+            rr, rs = np.nonzero((r_vals != 0) & ~blocked)
+            if rr.size:
+                rf = r_vals[rr, rs]
+                ox = wx[rr, rs] / TILE_W - (tx[rr, rs] + x0) - .5
+                oy = wy[rr, rs] / TILE_H - (ty[rr, rs] + y0) - .5
+                trunks = ox * ox + oy * oy <= .22 ** 2
+                bx = (np.abs(oy) <= .15) & ((np.where(ox > 0, 2, 4) & rf) != 0)
+                by = (np.abs(ox) <= .15) & ((np.where(oy > 0, 8, 16) & rf) != 0)
+                blocked[rr, rs] = trunks | bx | by
+
+        first_hit = blocked.argmax(axis=1)
+        hit = (first_hit != 0) | blocked[:, 0]
+        count = self._coarse_steps.size
+        limit = np.where(hit, first_hit, count)
+        open_samples = self._coarse_steps < limit[:, None]
+        open_samples[:, 1:] &= changed_x | changed_y
+
+        open_grid = np.zeros_like(walls)
+        open_grid[tx[open_samples], ty[open_samples]] = True
+        open_grid[start_x - x0, start_y - y0] = True
+
+        padded_open = np.pad(open_grid, 1)
+        dilated = open_grid.copy()
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            dilated |= padded_open[1 + dx:1 + dx + lw, 1 + dy:1 + dy + lh]
+        open_expanded = dilated & ~walls
+
+        padded_vis = np.pad(open_expanded, 1)
+        nearby_walls = np.zeros_like(walls)
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+            nearby_walls |= padded_vis[1 + dx:1 + dx + lw, 1 + dy:1 + dy + lh]
+
+        hit_grid = np.zeros_like(walls)
+        hit_rows = np.flatnonzero(hit)
+        hit_grid[tx[hit_rows, first_hit[hit_rows]], ty[hit_rows, first_hit[hit_rows]]] = True
+
+        visible_grid = open_expanded | (nearby_walls & walls) | hit_grid
+        open_x, open_y = np.nonzero(open_expanded)
+        vis_x, vis_y = np.nonzero(visible_grid)
+        result = (
+            frozenset(zip((vis_x + x0).tolist(), (vis_y + y0).tolist())),
+            frozenset(zip((open_x + x0).tolist(), (open_y + y0).tolist())),
+        )
+        self._coarse_fov_key = key
+        self._coarse_fov_result = result
+        return result

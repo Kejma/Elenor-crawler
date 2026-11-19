@@ -72,9 +72,16 @@ class PixelLayer:
             self.surface.fill((0, 0, 0, 0), self.dirty)
             self.dirty = pygame.Rect(0, 0, 0, 0)
 
-    def flush(self, screen, visibility=None, window=None):
+    def flush(self, screen, visibility=None, window=None, *, lit=False):
         rect = self.dirty
         if not rect.width:
+            return
+        if window is not None and visibility is None:
+            if lit:
+                window.lit_fx_pixels = self.pixels
+            else:
+                window.native_fx_pixels = self.pixels
+                window.native_fx_fov_mask = True
             return
         if visibility is not None:
             alpha = pygame.surfarray.pixels_alpha(self.surface)
@@ -83,7 +90,11 @@ class PixelLayer:
             np.multiply(active, mask, out=active, casting="unsafe")
             del active, alpha
         if window is not None:
-            window.native_fx_pixels = self.pixels
+            if lit:
+                window.lit_fx_pixels = self.pixels
+            else:
+                window.native_fx_pixels = self.pixels
+                window.native_fx_fov_mask = False
             return
         chunk = self.surface.subsurface(rect)
         scaled = pygame.transform.scale(chunk, (rect.width * SCALE, rect.height * SCALE))

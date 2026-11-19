@@ -75,13 +75,15 @@ def render_ground_traps(diffuse_canvas, normal_canvas, states, cam_x, cam_y):
         normal_canvas.blit(normal, rect)
 
 
-def render_physical(screen, game, cam_x, cam_y, visibility):
+def render_physical(screen, game, cam_x, cam_y, visibility, *, layer=None):
     states = getattr(game, "physical_effects", [])
     if not states:
         return
-    layer = getattr(game, "_physical_layer", None)
-    if layer is None:
-        layer = game._physical_layer = PixelLayer()
+    own_layer = layer is None
+    if own_layer:
+        layer = getattr(game, "_physical_layer", None)
+        if layer is None:
+            layer = game._physical_layer = PixelLayer()
 
     now_sec = pygame.time.get_ticks() * 0.001
 
@@ -301,4 +303,5 @@ def render_physical(screen, game, cam_x, cam_y, visibility):
                 layer.line((r_c, g_c, b_c, int(150 * fade)), (cx, cy), outer_pts[0], 2)
                 layer.line((255, 240, 195, int(210 * fade)), (cx, cy), outer_pts[-1], 3)
 
-    layer.flush(screen, visibility)
+    if own_layer:
+        layer.flush(screen, visibility)

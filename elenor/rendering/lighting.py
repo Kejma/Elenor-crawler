@@ -58,7 +58,7 @@ class GPULightShader:
         self.tex_masks = self.ctx.texture((MAP_COLS, MAP_ROWS * self.MAX_LIGHTS), 1, dtype="f4")
         self.tex_walls = self.ctx.texture((MAP_COLS, MAP_ROWS), 1, dtype="f4")
         self.tex_emissive = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
-        self.tex_out = self.ctx.texture((VIEW_W, CANVAS_H), 3, dtype="f1")
+        self.tex_out = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
 
         for tex in (self.tex_diff, self.tex_norm, self.tex_ent_y, self.tex_fov, self.tex_masks, self.tex_walls, self.tex_emissive, self.tex_out):
             tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
@@ -102,7 +102,7 @@ class GPULightShader:
             uniform vec4 u_hud_pos_rad[{self.MAX_HUD_LIGHTS}];
             uniform vec4 u_hud_col[{self.MAX_HUD_LIGHTS}];
 
-            out vec3 fragColor;
+            out vec4 fragColor;
 
             float sample_light_mask_smooth(int light_idx, float wx_px, float wy_px) {{
                 float gx = wx_px / {float(TILE_W)} - 0.5;
@@ -208,7 +208,7 @@ class GPULightShader:
                     float ent_y = texelFetch(u_ent_y, p, 0).r;
                     float fov = texelFetch(u_fov, p, 0).r;
                     if (fov <= .001) {{
-                        fragColor = vec3(0.0);
+                        fragColor = vec4(0.0);
                         return;
                     }}
 
@@ -257,6 +257,7 @@ class GPULightShader:
 
                     vec3 mult = vec3(0.0);
                     vec3 rim_add = vec3(0.0);
+                    float ov_lum = 0.0;
 
                     for (int i = 0; i < u_num_lights; ++i) {{
                         vec4 pos_rad = u_light_pos_rad[i];
@@ -275,12 +276,14 @@ class GPULightShader:
                         float lz = pos_rad.z;
                         float dist = sqrt(dx * dx + dy * dy + lz * lz);
                         if (dist >= rad) continue;
+                        vec4 col_foot = u_light_col_foot[i];
+                        float base_atten = clamp(1.0 - pow(dist / rad, 1.65), 0.0, 1.0);
+                        ov_lum += base_atten * mask_w * max(col_foot.r, max(col_foot.g, col_foot.b));
                         if (flags.z > .5) {{
                             mask_w *= surface_shadow(i, vec2(p), vec2(wx_px, wy_px), vec2(dx, -dy), is_wall_tile > 0.0, ent_y <= -9000.0, lz);
                             if (mask_w < .008) continue;
                         }}
 
-                        vec4 col_foot = u_light_col_foot[i];
                         float behind_ratio = 0.0;
                         if (flags.x < 0.5 && ent_y > -9000.0) {{
                             behind_ratio = clamp((ent_y - col_foot.w) / 4.5, 0.0, 1.0);
@@ -290,7 +293,7 @@ class GPULightShader:
                         float raw_dot = N.x * (dx * inv_dist) + N.y * (dy * inv_dist) + N.z * (lz * inv_dist);
                         float z_wrap = max(0.0, N.z * (lz * inv_dist)) * 0.65;
                         float ndotl = max(z_wrap, raw_dot);
-                        float atten = clamp(1.0 - pow(dist / rad, 1.65), 0.0, 1.0) * mask_w;
+                        float atten = base_atten * mask_w;
 
                         float front_shade = 1.0 - behind_ratio * (1.0 - sub_rim) * 0.65;
                         float intensity = ndotl * atten * 1.45 * front_shade;
@@ -345,7 +348,7 @@ class GPULightShader:
                     float peak = max(lit_out.r, max(lit_out.g, lit_out.b));
                     float excess = max(peak - knee, 0.0);
                     if (u_tonemap || temple_ground) lit_out *= 1.0 - excess / (headroom + excess) * (excess / max(peak, 1.0 / 255.0));
-                    fragColor = clamp(lit_out, 0.0, 1.0);
+                    fragColor = vec4(clamp(lit_out, 0.0, 1.0), clamp(ov_lum, 0.0, 1.0));
                 }} else {{
                     vec3 mult = vec3(0.74, 0.74, 0.80);
                     vec3 hud_glow = vec3(0.0);
@@ -367,7 +370,7 @@ class GPULightShader:
                         mult += (ndotl * atten * 0.40) * h_col;
                         hud_glow += (pow(atten, 1.8) * (12.0 / 255.0)) * h_col;
                     }}
-                    fragColor = clamp(diff * mult + hud_glow, 0.0, 1.0);
+                    fragColor = vec4(clamp(diff * mult + hud_glow, 0.0, 1.0), 1.0);
                 }}
             }}
             """
@@ -382,6 +385,21 @@ class GPULightShader:
         self.prog["u_emissive"].value = 6
         self.prog["u_shadows"].value = 7
         self.prog["u_props"].value = 8
+        self._u_cam = self.prog["u_cam"]
+        self._u_viewer = self.prog["u_viewer"]
+        self._u_has_props = self.prog["u_has_props"]
+        self._u_temple_exposure = self.prog["u_temple_exposure"]
+        self._u_bounce_color = self.prog["u_bounce_color"]
+        self._u_reflected_light = self.prog["u_reflected_light"]
+        self._u_tonemap = self.prog["u_tonemap"]
+        self._u_fx_flags = self.prog["u_fx_flags"]
+        self._u_num_lights = self.prog["u_num_lights"]
+        self._u_light_pos_rad = self.prog["u_light_pos_rad"]
+        self._u_light_col_foot = self.prog["u_light_col_foot"]
+        self._u_light_flags = self.prog["u_light_flags"]
+        self._u_num_hud_lights = self.prog["u_num_hud_lights"]
+        self._u_hud_pos_rad = self.prog["u_hud_pos_rad"]
+        self._u_hud_col = self.prog["u_hud_col"]
 
         quad = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self.vbo = self.ctx.buffer(quad.tobytes())
@@ -451,6 +469,12 @@ class GPULightShader:
         except Exception as exc:
             print(f"[GL] 2D-сцена использует CPU ({exc})")
             self.scene = None
+        try:
+            from elenor.rendering.gpu_fov import GPUFov
+            self.fov = GPUFov(self)
+        except Exception as exc:
+            print(f"[GL] FOV использует CPU ({exc})")
+            self.fov = None
 
     def _render_shadows(self, occlusion, lights, cam_x, cam_y, radius_scale):
         geometry = occlusion, occlusion.version
@@ -488,7 +512,7 @@ class GPULightShader:
             self.uploaded_fov = None if fov_mask.flags.writeable else fov_mask
 
     def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
-                           timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None):
+                           timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None, fov_on_gpu=False):
         self.survey_brightness = None
         if timings is not None and self.timers is None:
             self.timers = tuple(self.ctx.query(time=True) for _ in range(3))
@@ -497,7 +521,8 @@ class GPULightShader:
             self.tex_diff.write(pygame.image.tobytes(diff_canvas, "RGBA"))
             self.tex_norm.write(pygame.image.tobytes(norm_canvas, "RGBA"))
             self.tex_ent_y.write(np.ascontiguousarray(entity_y_canvas.T, dtype=np.float32))
-        self.upload_fov(fov_mask)
+        if not fov_on_gpu:
+            self.upload_fov(fov_mask)
         if occlusion is not None:
             wall_grid_np = occlusion.structure
         if wall_grid_np is not None and (occlusion is None or wall_grid_np is not self.uploaded_structure):
@@ -556,22 +581,22 @@ class GPULightShader:
             self.hud_pos_buf[j] = (hx, hy, hz, hl["radius"])
             self.hud_col_buf[j] = (hcr, hcg, hcb, 1.0)
 
-        self.prog["u_cam"].value = (float(cam_x), float(cam_y))
-        self.prog["u_viewer"].value = viewer
-        self.prog["u_has_props"].value = occlusion is not None and occlusion.has_props
-        self.prog["u_temple_exposure"].value = temple_exposure
-        self.prog["u_bounce_color"].value = bounce_color
-        self.prog["u_reflected_light"].value = any(bounce_color)
-        self.prog["u_tonemap"].value = tonemap
-        self.prog["u_fx_flags"].value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
-        self.prog["u_num_lights"].value = n_lgt
-        self.prog["u_light_pos_rad"].write(self.pos_rad_buf)
-        self.prog["u_light_col_foot"].write(self.col_foot_buf)
-        self.prog["u_light_flags"].write(self.flags_buf)
+        self._u_cam.value = (float(cam_x), float(cam_y))
+        self._u_viewer.value = viewer
+        self._u_has_props.value = occlusion is not None and occlusion.has_props
+        self._u_temple_exposure.value = temple_exposure
+        self._u_bounce_color.value = bounce_color
+        self._u_reflected_light.value = any(bounce_color)
+        self._u_tonemap.value = tonemap
+        self._u_fx_flags.value = (1.0 if enable_ao else 0.0, 1.0 if enable_bloom else 0.0)
+        self._u_num_lights.value = n_lgt
+        self._u_light_pos_rad.write(self.pos_rad_buf)
+        self._u_light_col_foot.write(self.col_foot_buf)
+        self._u_light_flags.write(self.flags_buf)
 
-        self.prog["u_num_hud_lights"].value = n_hud
-        self.prog["u_hud_pos_rad"].write(self.hud_pos_buf)
-        self.prog["u_hud_col"].write(self.hud_col_buf)
+        self._u_num_hud_lights.value = n_hud
+        self._u_hud_pos_rad.write(self.hud_pos_buf)
+        self._u_hud_col.write(self.hud_col_buf)
 
         self.fbo.use()
         self.ctx.viewport = (0, 0, VIEW_W, CANVAS_H)

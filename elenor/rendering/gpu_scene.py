@@ -435,7 +435,7 @@ class GPUSceneRenderer:
         if timings is not None:
             canopy_start = perf_counter()
         if not reveal_map and trees:
-            renderer.canopy_visibility.prefetch(trees)
+            renderer.canopy_visibility.prefetch(trees, visible_tiles=visible_tiles)
         tall_trees = []
         for c, r, tree_asset_key in trees:
             tile = (c, r)

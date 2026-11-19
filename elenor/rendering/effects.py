@@ -12,6 +12,7 @@ class FXManager:
         self.panel_open = False
         self.f3_open = False
         self.f3_btn_rects = {}
+        self._fx_hint_state = None
 
         # Тумблеры графических улучшений
         self.flags = {
@@ -573,12 +574,18 @@ class FXManager:
 
     def render_panel(self, screen, mouse_pos):
         r = self.game.renderer
-        hint_txt = "[F2] FX-Лаб | [F3] Телеметрия билда"
-        from elenor.ui.hud import hud_label
-        h_s = hud_label(r.font_small, hint_txt, (255, 225, 95) if (self.panel_open or self.f3_open) else UI_TEXT_DIM)
-        pygame.draw.rect(screen, (16, 14, 22), (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), border_radius=4)
-        pygame.draw.rect(screen, UI_BORDER_WOOD, (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), 1, border_radius=4)
-        screen.blit(h_s, (SCREEN_W - h_s.get_width() - 14, 11))
+        window = getattr(self.game, "gl_window", None)
+        hint_state = (self.panel_open, self.f3_open)
+        if window is None or self.panel_open or self.f3_open or window.top_dirty or window.full_dirty or window.prev_full_dirty or hint_state != self._fx_hint_state:
+            hint_txt = "[F2] FX-Лаб | [F3] Телеметрия билда"
+            from elenor.ui.hud import hud_label
+            h_s = hud_label(r.font_small, hint_txt, (255, 225, 95) if (self.panel_open or self.f3_open) else UI_TEXT_DIM)
+            pygame.draw.rect(screen, (16, 14, 22), (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), border_radius=4)
+            pygame.draw.rect(screen, UI_BORDER_WOOD, (SCREEN_W - h_s.get_width() - 20, 8, h_s.get_width() + 12, 22), 1, border_radius=4)
+            screen.blit(h_s, (SCREEN_W - h_s.get_width() - 14, 11))
+            self._fx_hint_state = hint_state
+            if window is not None:
+                window.top_dirty = True
 
         if self.f3_open:
             self._render_f3_telemetry(screen, mouse_pos)

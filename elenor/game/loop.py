@@ -46,10 +46,13 @@ def main():
     fps_start = None
     fps_frames = 0
     fps_label = None
+    fps_prev_rect = None
     profile = FrameProfile()
 
     def present_frame(gameplay=False):
-        nonlocal fps_start, fps_frames, fps_label
+        nonlocal fps_start, fps_frames, fps_label, fps_prev_rect
+        window = game.gl_window
+        fps_updated = False
         if game.profile["show_performance"]:
             now = perf_counter()
             if fps_start is None:
@@ -62,14 +65,24 @@ def main():
                     details = f" · {profile.label}" if gameplay and profile.label else ""
                     fps_label = game.renderer.font_small.render(f"{fps:.0f} FPS{details}", True, (246, 225, 178))
                     fps_start, fps_frames = now, 0
+                    fps_updated = True
             if fps_label is not None:
-                rect = fps_label.get_rect(midtop=(SCREEN_W // 2, 12))
-                pygame.draw.rect(screen, (20, 18, 27), rect.inflate(16, 6), border_radius=3)
-                screen.blit(fps_label, rect)
+                if window is None or not gameplay or fps_updated or window.top_dirty or window.full_dirty or window.prev_full_dirty:
+                    if window is not None and gameplay and fps_prev_rect is not None and not window.prev_full_dirty:
+                        screen.fill((0, 0, 0, 0), fps_prev_rect)
+                    rect = fps_label.get_rect(midtop=(SCREEN_W // 2, 12))
+                    pill = rect.inflate(16, 6)
+                    pygame.draw.rect(screen, (20, 18, 27), pill, border_radius=3)
+                    screen.blit(fps_label, rect)
+                    fps_prev_rect = pill
+                    if window is not None and gameplay:
+                        window.top_dirty = True
         else:
-            fps_start, fps_frames, fps_label = None, 0, None
+            if window is not None and gameplay and fps_prev_rect is not None:
+                screen.fill((0, 0, 0, 0), fps_prev_rect)
+                window.top_dirty = True
+            fps_start, fps_frames, fps_label, fps_prev_rect = None, 0, None, None
         present_start = perf_counter() if gameplay and profile.active else None
-        window = game.gl_window
         if window is None:
             present_logical_canvas(game.display_surface, screen, game.viewport_rect)
         else:
@@ -721,9 +734,13 @@ def main():
         if profile.active:
             fov_start = perf_counter()
             profile.stages["game"] = (fov_start - profile.started) * 1000
-        fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(
-            round(world_ox), round(world_oy), game.cam_x, game.cam_y
-        )
+        if game.gl_window is not None and getattr(game.renderer.gpu_shader, "fov", None) is not None:
+            visible_tiles, player_open_tiles = game.dungeon.compute_coarse_visibility(world_ox, world_oy)
+            fov_mask = None
+        else:
+            fov_mask, visible_tiles, player_open_tiles = game.dungeon.compute_nox_fov(
+                round(world_ox), round(world_oy), game.cam_x, game.cam_y
+            )
         if profile.active:
             fov_end = perf_counter()
             profile.stages["fov"] = (fov_end - fov_start) * 1000
@@ -1012,7 +1029,12 @@ def main():
             ui_bundle["_frame_timings"] = profile.stages
         if game.gl_window is not None:
             ui_bundle["_gl_window"] = game.gl_window
-            game.gl_window.begin_ui_frame()
+            need_full_ui = bool(
+                game.inv_open or game.levelup_choices or dev_open
+                or game.fx.panel_open or game.fx.f3_open
+                or game.fishing_cast or game.catch_display
+            )
+            game.gl_window.begin_ui_frame(full_clear=need_full_ui)
         game.renderer.render_frame(
             screen=screen,
             dungeon=game.dungeon,
@@ -1055,7 +1077,7 @@ def main():
             passage = game.nearby_passage()
             if passage:
                 if window is not None:
-                    window.middle_dirty = True
+                    window.mark_world_y(VIEW_H * SCALE - 52, VIEW_H * SCALE)
                 _, action = passage
                 label = hud_label(game.renderer.font_ui, game.loc["jungle_passages"][action], (246, 225, 178))
                 rect = label.get_rect(midbottom=(VIEW_W * SCALE // 2, VIEW_H * SCALE - 16))
