@@ -22,7 +22,6 @@ class FXManager:
 
         # Тумблеры графических улучшений
         self.flags = {
-            "tonemap": True,
             "gi": True,
             "specular": True,
             "water_reflections": True,
@@ -850,7 +849,7 @@ class FXManager:
         if not self.panel_open:
             return
 
-        pw, ph = 376, 534
+        pw, ph = 376, 498
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
         hov_k = next((k for k, rect in self.toggle_rects.items() if rect.collidepoint(mouse_pos)), None)
@@ -868,7 +867,6 @@ class FXManager:
             surf.blit(title, ((pw - title.get_width()) // 2, 12))
 
             items = [
-                ("tonemap",           "Тонмаппинг"),
                 ("gi",                "2D Global Illumination (GI)"),
                 ("specular",          "PBR-блики и рябь воды"),
                 ("water_reflections", "Отражения в воде (SSR)"),

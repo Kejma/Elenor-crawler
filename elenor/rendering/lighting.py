@@ -7,26 +7,6 @@ from elenor.rendering.gpu_fog import GPUFog
 from elenor.rendering.occlusion import PROP_SAMPLE_STEPS, PROP_SHADOW_STRENGTH, SHADOW_RAYS
 
 
-# Peak-channel compression preserves RGB ratios in warm or saturated lights.
-WORLD_HIGHLIGHTS = (203.0, 60.0)
-TEMPLE_HIGHLIGHTS = (170.0, 77.0)
-
-
-def tone_map_world(rgb, is_entity, temple_exposure, *, temple_only=False):
-    """Compress world highlights in place, in the renderer's 0–255 range."""
-    knee, headroom = WORLD_HIGHLIGHTS
-    if temple_exposure:
-        knee = np.where(is_entity, knee, TEMPLE_HIGHLIGHTS[0])
-        headroom = np.where(is_entity, headroom, TEMPLE_HIGHLIGHTS[1])
-    peak = np.maximum(np.maximum(rgb[..., 0], rgb[..., 1]), rgb[..., 2])
-    excess = np.maximum(peak - knee, 0.0)
-    # 1 - (peak - mapped_peak) / peak, with zero change below the knee.
-    scale = 1.0 - excess / (headroom + excess) * (excess / np.maximum(peak, 1.0))
-    if temple_only:
-        scale[is_entity] = 1.0
-    rgb *= scale[..., None]
-
-
 def bounce_color_for(dungeon):
     """RGB reflectance for one approximate diffuse bounce from the surroundings."""
     if dungeon.interior == "temple":
@@ -142,8 +122,6 @@ class GPULightShader:
             uniform sampler2D u_shadows;
             uniform sampler2D u_props;
             uniform bool u_has_props;
-            uniform bool u_temple_exposure;
-            uniform bool u_tonemap;
             uniform bool u_reflected_light;
             uniform vec3 u_bounce_color;
             uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
@@ -436,12 +414,6 @@ class GPULightShader:
                         rim_add.b > (0.5 / 255.0) ? min(220.0 / 255.0, base_c.b * 1.25 + rim_add.b) : base_c.b
                     );
 
-                    bool temple_ground = u_temple_exposure && ent_y <= -9000.0;
-                    float knee = (temple_ground ? {TEMPLE_HIGHLIGHTS[0]} : {WORLD_HIGHLIGHTS[0]}) / 255.0;
-                    float headroom = (temple_ground ? {TEMPLE_HIGHLIGHTS[1]} : {WORLD_HIGHLIGHTS[1]}) / 255.0;
-                    float peak = max(lit_out.r, max(lit_out.g, lit_out.b));
-                    float excess = max(peak - knee, 0.0);
-                    if (u_tonemap || temple_ground) lit_out *= 1.0 - excess / (headroom + excess) * (excess / max(peak, 1.0 / 255.0));
                     fragColor = vec4(clamp(lit_out, 0.0, 1.0), clamp(ov_lum, 0.0, 1.0));
                 }} else {{
                     vec3 mult = vec3(0.74, 0.74, 0.80);
@@ -483,10 +455,8 @@ class GPULightShader:
         self._u_cam = self.prog["u_cam"]
         self._u_viewer = self.prog["u_viewer"]
         self._u_has_props = self.prog["u_has_props"]
-        self._u_temple_exposure = self.prog["u_temple_exposure"]
         self._u_bounce_color = self.prog["u_bounce_color"]
         self._u_reflected_light = self.prog["u_reflected_light"]
-        self._u_tonemap = self.prog["u_tonemap"]
         self._u_fx_flags = self.prog["u_fx_flags"]
         self._u_num_lights = self.prog["u_num_lights"]
         self._u_light_pos_rad = self.prog["u_light_pos_rad"]
@@ -621,7 +591,7 @@ class GPULightShader:
             self.tex_fov.write(np.ascontiguousarray(fov_mask.T, dtype=np.float32))
             self.uploaded_fov = None if fov_mask.flags.writeable else fov_mask
 
-    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
+    def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0),
                            timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None, fov_on_gpu=False,
                            time_sec=0.0, enable_specular=True, enable_reflections=True, enable_gi=True, enable_eye_adaptation=True,
                            enable_color_grade=True, color_grade=None,
@@ -704,10 +674,8 @@ class GPULightShader:
         self._u_cam.value = (float(cam_x), float(cam_y))
         self._u_viewer.value = viewer
         self._u_has_props.value = occlusion is not None and occlusion.has_props
-        self._u_temple_exposure.value = temple_exposure
         self._u_bounce_color.value = bounce_color
         self._u_reflected_light.value = any(bounce_color)
-        self._u_tonemap.value = tonemap
         bloom_mode = 1.0 if (enable_bloom and self.postfx is not None) else (2.0 if enable_bloom else 0.0)
         self._u_fx_flags.value = (1.0 if enable_ao else 0.0, bloom_mode)
         self._u_enable_specular.value = bool(enable_specular)

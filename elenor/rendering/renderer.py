@@ -10,7 +10,7 @@ from elenor.rendering.assets import make_pair, enforce_crisp_rim_normals, create
 from elenor.rendering.fog import FogRenderer
 from elenor.rendering.terrain import DIFFUSE_CLEAR, NORMAL_CLEAR, TerrainCache
 from elenor.rendering.occlusion import LightOcclusion
-from elenor.rendering.lighting import GPULightShader, bounce_color_for, color_grade_for, tone_map_world
+from elenor.rendering.lighting import GPULightShader, bounce_color_for, color_grade_for
 from elenor.rendering.pixel_fx import PixelLayer
 from elenor.rendering.physical import render_ground_traps, render_physical
 from elenor.rendering.visibility import CanopyVisibility, canopy_opacity, misted_actor
@@ -927,11 +927,9 @@ class Renderer(UIRendererMixin):
         viewer = (player.x * TILE_W, player.y * TILE_H)
         has_gpu_gi = isinstance(self.gpu_shader, GPULightShader) and self.gpu_shader.gi is not None
         bounce_color = (0.0, 0.0, 0.0) if has_gpu_gi else bounce_color_for(dungeon)
-        tonemap = flags.get("tonemap", True)
         if timings is not None:
             light_start = perf_counter()
             timings["scene"] = (light_start - scene_start) * 1000
-        temple_exposure = dungeon.interior == "temple"
         window = ui_texts.get("_gl_window")
         slot = None
         if window is not None:
@@ -974,8 +972,7 @@ class Renderer(UIRendererMixin):
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
                 scene_fov, cam_x, cam_y, lights, self.current_hud_lights,
                 wall_grid_np=w_grid, emissive_canvas=self.emissive_canvas,
-                temple_exposure=temple_exposure, bounce_color=bounce_color,
-                tonemap=tonemap, timings=timings if window is None else None,
+                bounce_color=bounce_color, timings=timings if window is None else None,
                 fog=(clouds, now_sec, fov_mask) if gpu_fog else None, readback=window is None,
                 timer_queries=slot.timers if slot is not None and slot.timed else None,
                 occlusion=self.light_occlusion, viewer=(viewer[0] - cam_x, viewer[1] - cam_y),
@@ -1088,10 +1085,6 @@ class Renderer(UIRendererMixin):
             out[:, :, 0] = np.where(rim_add_r > 0.5, np.minimum(228.0, base_r * 1.25 + rim_add_r * scene_fov), base_r)
             out[:, :, 1] = np.where(rim_add_g > 0.5, np.minimum(222.0, base_g * 1.25 + rim_add_g * scene_fov), base_g)
             out[:, :, 2] = np.where(rim_add_b > 0.5, np.minimum(220.0, base_b * 1.25 + rim_add_b * scene_fov), base_b)
-            if tonemap:
-                tone_map_world(out[:, :VIEW_H], is_ent[:, :VIEW_H], temple_exposure)
-            elif temple_exposure:
-                tone_map_world(out[:, :VIEW_H], is_ent[:, :VIEW_H], True, temple_only=True)
             lit_surf = pygame.surfarray.make_surface(out.clip(0,255).astype(np.uint8))
 
         if timings is not None:
