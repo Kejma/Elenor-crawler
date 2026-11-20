@@ -43,7 +43,7 @@ class InventoryMixin:
     def roll_currency_or_gem_drop(self, allow_gem=True, force_gem=False, gem_mult=1.0):
         fl = getattr(self.dungeon, "floor_num", 2)
         luck = getattr(getattr(self, "player", None), "luck", 1)
-        if force_gem or (allow_gem and random.random() < (0.28 + luck * 0.03) * gem_mult):
+        if force_gem or (allow_gem and random.random() < (0.12 + luck * 0.015) * gem_mult):
             gem_ids = ["gem_malachite", "gem_garnet", "gem_sapphire", "gem_ruby", "gem_diamond"]
             weights = get_rarity_weights(luck + max(0, fl - 2))
             return self.make_item(random.choices(gem_ids, weights=weights, k=1)[0])

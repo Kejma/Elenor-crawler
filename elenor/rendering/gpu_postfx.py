@@ -306,6 +306,7 @@ class GPUPostFX:
                 uniform float u_time;
                 uniform bool u_use_heat;
                 uniform vec2 u_combat_fx;
+                uniform vec2 u_comp_viewer;
                 uniform float u_rain_amt;
                 uniform sampler2D u_outdoor;
                 out vec4 fragColor;
@@ -340,11 +341,14 @@ class GPUPostFX:
                     vec4 base = texelFetch(u_src, sp, 0);
                     vec3 col = base.rgb;
                     if (u_combat_fx.x > 0.01) {{
-                        int ca = max(1, int(round(u_combat_fx.x * 2.5)));
-                        float r_ch = texelFetch(u_src, ivec2(clamp(sp.x + ca, 0, {VIEW_W - 1}), sp.y), 0).r;
-                        float b_ch = texelFetch(u_src, ivec2(clamp(sp.x - ca, 0, {VIEW_W - 1}), sp.y), 0).b;
-                        col.r = mix(col.r, r_ch, u_combat_fx.x);
-                        col.b = mix(col.b, b_ch, u_combat_fx.x);
+                        float ca_strength = u_combat_fx.x * smoothstep(46.0, 132.0, length(vec2(p) - u_comp_viewer));
+                        if (ca_strength > 0.015) {{
+                            int ca = max(1, int(round(u_combat_fx.x * 2.5)));
+                            float r_ch = texelFetch(u_src, ivec2(clamp(sp.x + ca, 0, {VIEW_W - 1}), sp.y), 0).r;
+                            float b_ch = texelFetch(u_src, ivec2(clamp(sp.x - ca, 0, {VIEW_W - 1}), sp.y), 0).b;
+                            col.r = mix(col.r, r_ch, ca_strength);
+                            col.b = mix(col.b, b_ch, ca_strength);
+                        }}
                     }}
 
                     if (u_use_bloom) {{
@@ -409,7 +413,16 @@ class GPUPostFX:
                         float vr = length(vp * vec2(0.85, 1.0));
                         float edge = smoothstep(0.55, 1.28, vr);
                         float pulse = 0.65 + 0.35 * sin(u_time * 5.2);
-                        col = mix(col, vec3(0.45, 0.02, 0.04), clamp(edge * u_combat_fx.y * pulse * 0.72, 0.0, 0.72));
+                        float droplets = 0.0;
+                        for (int i = 0; i < 5; ++i) {{
+                            float idx = float(i);
+                            float side = (i % 2 == 0) ? -1.0 : 1.0;
+                            vec2 center = vec2(side * (0.78 + 0.14 * fract(idx * 0.61)), -0.83 + 0.37 * idx);
+                            vec2 d = (vp - center) / vec2(0.018 + 0.004 * fract(idx * 0.73), 0.046);
+                            droplets = max(droplets, 1.0 - smoothstep(0.50, 1.1, length(d)));
+                        }}
+                        float red = u_combat_fx.y * (edge * pulse * 0.63 + droplets * 0.16);
+                        col = mix(col, vec3(0.45, 0.02, 0.04), clamp(red, 0.0, 0.72));
                     }}
                     col = clamp(col, 0.0, 1.0);
                     fragColor = vec4(col, base.a);
@@ -428,6 +441,7 @@ class GPUPostFX:
         self._u_comp_cam = self.composite_prog["u_cam"]
         self._u_comp_time = self.composite_prog["u_time"]
         self._u_comp_heat = self.composite_prog["u_use_heat"]
+        self._u_comp_viewer = self.composite_prog["u_comp_viewer"]
         self._u_comp_combat = self.composite_prog["u_combat_fx"]
         self._u_comp_rain = self.composite_prog["u_rain_amt"]
         self.composite_vao = ctx.simple_vertex_array(self.composite_prog, shader.vbo, "in_vert")
@@ -546,6 +560,7 @@ class GPUPostFX:
             self._u_comp_cam.value = cam
             self._u_comp_time.value = float(time_sec)
             self._u_comp_heat.value = bool(enable_heat_combat)
+            self._u_comp_viewer.value = viewer if viewer is not None else (VIEW_W * .5, VIEW_H * .5)
             self._u_comp_combat.value = combat_fx if enable_heat_combat else (0.0, 0.0)
             self._u_comp_rain.value = float(rain_amt)
             if enable_color_grade and self._grade_cur is not None:

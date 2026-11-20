@@ -855,15 +855,7 @@ class GPUSceneRenderer:
                 if has_traps:
                     self._dyn_norm_surf.fill((0, 0, 0, 0))
                 if has_ripples:
-                    for rp in fx_mgr.ripples:
-                        prog_r = 1.0 - (rp["timer"] / rp["max_timer"])
-                        rx_s = int(rp["wx"] * TILE_W - cam_x)
-                        ry_s = int(rp["wy"] * TILE_H - cam_y)
-                        rad_w = max(2, int(2 + prog_r * 7))
-                        rad_h = max(1, int(1 + prog_r * 4))
-                        palette = ((128, 214, 102), (62, 137, 70)) if rp["green"] else ((85, 165, 210), (50, 110, 150))
-                        pygame.draw.ellipse(self._dyn_diff_surf, palette[prog_r >= 0.5],
-                                            (rx_s - rad_w, ry_s - rad_h, rad_w * 2, rad_h * 2), 1)
+                    fx_mgr.draw_ripples(self._dyn_diff_surf, dungeon, cam_x, cam_y)
                 if has_traps:
                     from elenor.rendering.physical import render_ground_traps
                     render_ground_traps(self._dyn_diff_surf, self._dyn_norm_surf, physical_states, cam_x, cam_y)
