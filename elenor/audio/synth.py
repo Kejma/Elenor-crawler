@@ -269,7 +269,7 @@ class SoundSynth:
                 menu_sound.set_volume(self.volume * MENU_MUSIC_GAIN)
 
     def start_menu_music(self, track_filename="scottishe Sunshine.json"):
-        """Компилирует трек из JSON при первом вызове и запускает бесконечный луп в Главном меню."""
+        """Компилирует трек из JSON или data.epk при первом вызове и запускает луп в Главном меню."""
         if not self.enabled:
             return
         if not hasattr(self, "menu_channel") or self.menu_channel is None:
@@ -278,23 +278,15 @@ class SoundSynth:
         if self.menu_channel.get_busy():
             return
 
-        # Гасим эмбиент данжа, если игрок вышел в меню через ESC
         self.stop_disco_track()
 
         if not hasattr(self, "menu_music_sound") or self.menu_music_sound is None:
             try:
-                import json
-                import os
-                from elenor.audio.music import SongData, MusicLoopCompiler
-                # Проверяем файл сначала в подпапке music/, а затем в корне
-                fpath = os.path.join(str(PROJECT_ROOT), "music", track_filename)
-                if not os.path.isfile(fpath):
-                    fpath = os.path.join(str(PROJECT_ROOT), track_filename)
-                if not os.path.isfile(fpath):
+                from elenor.audio.music import MusicLoopCompiler, load_song_file
+                song_data = load_song_file(track_filename)
+                if song_data is None:
                     print(f"[Audio] Файл трека не найден: {track_filename}")
                     return
-                with open(fpath, "r", encoding="utf-8") as f:
-                    song_data = SongData.from_dict(json.load(f))
                 compiler = MusicLoopCompiler(sample_rate=self.freq)
                 self.menu_music_sound, _ = compiler.compile_song(song_data, make_muffled=False)
             except Exception as e:
@@ -302,7 +294,6 @@ class SoundSynth:
                 return
 
         if self.menu_music_sound is not None:
-            # The mixer restores channel volume after a fade. Keep gain on the track.
             self.menu_music_sound.set_volume(self.volume * MENU_MUSIC_GAIN)
             self.menu_channel.set_volume(1.0)
             self.menu_channel.play(self.menu_music_sound, loops=-1, fade_ms=400)

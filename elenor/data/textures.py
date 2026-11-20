@@ -349,6 +349,10 @@ def get_manifest_path():
 
 
 def load_manifest():
+    from elenor.data.pak import get_pack_manifest
+    pak_m = get_pack_manifest()
+    if pak_m is not None:
+        return pak_m
     m_path = get_manifest_path()
     if os.path.isfile(m_path):
         try:
@@ -362,7 +366,70 @@ def load_manifest():
 def save_manifest(manifest_data):
     os.makedirs(get_assets_root(), exist_ok=True)
     with open(get_manifest_path(), "w", encoding="utf-8") as f:
-        json.dump(manifest_data, f, ensure_ascii=False, indent=2)
+        json.dump(manifest_data, f, ensure_ascii=False, separators=(",", ":"))
+
+
+def _encode_rgba(rgba):
+    r, g, b, a = int(rgba[0]), int(rgba[1]), int(rgba[2]), int(rgba[3])
+    if a == 255:
+        return f"{r:02X}{g:02X}{b:02X}"
+    return f"{r:02X}{g:02X}{b:02X}{a:02X}"
+
+
+def _decode_rgba(val):
+    if isinstance(val, str):
+        if len(val) == 6:
+            return (int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16), 255)
+        if len(val) == 8:
+            return (int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16), int(val[6:8], 16))
+    return tuple(val)
+
+
+def compact_dtex_dict(data):
+    """Converts any v1/v2/v3 .dtex dict into compact v3 without v1 duplication."""
+    raw_frames = data.get("frames")
+    if not isinstance(raw_frames, list) or not raw_frames:
+        raw_frames = [{
+            "diffuse_palette": data["diffuse_palette"],
+            "diffuse_grid": data["diffuse_grid"],
+            "normal_palette": data["normal_palette"],
+            "normal_grid": data["normal_grid"],
+        }]
+
+    compact_frames = []
+    for fr in raw_frames[:3]:
+        d_pal = {}
+        for k, v in fr["diffuse_palette"].items():
+            rgba = _decode_rgba(v)
+            if k == "." and rgba == (0, 0, 0, 0):
+                continue
+            d_pal[k] = _encode_rgba(rgba)
+
+        n_pal = {}
+        for k, v in fr["normal_palette"].items():
+            rgba = _decode_rgba(v)
+            if k == "." and rgba == (128, 128, 255, 255):
+                continue
+            n_pal[k] = _encode_rgba(rgba)
+
+        compact_frames.append({
+            "diffuse_palette": d_pal,
+            "diffuse_grid": fr["diffuse_grid"],
+            "normal_palette": n_pal,
+            "normal_grid": fr["normal_grid"],
+        })
+
+    return {
+        "dtex_version": 3,
+        "role_id": data.get("role_id", ""),
+        "id": data.get("id", data.get("role_id", "")),
+        "name": data.get("name", ""),
+        "category": data.get("category", ""),
+        "size": list(data["size"]),
+        "fps": int(data.get("fps", 4)),
+        "random_rot": bool(data.get("random_rot", False)),
+        "frames": compact_frames,
+    }
 
 
 def surface_to_encoded_grid(surf, is_normal=False):
@@ -373,10 +440,8 @@ def surface_to_encoded_grid(surf, is_normal=False):
 
     if not is_normal:
         color_to_char[(0, 0, 0, 0)] = "."
-        palette["."] = [0, 0, 0, 0]
     else:
         color_to_char[(128, 128, 255, 255)] = "."
-        palette["."] = [128, 128, 255, 255]
 
     char_idx = 0
     for y in range(h):
@@ -397,7 +462,7 @@ def surface_to_encoded_grid(surf, is_normal=False):
                     ch = chr(160 + (char_idx - len(PALETTE_CHARS)))
                 char_idx += 1
                 color_to_char[c] = ch
-                palette[ch] = list(c)
+                palette[ch] = _encode_rgba(c)
 
             row_str.append(color_to_char[c])
         rows.append("".join(row_str))
@@ -413,19 +478,16 @@ def encoded_grid_to_surface(palette, rows, size, is_normal=False):
     else:
         surf.fill((0, 0, 0, 0))
 
+    decoded_pal = {k: _decode_rgba(v) for k, v in palette.items()}
     for y, row in enumerate(rows[:h]):
         for x, ch in enumerate(row[:w]):
-            rgba = palette.get(ch)
+            rgba = decoded_pal.get(ch)
             if rgba:
-                surf.set_at((x, y), tuple(rgba))
+                surf.set_at((x, y), rgba)
     return surf
 
 
 def save_dtex_frames(filepath, role_id, file_stem, name, category, frames_list, fps=4, random_rot=False):
-    """
-    Saves 1 to 3 animation frames [(diff_surf, norm_surf), ...] and FPS into a .dtex v2 file.
-    Also keeps top-level diffuse_palette/grid of frame 0 for backward compatibility.
-    """
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     w, h = frames_list[0][0].get_size()
     encoded_frames = []
@@ -437,11 +499,11 @@ def save_dtex_frames(filepath, role_id, file_stem, name, category, frames_list, 
             "diffuse_palette": d_pal,
             "diffuse_grid": d_rows,
             "normal_palette": n_pal,
-            "normal_grid": n_rows
+            "normal_grid": n_rows,
         })
 
     payload = {
-        "dtex_version": 2,
+        "dtex_version": 3,
         "role_id": role_id,
         "id": file_stem,
         "name": name,
@@ -449,23 +511,13 @@ def save_dtex_frames(filepath, role_id, file_stem, name, category, frames_list, 
         "size": [w, h],
         "fps": int(fps),
         "random_rot": bool(random_rot),
-        "frame_count": len(encoded_frames),
         "frames": encoded_frames,
-        # Frame 0 mirrored at top level so v1 readers never break
-        "diffuse_palette": encoded_frames[0]["diffuse_palette"],
-        "diffuse_grid": encoded_frames[0]["diffuse_grid"],
-        "normal_palette": encoded_frames[0]["normal_palette"],
-        "normal_grid": encoded_frames[0]["normal_grid"],
     }
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
 
 
-def load_dtex_frames(filepath):
-    """Loads a .dtex v1 or v2 file and returns (meta_dict, [(diff_0, norm_0), ...], fps)."""
-    with open(filepath, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
+def load_dtex_data(data):
     size = tuple(data["size"])
     fps = int(data.get("fps", 4))
     frames_out = []
@@ -480,7 +532,6 @@ def load_dtex_frames(filepath):
         n_s = encoded_grid_to_surface(data["normal_palette"], data["normal_grid"], size, is_normal=True)
         frames_out.append((d_s, n_s))
 
-    # Mask normal alpha with diffuse alpha AND snap all normal pixels strictly to the 10-color compass!
     from elenor.rendering.normals import snap_normal_rgb
     masked_frames = []
     for d_s, n_s in frames_out:
@@ -498,18 +549,28 @@ def load_dtex_frames(filepath):
     return data, masked_frames, fps
 
 
+def load_dtex_frames(filepath):
+    with open(filepath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return load_dtex_data(data)
+
+
 def _is_dtex_empty_blank(filepath):
-    """Проверяет, не является ли .dtex файл пустой прозрачной заглушкой из одних точек '.'."""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
-        pal = data.get("diffuse_palette", {})
-        return len(pal) <= 1 and "." in pal
+        fr0 = data["frames"][0] if data.get("frames") else data
+        pal = fr0.get("diffuse_palette", {})
+        return len(pal) == 0 or (len(pal) == 1 and "." in pal)
     except Exception:
         return True
 
 
 def bootstrap_assets_if_needed(procedural_assets, hero_builder_fn=None):
+    from elenor.data.pak import has_pack
+    if has_pack():
+        return
+
     root = get_assets_root()
     os.makedirs(root, exist_ok=True)
     manifest = load_manifest()
@@ -553,7 +614,6 @@ def bootstrap_assets_if_needed(procedural_assets, hero_builder_fn=None):
                 changed = True
                 continue
 
-            # Если файла нет ИЛИ он оказался пустой заглушкой из точек "." — запекаем реальную процедурную текстуру!
             need_bake = (not os.path.isfile(dtex_path)) or (
                 role_id in procedural_assets and _is_dtex_empty_blank(dtex_path)
             )
@@ -620,6 +680,8 @@ def bootstrap_assets_if_needed(procedural_assets, hero_builder_fn=None):
 
 
 def load_custom_dtex_animations(assets_dict):
+    from elenor.data.pak import get_pack_dtex, has_pack
+    use_pack = has_pack()
     root = get_assets_root()
     manifest = load_manifest()
     anim_bank = {}
@@ -629,22 +691,31 @@ def load_custom_dtex_animations(assets_dict):
         for role_id in cat_data["items"]:
             default_rrot = (role_id in DEFAULT_RANDOM_ROT_ROLES)
             m_info = manifest.get(role_id, {"file": role_id, "name": cat_data["items"][role_id][0], "random_rot": default_rrot})
-            fpath = os.path.join(cat_dir, f"{m_info['file']}.dtex")
-            if not os.path.isfile(fpath):
-                fpath = os.path.join(cat_dir, f"{role_id}.dtex")
 
-            if os.path.isfile(fpath):
-                try:
+            meta = None
+            if use_pack:
+                meta = get_pack_dtex(f"{cat_key}/{m_info['file']}.dtex") or get_pack_dtex(f"{cat_key}/{role_id}.dtex")
+
+            try:
+                if meta is not None:
+                    meta, frames_list, fps = load_dtex_data(meta)
+                else:
+                    fpath = os.path.join(cat_dir, f"{m_info['file']}.dtex")
+                    if not os.path.isfile(fpath):
+                        fpath = os.path.join(cat_dir, f"{role_id}.dtex")
+                    if not os.path.isfile(fpath):
+                        continue
                     meta, frames_list, fps = load_dtex_frames(fpath)
-                    rrot = bool(meta.get("random_rot", m_info.get("random_rot", default_rrot)))
-                    assets_dict[role_id] = frames_list[0]
-                    anim_bank[role_id] = {
-                        "frames": frames_list,
-                        "fps": max(1, fps),
-                        "name": meta.get("name", m_info["name"]),
-                        "file": m_info["file"],
-                        "random_rot": rrot
-                    }
-                except Exception:
-                    pass
+            except Exception:
+                continue
+
+            rrot = bool(meta.get("random_rot", m_info.get("random_rot", default_rrot)))
+            assets_dict[role_id] = frames_list[0]
+            anim_bank[role_id] = {
+                "frames": frames_list,
+                "fps": max(1, fps),
+                "name": meta.get("name", m_info["name"]),
+                "file": m_info["file"],
+                "random_rot": rrot,
+            }
     return anim_bank

@@ -228,19 +228,38 @@ class PatternData:
                 st.extra_notes.clear()
 
     def to_dict(self):
+        ch_out = []
+        for ch in self.channels:
+            sparse_steps = []
+            for idx, st in enumerate(ch["steps"][:self.steps_count]):
+                if not st.active and not st.extra_notes:
+                    continue
+                note_v = st.note if st.active else None
+                vol_r = round(float(st.volume), 2)
+                entry = [idx, note_v]
+                if st.extra_notes:
+                    entry.extend([st.length, vol_r, 1 if st.slide else 0, dict(st.extra_notes)])
+                elif st.slide:
+                    entry.extend([st.length, vol_r, 1])
+                elif vol_r != 0.85:
+                    entry.extend([st.length, vol_r])
+                elif st.length != 1:
+                    entry.append(st.length)
+                sparse_steps.append(entry)
+            ch_d = {
+                "inst_id": ch["inst_id"],
+                "volume": round(float(ch["volume"]), 2),
+                "s": sparse_steps,
+            }
+            if ch["mute"]:
+                ch_d["mute"] = True
+            if ch["solo"]:
+                ch_d["solo"] = True
+            ch_out.append(ch_d)
         return {
             "name": self.name,
             "steps": self.steps_count,
-            "channels": [
-                {
-                    "inst_id": ch["inst_id"],
-                    "mute": ch["mute"],
-                    "solo": ch["solo"],
-                    "volume": round(ch["volume"], 2),
-                    "steps": [s.to_dict() for s in ch["steps"]]
-                }
-                for ch in self.channels
-            ]
+            "channels": ch_out,
         }
 
     @classmethod
@@ -252,16 +271,36 @@ class PatternData:
                 iid = ch_d.get("inst_id", DEFAULT_CHANNEL_INSTS[idx])
                 if iid not in INSTRUMENT_CATALOG:
                     iid = DEFAULT_CHANNEL_INSTS[idx]
+                def_n = INSTRUMENT_CATALOG[iid]["def_note"]
                 pat.channels[idx]["inst_id"] = iid
-                pat.channels[idx]["mute"] = ch_d.get("mute", False)
-                pat.channels[idx]["solo"] = ch_d.get("solo", False)
-                pat.channels[idx]["volume"] = ch_d.get("volume", 0.80)
-                loaded_steps = [TrackStep.from_dict(s) for s in ch_d.get("steps", [])]
-                if loaded_steps:
-                    pat.channels[idx]["steps"] = loaded_steps
+                pat.channels[idx]["mute"] = bool(ch_d.get("mute", False))
+                pat.channels[idx]["solo"] = bool(ch_d.get("solo", False))
+                pat.channels[idx]["volume"] = float(ch_d.get("volume", 0.80))
+                if "s" in ch_d:
+                    steps = [TrackStep(active=False, note=def_n, length=1) for _ in range(pat.steps_count)]
+                    for entry in ch_d["s"]:
+                        si = int(entry[0])
+                        if 0 <= si < len(steps):
+                            n_val = entry[1]
+                            ln = entry[2] if len(entry) > 2 else 1
+                            vol = entry[3] if len(entry) > 3 else 0.85
+                            sl = bool(entry[4]) if len(entry) > 4 else False
+                            ex = entry[5] if len(entry) > 5 else None
+                            steps[si] = TrackStep(
+                                active=(n_val is not None),
+                                note=n_val or def_n,
+                                volume=vol,
+                                length=ln,
+                                slide=sl,
+                                extra_notes=ex,
+                            )
+                    pat.channels[idx]["steps"] = steps
+                else:
+                    loaded_steps = [TrackStep.from_dict(s) for s in ch_d.get("steps", [])]
+                    if loaded_steps:
+                        pat.channels[idx]["steps"] = loaded_steps
         pat.resize_steps(pat.steps_count)
         return pat
-
 
 class SongData:
     def __init__(self, bpm=120.0):
@@ -1306,3 +1345,32 @@ def load_preset_into_song(song: SongData, preset_id: str):
             song.playlist_tracks[0][b] = 0
             if b >= 2:
                 song.playlist_tracks[1][b] = 1
+
+def save_song_file(song: SongData, filepath: str):
+    import json
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(song.to_dict(), f, ensure_ascii=False, separators=(",", ":"))
+
+
+def load_song_file(filename_or_path: str):
+    import json
+    import os
+    from elenor.data.pak import get_pack_music
+    from elenor.paths import PROJECT_ROOT
+
+    if os.path.isfile(filename_or_path):
+        with open(filename_or_path, "r", encoding="utf-8") as f:
+            return SongData.from_dict(json.load(f))
+
+    pak_data = get_pack_music(filename_or_path)
+    if pak_data is not None:
+        return SongData.from_dict(pak_data)
+
+    for candidate in (
+        os.path.join(str(PROJECT_ROOT), "music", filename_or_path),
+        os.path.join(str(PROJECT_ROOT), filename_or_path),
+    ):
+        if os.path.isfile(candidate):
+            with open(candidate, "r", encoding="utf-8") as f:
+                return SongData.from_dict(json.load(f))
+    return None

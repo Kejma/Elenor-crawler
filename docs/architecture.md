@@ -904,3 +904,8 @@ git diff --check
 > идеального баланса или художественной готовности. После правок опиши изменённое
 > поведение, проверки и оставшиеся ограничения; обнови архитектуру при изменении
 > контрактов. Моя следующая задача: …
+
+
+Команда для компиляции:
+pyinstaller --onefile --noconfirm --windowed --name Elenor --add-data "dist_pack/data.epk;." --add-data "locales;locales" --collect-all glcontext --exclude-module tkinter --exclude-module elenor.tools.music_studio --exclude-module elenor.tools.texture_studio --exclude-module elenor.tools.balance --exclude-module elenor.tools.balance_audit main.py
+

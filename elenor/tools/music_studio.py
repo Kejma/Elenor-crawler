@@ -319,8 +319,8 @@ class MusicStudioApp:
         pygame.event.clear()
         if not fpath:
             return
-        with open(fpath, "w", encoding="utf-8") as f:
-            json.dump(self.song.to_dict(), f, ensure_ascii=False, indent=2)
+        from elenor.audio.music import save_song_file
+        save_song_file(self.song, fpath)
         self.current_file_path = fpath
         self.set_status(f"Сохранено в файл: {os.path.basename(fpath)}")
 
@@ -347,8 +347,11 @@ class MusicStudioApp:
         if not fpath or not os.path.isfile(fpath):
             return
         try:
-            with open(fpath, "r", encoding="utf-8") as f:
-                self.song = SongData.from_dict(json.load(f))
+            from elenor.audio.music import load_song_file
+            loaded = load_song_file(fpath)
+            if loaded is None:
+                return
+            self.song = loaded
             self.current_file_path = fpath
             self.cur_pat_idx = 0
             self.pat_scroll_offset = 0

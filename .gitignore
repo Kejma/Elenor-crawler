@@ -4,3 +4,8 @@ __pycache__/
 .idea/
 save_profile.json
 assets/png_export/
+dist_pack/
+build/
+dist/
+dist_pack/
+*.spec
