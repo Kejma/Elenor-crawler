@@ -67,8 +67,10 @@ class GPUPostFX:
                 uniform sampler2D u_ent_y;
                 uniform sampler2D u_fov;
                 uniform sampler2D u_walls;
+                uniform sampler2D u_outdoor;
                 uniform vec2 u_cam;
                 uniform float u_time;
+                uniform float u_rain_wetness;
                 out vec4 fragColor;
 
                 void main() {{
@@ -86,20 +88,44 @@ class GPUPostFX:
                     vec4 mat = texelFetch(u_mat, p, 0);
                     float water = mat.b;
                     float ent_y = texelFetch(u_ent_y, p, 0).r;
+                    bool is_puddle = false;
+                    if (water <= 0.08 && u_rain_wetness > 0.05 && ent_y <= -9000.0) {{
+                        vec2 wp_r = vec2(p) + u_cam;
+                        ivec2 w_sz = textureSize(u_walls, 0);
+                        ivec2 rt = clamp(ivec2(floor(wp_r / vec2({float(TILE_W)}, {float(TILE_H)}))), ivec2(0), w_sz - 1);
+                        if (texelFetch(u_walls, rt, 0).r < 0.5 && texelFetch(u_outdoor, rt, 0).r > 0.5) {{
+                            float p1 = sin(wp_r.x * 0.085 + sin(wp_r.y * 0.065) * 1.4);
+                            float p2 = cos(wp_r.y * 0.095 - cos(wp_r.x * 0.075) * 1.2);
+                            float puddle = smoothstep(0.24, 0.68, (p1 * p2) * 0.5 + 0.5);
+                            water = puddle * u_rain_wetness * 0.65;
+                            is_puddle = water > 0.08;
+                        }}
+                    }}
                     if (water <= 0.08 || ent_y > -9000.0) {{
                         fragColor = base;
                         return;
                     }}
 
                     int dist_edge = 0;
-                    for (int dy = 1; dy <= 24; ++dy) {{
+                    int max_dy = is_puddle ? 16 : 24;
+                    ivec2 wall_sz = textureSize(u_walls, 0);
+                    for (int dy = 1; dy <= max_dy; ++dy) {{
                         int uy = p.y - dy;
                         if (uy < 0) break;
-                        float u_water = texelFetch(u_mat, ivec2(p.x, uy), 0).b;
                         float u_ent = texelFetch(u_ent_y, ivec2(p.x, uy), 0).r;
-                        if (u_water <= 0.08 || u_ent > -9000.0) {{
-                            dist_edge = dy;
-                            break;
+                        if (is_puddle) {{
+                            vec2 uw = vec2(float(p.x), float(uy)) + u_cam;
+                            ivec2 ut = clamp(ivec2(floor(uw / vec2({float(TILE_W)}, {float(TILE_H)}))), ivec2(0), wall_sz - 1);
+                            if (u_ent > -9000.0 || texelFetch(u_walls, ut, 0).r > 0.5) {{
+                                dist_edge = dy;
+                                break;
+                            }}
+                        }} else {{
+                            float u_water = texelFetch(u_mat, ivec2(p.x, uy), 0).b;
+                            if (u_water <= 0.08 || u_ent > -9000.0) {{
+                                dist_edge = dy;
+                                break;
+                            }}
                         }}
                     }}
 
@@ -107,9 +133,12 @@ class GPUPostFX:
                     if (dist_edge > 0) {{
                         int mirror_y = p.y - dist_edge * 2;
                         if (mirror_y >= 0 && mirror_y < {VIEW_H}) {{
+                            bool is_blood = !is_puddle && (water < 0.45);
                             vec2 world = vec2(p) + u_cam;
-                            float wave = sin(world.y * 0.55 + u_time * 3.8 + sin(world.x * 0.22 + u_time * 1.4))
-                                       * (0.65 + min(float(dist_edge) * 0.055, 0.95));
+                            float wave = (is_blood || is_puddle)
+                                ? 0.0
+                                : sin(world.y * 0.55 + u_time * 3.8 + sin(world.x * 0.22 + u_time * 1.4))
+                                  * (0.65 + min(float(dist_edge) * 0.055, 0.95));
                             int sx = clamp(p.x + int(round(wave)), 0, {VIEW_W - 1});
                             ivec2 sp = ivec2(sx, mirror_y);
                             float s_fov = texelFetch(u_fov, sp, 0).r;
@@ -117,14 +146,15 @@ class GPUPostFX:
                             float s_ent = texelFetch(u_ent_y, sp, 0).r;
                             if (s_fov > 0.05 && (s_mat.b <= 0.08 || s_ent > -9000.0)) {{
                                 vec2 s_world = vec2(sp) + u_cam;
-                                ivec2 wall_sz = textureSize(u_walls, 0);
                                 ivec2 st = clamp(ivec2(floor(s_world / vec2({float(TILE_W)}, {float(TILE_H)}))), ivec2(0), wall_sz - 1);
                                 bool is_feature = (s_ent > -9000.0) || (s_mat.r > 0.1) || (texelFetch(u_walls, st, 0).r > 0.5);
                                 float fade = is_feature
-                                    ? clamp(1.0 - float(dist_edge) / 24.0, 0.0, 1.0)
+                                    ? clamp(1.0 - float(dist_edge) / float(max_dy), 0.0, 1.0)
                                     : clamp(1.0 - float(dist_edge) / 8.0, 0.0, 1.0);
-                                float strength = fade * (is_feature ? (0.44 * water + 0.14) : (0.24 * water));
-                                vec3 ref_col = texelFetch(u_scene, sp, 0).rgb * vec3(0.84, 0.94, 1.03);
+                                float eff_w = is_blood ? 0.80 : water;
+                                float strength = fade * (is_feature ? (0.44 * eff_w + 0.12) : (0.22 * eff_w));
+                                vec3 ref_tint = is_blood ? vec3(0.96, 0.62, 0.66) : vec3(0.84, 0.94, 1.03);
+                                vec3 ref_col = texelFetch(u_scene, sp, 0).rgb * ref_tint;
                                 out_rgb = mix(out_rgb, max(out_rgb * 0.65, ref_col), strength);
                             }}
                         }}
@@ -133,10 +163,11 @@ class GPUPostFX:
                 }}
             """,
         )
-        for unit, name in enumerate(("u_scene", "u_mat", "u_ent_y", "u_fov", "u_walls")):
+        for unit, name in enumerate(("u_scene", "u_mat", "u_ent_y", "u_fov", "u_walls", "u_outdoor")):
             self.reflect_prog[name].value = unit
         self._u_refl_cam = self.reflect_prog["u_cam"]
         self._u_refl_time = self.reflect_prog["u_time"]
+        self._u_refl_wet = self.reflect_prog["u_rain_wetness"]
         self.reflect_vao = ctx.simple_vertex_array(self.reflect_prog, shader.vbo, "in_vert")
 
         self.adapt_prog = ctx.program(
@@ -254,6 +285,7 @@ class GPUPostFX:
                 uniform sampler2D u_bloom_quarter;
                 uniform sampler2D u_fov;
                 uniform sampler2D u_exp;
+                uniform sampler2D u_mat;
                 uniform bool u_use_bloom;
                 uniform bool u_use_adapt;
                 uniform bool u_use_grade;
@@ -261,19 +293,54 @@ class GPUPostFX:
                 uniform vec3 u_grade_mid;
                 uniform vec3 u_grade_hi;
                 uniform vec3 u_grade_params;
+                uniform vec2 u_cam;
+                uniform float u_time;
+                uniform bool u_use_heat;
+                uniform vec2 u_combat_fx;
+                uniform float u_rain_amt;
+                uniform sampler2D u_outdoor;
                 out vec4 fragColor;
 
                 void main() {{
                     ivec2 p = ivec2(gl_FragCoord.xy);
-                    vec4 base = texelFetch(u_src, p, 0);
                     if (p.y >= {VIEW_H}) {{
-                        fragColor = base;
+                        fragColor = texelFetch(u_src, p, 0);
                         return;
                     }}
+
+                    ivec2 sp = p;
+                    if (u_use_heat) {{
+                        float heat = 0.0;
+                        for (int dy = 2; dy <= 14; dy += 3) {{
+                            int sy = min(p.y + dy, {VIEW_H - 1});
+                            float em_b = texelFetch(u_mat, ivec2(p.x, sy), 0).r;
+                            if (em_b > 0.20) {{
+                                vec3 cb = texelFetch(u_src, ivec2(p.x, sy), 0).rgb;
+                                if (cb.r > cb.b * 1.35) {{
+                                    heat = max(heat, (1.0 - float(dy) / 16.0) * em_b);
+                                }}
+                            }}
+                        }}
+                        if (heat > 0.05) {{
+                            vec2 wp_h = vec2(p) + u_cam;
+                            float wv = sin(wp_h.y * 0.65 + u_time * 11.0 + wp_h.x * 0.35);
+                            sp.x = clamp(p.x + int(round(wv * heat * 1.15)), 0, {VIEW_W - 1});
+                        }}
+                    }}
+
+                    vec4 base = texelFetch(u_src, sp, 0);
                     vec3 col = base.rgb;
+                    if (u_combat_fx.x > 0.01) {{
+                        int ca = max(1, int(round(u_combat_fx.x * 2.5)));
+                        float r_ch = texelFetch(u_src, ivec2(clamp(sp.x + ca, 0, {VIEW_W - 1}), sp.y), 0).r;
+                        float b_ch = texelFetch(u_src, ivec2(clamp(sp.x - ca, 0, {VIEW_W - 1}), sp.y), 0).b;
+                        col.r = mix(col.r, r_ch, u_combat_fx.x);
+                        col.b = mix(col.b, b_ch, u_combat_fx.x);
+                    }}
+
                     if (u_use_bloom) {{
                         float fov = texelFetch(u_fov, p, 0).r;
-                        vec2 uv = (vec2(p) + 0.5) / vec2({float(VIEW_W)}, {float(VIEW_H)});
+                        vec2 uv = (vec2(sp) + 0.5) / vec2({float(VIEW_W)}, {float(VIEW_H)});
                         vec3 tight = texture(u_bloom_half, uv).rgb;
                         vec3 wide = texture(u_bloom_quarter, uv).rgb;
                         vec3 bloom = (tight * 0.50 + wide * 0.45) * fov;
@@ -306,11 +373,41 @@ class GPUPostFX:
                             col *= 1.0 - smoothstep(0.42, 1.65, vr2) * u_grade_params.z;
                         }}
                     }}
-                    fragColor = vec4(clamp(col, 0.0, 1.0), base.a);
+                    if (u_rain_amt > 0.01) {{
+                        float fov_r = texelFetch(u_fov, p, 0).r;
+                        vec2 wp = vec2(p) + u_cam;
+                        ivec2 out_sz = textureSize(u_outdoor, 0);
+                        ivec2 ot = clamp(ivec2(floor(wp / vec2({float(TILE_W)}, {float(TILE_H)}))), ivec2(0), out_sz - 1);
+                        if (fov_r > 0.05 && texelFetch(u_outdoor, ot, 0).r > 0.5) {{
+                            float slant = wp.x + wp.y * 0.28;
+                            float col_id = floor(slant / 5.0);
+                            float h1 = fract(sin(col_id * 127.1) * 43758.5453);
+                            float spd = 145.0 + h1 * 80.0;
+                            float y_flow = wp.y - u_time * spd + h1 * 240.0;
+                            float drop_cell = floor(y_flow / 38.0);
+                            float h2 = fract(sin(dot(vec2(col_id, drop_cell), vec2(127.1, 311.7))) * 43758.5453);
+                            float local_x = fract(slant / 5.0);
+                            float local_y = fract(y_flow / 38.0);
+                            float thresh = mix(0.95, 0.52, clamp(u_rain_amt, 0.0, 1.0));
+                            if (h2 > thresh && local_x < 0.20 && local_y < 0.22) {{
+                                float lum_bg = dot(col, vec3(0.299, 0.587, 0.114));
+                                col += vec3(0.14, 0.20, 0.28) * (0.35 + lum_bg * 1.30) * fov_r * (0.45 + 0.55 * u_rain_amt);
+                            }}
+                        }}
+                    }}
+                    if (u_combat_fx.y > 0.01) {{
+                        vec2 vp = ((vec2(p) + 0.5) / vec2({float(VIEW_W)}, {float(VIEW_H)})) * 2.0 - 1.0;
+                        float vr = length(vp * vec2(0.85, 1.0));
+                        float edge = smoothstep(0.55, 1.28, vr);
+                        float pulse = 0.65 + 0.35 * sin(u_time * 5.2);
+                        col = mix(col, vec3(0.45, 0.02, 0.04), clamp(edge * u_combat_fx.y * pulse * 0.72, 0.0, 0.72));
+                    }}
+                    col = clamp(col, 0.0, 1.0);
+                    fragColor = vec4(col, base.a);
                 }}
             """,
         )
-        for unit, name in enumerate(("u_src", "u_bloom_half", "u_bloom_quarter", "u_fov", "u_exp")):
+        for unit, name in enumerate(("u_src", "u_bloom_half", "u_bloom_quarter", "u_fov", "u_exp", "u_mat", "u_outdoor")):
             self.composite_prog[name].value = unit
         self._u_comp_bloom = self.composite_prog["u_use_bloom"]
         self._u_comp_adapt = self.composite_prog["u_use_adapt"]
@@ -319,6 +416,11 @@ class GPUPostFX:
         self._u_grade_mid = self.composite_prog["u_grade_mid"]
         self._u_grade_hi = self.composite_prog["u_grade_hi"]
         self._u_grade_params = self.composite_prog["u_grade_params"]
+        self._u_comp_cam = self.composite_prog["u_cam"]
+        self._u_comp_time = self.composite_prog["u_time"]
+        self._u_comp_heat = self.composite_prog["u_use_heat"]
+        self._u_comp_combat = self.composite_prog["u_combat_fx"]
+        self._u_comp_rain = self.composite_prog["u_rain_amt"]
         self.composite_vao = ctx.simple_vertex_array(self.composite_prog, shader.vbo, "in_vert")
 
     def read_exposure(self):
@@ -336,6 +438,7 @@ class GPUPostFX:
         cam, time_sec, *, viewer=(VIEW_W * 0.5, VIEW_H * 0.5),
         enable_reflections=True, enable_bloom=True, enable_eye_adaptation=True,
         enable_color_grade=True, color_grade=None,
+        enable_heat_combat=True, combat_fx=(0.0, 0.0), rain_amt=0.0, outdoor_tex=None,
     ):
         ctx, gl = self.ctx, self.gl
         ctx.disable(gl.BLEND)
@@ -355,6 +458,8 @@ class GPUPostFX:
             ent_y_tex.use(2)
             fov_tex.use(3)
             walls_tex.use(4)
+            self._u_refl_wet.value = float(rain_amt)
+            (outdoor_tex or walls_tex).use(5)
             self.reflect_vao.render(gl.TRIANGLE_STRIP)
             cur_tex, cur_fbo = self.tex_refl, self.reflect_fbo
 
@@ -418,12 +523,21 @@ class GPUPostFX:
             self.quarter_b.use(0)
             self.blur_vao.render(gl.TRIANGLE_STRIP)
 
-        if enable_bloom or enable_eye_adaptation or enable_color_grade:
+        need_comp = (
+            enable_bloom or enable_eye_adaptation or enable_color_grade
+            or enable_heat_combat or rain_amt > 0.01
+        )
+        if need_comp:
             self.final_fbo.use()
             ctx.viewport = (0, 0, VIEW_W, CANVAS_H)
             self._u_comp_bloom.value = bool(enable_bloom)
             self._u_comp_adapt.value = bool(enable_eye_adaptation)
             self._u_comp_grade.value = bool(enable_color_grade)
+            self._u_comp_cam.value = cam
+            self._u_comp_time.value = float(time_sec)
+            self._u_comp_heat.value = bool(enable_heat_combat)
+            self._u_comp_combat.value = combat_fx if enable_heat_combat else (0.0, 0.0)
+            self._u_comp_rain.value = float(rain_amt)
             if enable_color_grade and self._grade_cur is not None:
                 g = self._grade_cur
                 self._u_grade_sh.value = (g[0], g[1], g[2])
@@ -435,6 +549,8 @@ class GPUPostFX:
             self.quarter_a.use(2)
             fov_tex.use(3)
             exp_tex.use(4)
+            mat_tex.use(5)
+            (outdoor_tex or walls_tex).use(6)
             self.composite_vao.render(gl.TRIANGLE_STRIP)
             cur_tex, cur_fbo = self.tex_final, self.final_fbo
 

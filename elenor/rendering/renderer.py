@@ -943,6 +943,18 @@ class Renderer(UIRendererMixin):
             en_refl = flags.get("water_reflections", True)
             en_adapt = flags.get("eye_adaptation", True)
             en_grade = flags.get("color_grade", True)
+            en_heat = flags.get("heat_combat", True)
+            rain_amt = 0.0
+            if flags.get("night_rain", True):
+                if dungeon.campaign == "jungle" and not getattr(dungeon, "interior", None):
+                    rain_amt = fx_mgr.weather_rain if fx_mgr else 0.0
+                elif dungeon.campaign == "rats" and dungeon.floor_num == 1:
+                    rain_amt = 1.0
+            ca_str = 0.0
+            if fx_mgr and fx_mgr.shake_timer > 0.0:
+                ca_str = min(1.0, (fx_mgr.shake_timer / max(0.01, fx_mgr.shake_max_timer)) * (fx_mgr.shake_amp / 1.8))
+            hp_ratio = player.hp / max(1.0, float(player.max_hp))
+            low_hp = max(0.0, min(1.0, (0.35 - hp_ratio) / 0.35))
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             extra_gl = {}
             if scene_on_gpu:
@@ -953,6 +965,10 @@ class Renderer(UIRendererMixin):
                     enable_gi=en_gi, enable_eye_adaptation=en_adapt,
                     enable_color_grade=en_grade,
                     color_grade=color_grade_for(dungeon, player, mobs) if en_grade else None,
+                    enable_heat_combat=en_heat,
+                    combat_fx=(ca_str, low_hp),
+                    rain_amt=rain_amt,
+                    outdoor_grid_np=fx_mgr.outdoor_grid_np if fx_mgr else None,
                 )
             lit_surf = self.gpu_shader.render_lit_surface(
                 self.diff_canvas, self.norm_canvas, self.entity_y_canvas,
@@ -1136,16 +1152,17 @@ class Renderer(UIRendererMixin):
             and mob.jungle_windup[0].form not in ("strike", "sweep", "lunge")
         ]
         use_gpu_lit_fx = window is not None and self.gpu_shader is not None
-        if fov_mask is None and (has_mirrors or (not use_gpu_lit_fx and (has_phys_fx or windups))):
+        if fov_mask is None and not use_gpu_lit_fx and (has_mirrors or has_phys_fx or windups):
             fov_mask = dungeon.compute_nox_fov(round(player.x * TILE_W), round(player.y * TILE_H), cam_x, cam_y)[0]
 
         if has_mirrors:
-            if window is not None:
-                window.mark_world_y(0, VIEW_H * SCALE)
             from elenor.rendering.mirrors import render_mirror_puzzles_beams
-            from elenor.rendering.visibility import overlay_visibility
-            visibility = overlay_visibility(fov_mask, lights, cam_x, cam_y)
-            render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, visibility)
+            if use_gpu_lit_fx:
+                render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, None, layer=self.lit_pixels)
+            else:
+                from elenor.rendering.visibility import overlay_visibility
+                visibility = overlay_visibility(fov_mask, lights, cam_x, cam_y)
+                render_mirror_puzzles_beams(screen, game_ref, cam_x, cam_y, visible_tiles, visibility)
 
         if has_phys_fx:
             if use_gpu_lit_fx:
@@ -1162,7 +1179,7 @@ class Renderer(UIRendererMixin):
             else:
                 render_jungle_attacks(screen, windups, cam_x, cam_y, fov_mask, lights, self.jungle_attack_cache)
 
-        if use_gpu_lit_fx and (has_phys_fx or windups):
+        if use_gpu_lit_fx and (has_mirrors or has_phys_fx or windups):
             self.lit_pixels.flush(screen, None, window=window, lit=True)
 
         # 5. Пылинки и споры, видимые ТОЛЬКО когда они пролетают сквозь лучи света!
@@ -1222,6 +1239,19 @@ class Renderer(UIRendererMixin):
             if 0 <= sy < VIEW_H * SCALE:
                 rad = max(2, int(pt.size * (pt.life / pt.max_life) * SCALE * 0.6))
                 self.combat_pixels.circle(pt.color, (sx, sy), rad)
+
+        if fx_mgr and fx_mgr.gibs:
+            for gb in fx_mgr.gibs:
+                sx = int((gb["wx"] * TILE_W - cam_x) * SCALE)
+                sy_g = int((gb["wy"] * TILE_H - cam_y) * SCALE)
+                sy = int(sy_g - gb["z"] * SCALE)
+                if 0 <= sy_g < VIEW_H * SCALE:
+                    gw, gh = gb["w"] * SCALE, gb["h"] * SCALE
+                    if gb["z"] > 0.5:
+                        self.combat_pixels.rect((12, 8, 12), (sx - gw // 2, sy_g, gw, max(2, SCALE)))
+                    if 0 <= sy < VIEW_H * SCALE:
+                        self.combat_pixels.rect((28, 10, 14), (sx - gw // 2 - 1, sy - gh // 2 - 1, gw + 2, gh + 2))
+                        self.combat_pixels.rect(gb["color"], (sx - gw // 2, sy - gh // 2, gw, gh))
 
         for pr in projectiles:
             sx = int((pr.wx * TILE_W - cam_x) * SCALE)

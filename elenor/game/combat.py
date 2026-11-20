@@ -1145,7 +1145,13 @@ class CombatMixin:
     def _check_mob_death(self, m, action=None):
         if m.hp <= 0 and m in self.mobs:
             self.mobs.remove(m)
-            self.fx.add_blood_splatter(m.x, m.y, count=10, is_kill=True)
+            if m.kind == "rat_king":
+                self.fx.add_boss_bloodbath(m.x, m.y, self.dungeon)
+                self.sfx.play("crit")
+            else:
+                self.fx.add_blood_splatter(m.x, m.y, count=10, is_kill=True)
+                if random.random() < 0.75:
+                    self.fx.spawn_gibs(m.x, m.y, count=random.randint(1, 3), is_boss=False)
             if getattr(m, "no_rewards", False):
                 self.add_log("combat", f"Враг из засады повержен: {m.kind} (0 опыта).", (165, 165, 175))
                 for _ in range(10):
@@ -1230,6 +1236,12 @@ class CombatMixin:
                 ang = random.uniform(0, 6.28)
                 spd = random.uniform(0.8, 3.2)
                 self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, (220, 210, 195), 3.0, 0.45))
+            if m.kind != "rat_king":
+                for _ in range(18):
+                    ang = random.uniform(0, 6.28)
+                    spd = random.uniform(1.0, 3.8)
+                    bcol = random.choice([(185, 18, 26), (135, 12, 20), (225, 28, 36)])
+                    self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, bcol, random.uniform(1.8, 3.4), random.uniform(0.22, 0.48)))
 
 
     def _execute_physical_ability(self, item, power, tx, ty, credit):

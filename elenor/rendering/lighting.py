@@ -100,6 +100,7 @@ class GPULightShader:
         self.timers = None
         self.uploaded_structure = None
         self.uploaded_fov = None
+        self.uploaded_outdoor = None
 
         self.tex_diff = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
         self.tex_norm = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
@@ -107,6 +108,8 @@ class GPULightShader:
         self.tex_fov = self.ctx.texture((VIEW_W, CANVAS_H), 1, dtype="f4")
         self.tex_masks = self.ctx.texture((MAP_COLS, MAP_ROWS * self.MAX_LIGHTS), 1, dtype="f4")
         self.tex_walls = self.ctx.texture((MAP_COLS, MAP_ROWS), 1, dtype="f4")
+        self.tex_outdoor = self.ctx.texture((MAP_COLS, MAP_ROWS), 1, dtype="f1")
+        self.tex_outdoor.filter = (moderngl.NEAREST, moderngl.NEAREST)
         self.tex_emissive = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
         self.tex_out = self.ctx.texture((VIEW_W, CANVAS_H), 4, dtype="f1")
 
@@ -131,6 +134,7 @@ class GPULightShader:
             uniform sampler2D u_fov;
             uniform sampler2D u_light_masks;
             uniform sampler2D u_walls;
+            uniform sampler2D u_outdoor;
             uniform sampler2D u_emissive;
 
             uniform vec2 u_cam;
@@ -145,6 +149,7 @@ class GPULightShader:
             uniform vec2 u_fx_flags; // x = enable_ao, y = enable_bloom
             uniform bool u_enable_specular;
             uniform float u_time;
+            uniform float u_rain_wetness;
             uniform int u_num_lights;
             uniform vec4 u_light_pos_rad[{self.MAX_LIGHTS}];
             uniform vec4 u_light_col_foot[{self.MAX_LIGHTS}];
@@ -201,15 +206,17 @@ class GPULightShader:
                 vec2 near = edge + side * .75;
                 bool face_x = (viewer_world.x - edge.x) * side.x >= 0.0 && open_wall_face(vec2(near.x, world.y));
                 bool face_y = (viewer_world.y - edge.y) * side.y >= 0.0 && open_wall_face(vec2(world.x, near.y));
-                if (face_x && (!face_y || abs(view.x) > abs(view.y))) {{
-                    if (to_light.x * side.x <= 0.0 || exits.x > distance
-                        || !open_wall_face(vec2(near.x, world.y + direction.y * (exits.x + .75)))) return -1.0;
-                    return exits.x + 2.4 * distance / max(abs(to_light.x), .001);
+                float res = -1.0;
+                if (face_x && to_light.x * side.x > 0.0 && exits.x <= distance
+                    && open_wall_face(vec2(near.x, world.y + direction.y * (exits.x + .75)))) {{
+                    res = exits.x + 2.4 * distance / max(abs(to_light.x), .001);
                 }}
                 if (face_y && to_light.y * side.y > 0.0 && exits.y <= distance
-                    && open_wall_face(vec2(world.x + direction.x * (exits.y + .75), near.y)))
-                    return exits.y + 2.4 * distance / max(abs(to_light.y), .001);
-                return -1.0;
+                    && open_wall_face(vec2(world.x + direction.x * (exits.y + .75), near.y))) {{
+                    float ry = exits.y + 2.4 * distance / max(abs(to_light.y), .001);
+                    res = (res < 0.0) ? ry : min(res, ry);
+                }}
+                return res;
             }}
 
             float prop_visibility(vec2 world, vec2 to_light, float distance, float light_height) {{
@@ -284,7 +291,12 @@ class GPULightShader:
                     float self_em = mat_px.r;
                     float gloss = mat_px.g;
                     float water_mask = mat_px.b;
-                    if (u_enable_specular && water_mask > 0.1 && ent_y <= -9000.0) {{
+                    if (u_rain_wetness > 0.01 && ent_y <= -9000.0 && is_wall_tile < 0.5 && texelFetch(u_outdoor, ivec2(tx, ty), 0).r > 0.5) {{
+                        gloss = max(gloss, 0.52 * u_rain_wetness);
+                        float r_w = sin(wx_px * 0.45 + u_time * 6.5) * cos(wy_px * 0.45 - u_time * 5.2);
+                        N = normalize(N + vec3(r_w * 0.06, -r_w * 0.06, 0.0) * u_rain_wetness);
+                    }}
+                    if (u_enable_specular && water_mask > 0.45 && ent_y <= -9000.0) {{
                         float wx_w = wx_px * 0.18;
                         float wy_w = wy_px * 0.28;
                         float rip1 = sin(wx_w + u_time * 2.6 + cos(wy_w * 0.8 - u_time * 1.7));
@@ -457,6 +469,7 @@ class GPULightShader:
         self.prog["u_emissive"].value = 6
         self.prog["u_shadows"].value = 7
         self.prog["u_props"].value = 8
+        self.prog["u_outdoor"].value = 9
         self._u_cam = self.prog["u_cam"]
         self._u_viewer = self.prog["u_viewer"]
         self._u_has_props = self.prog["u_has_props"]
@@ -474,6 +487,7 @@ class GPULightShader:
         self._u_hud_col = self.prog["u_hud_col"]
         self._u_enable_specular = self.prog["u_enable_specular"]
         self._u_time = self.prog["u_time"]
+        self._u_rain_wetness = self.prog["u_rain_wetness"]
 
         quad = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self.vbo = self.ctx.buffer(quad.tobytes())
@@ -600,7 +614,8 @@ class GPULightShader:
     def render_lit_surface(self, diff_canvas, norm_canvas, entity_y_canvas, fov_mask, cam_x, cam_y, lights, hud_lights, wall_grid_np=None, emissive_canvas=None, enable_ao=True, enable_bloom=True, temple_exposure=False, *, occlusion=None, viewer=(0.0, 0.0), bounce_color=(0.0, 0.0, 0.0), tonemap=True,
                            timings=None, readback=True, fog=None, timer_queries=None, raw_buffers=None, scene_on_gpu=False, gpu_scene_fov=None, fov_on_gpu=False,
                            time_sec=0.0, enable_specular=True, enable_reflections=True, enable_gi=True, enable_eye_adaptation=True,
-                           enable_color_grade=True, color_grade=None):
+                           enable_color_grade=True, color_grade=None,
+                           enable_heat_combat=True, combat_fx=(0.0, 0.0), rain_amt=0.0, outdoor_grid_np=None):
         self.survey_brightness = None
         if timings is not None and self.timers is None:
             self.timers = tuple(self.ctx.query(time=True) for _ in range(3))
@@ -623,6 +638,13 @@ class GPULightShader:
                 self.masks_buf = np.zeros((self.MAX_LIGHTS, height, width), dtype=np.float32)
             self.tex_walls.write(np.ascontiguousarray(wall_grid_np.T, dtype=np.float32))
             self.uploaded_structure = wall_grid_np if occlusion is not None else None
+        if outdoor_grid_np is not None and outdoor_grid_np is not self.uploaded_outdoor:
+            if outdoor_grid_np.shape != self.tex_outdoor.size:
+                self.tex_outdoor.release()
+                self.tex_outdoor = self.ctx.texture(outdoor_grid_np.shape, 1, dtype="f1")
+                self.tex_outdoor.filter = (self.moderngl.NEAREST, self.moderngl.NEAREST)
+            self.tex_outdoor.write(np.ascontiguousarray(outdoor_grid_np.T, dtype=np.uint8))
+            self.uploaded_outdoor = outdoor_grid_np
         if not scene_on_gpu and enable_bloom and emissive_canvas is not None:
             self.tex_emissive.write(pygame.image.tobytes(emissive_canvas, "RGBA"))
 
@@ -680,6 +702,7 @@ class GPULightShader:
         self._u_fx_flags.value = (1.0 if enable_ao else 0.0, bloom_mode)
         self._u_enable_specular.value = bool(enable_specular)
         self._u_time.value = float(time_sec)
+        self._u_rain_wetness.value = float(rain_amt)
         self._u_num_lights.value = n_lgt
         self._u_light_pos_rad.write(self.pos_rad_buf)
         self._u_light_col_foot.write(self.col_foot_buf)
@@ -702,9 +725,11 @@ class GPULightShader:
         if self.tex_props is not None:
             self.tex_props.use(8)
         if timers is None:
+            self.tex_outdoor.use(9)
             self.vao.render(self.moderngl.TRIANGLE_STRIP)
         else:
             with timers[1]:
+                self.tex_outdoor.use(9)
                 self.vao.render(self.moderngl.TRIANGLE_STRIP)
         fog_timer = None
         if fog is not None:
@@ -725,7 +750,7 @@ class GPULightShader:
                 fov_for_post, self.tex_walls, self.tex_blockers,
                 (float(cam_x), float(cam_y)),
             )
-        if self.postfx is not None and (enable_reflections or enable_bloom or enable_eye_adaptation or enable_color_grade):
+        if self.postfx is not None and (enable_reflections or enable_bloom or enable_eye_adaptation or enable_color_grade or enable_heat_combat or rain_amt > 0.01):
             out_tex, out_fbo = self.postfx.render(
                 src_tex, src_fbo, self.tex_emissive, self.tex_ent_y, fov_for_post, self.tex_walls,
                 (float(cam_x), float(cam_y)), float(time_sec),
@@ -733,6 +758,8 @@ class GPULightShader:
                 enable_reflections=enable_reflections, enable_bloom=enable_bloom,
                 enable_eye_adaptation=enable_eye_adaptation,
                 enable_color_grade=enable_color_grade, color_grade=color_grade,
+                enable_heat_combat=enable_heat_combat, combat_fx=combat_fx,
+                rain_amt=rain_amt, outdoor_tex=self.tex_outdoor,
             )
         else:
             out_tex, out_fbo = src_tex, src_fbo

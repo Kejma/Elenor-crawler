@@ -210,6 +210,30 @@ class GPUSceneRenderer:
         self.quad_d_prog["u_tex0"].value = 0
         self.quad_d_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
         self.quad_d_vao = ctx.simple_vertex_array(self.quad_d_prog, self.unit_vbo, "in_corner")
+        self.quad_decal_prog = ctx.program(
+            vertex_shader=_QUAD_VERT,
+            fragment_shader="""#version 330 core
+                uniform sampler2D u_tex0;
+                in vec2 v_uv;
+                layout(location = 0) out vec4 out_diff;
+                layout(location = 1) out vec4 out_norm;
+                layout(location = 2) out vec4 out_em;
+                void main() {
+                    ivec2 uv = ivec2(floor(v_uv));
+                    ivec2 sz = textureSize(u_tex0, 0);
+                    if (uv.x < 0 || uv.y < 0 || uv.x >= sz.x || uv.y >= sz.y) discard;
+                    vec4 d = texelFetch(u_tex0, uv, 0);
+                    if (d.a <= 0.02) discard;
+                    out_diff = d;
+                    out_norm = vec4(0.0);
+                    float is_liq = (d.r > d.g * 1.45 && d.r > 0.22) ? 1.0 : 0.0;
+                    out_em = vec4(0.0, mix(0.10, 0.88, is_liq), is_liq * 0.28, d.a);
+                }
+            """,
+        )
+        self.quad_decal_prog["u_tex0"].value = 0
+        self.quad_decal_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
+        self.quad_decal_vao = ctx.simple_vertex_array(self.quad_decal_prog, self.unit_vbo, "in_corner")
 
         self.clear_ent_y_prog = ctx.program(
             vertex_shader="""#version 330 core
@@ -813,11 +837,11 @@ class GPUSceneRenderer:
                     self._decal_tex.write(pygame.image.tobytes(fx_mgr.decal_surf, "RGBA"))
                     self._decal_key = d_key
                 ctx.enable(gl.BLEND)
-                self.fbo_diff.use()
+                self.fbo_color.use()
                 self._decal_tex.use(0)
-                self.quad_d_prog["u_dest"].value = (0.0, 0.0, float(VIEW_W), float(VIEW_H))
-                self.quad_d_prog["u_src"].value = (float(cam_ix), float(cam_iy), float(VIEW_W), float(VIEW_H))
-                self.quad_d_vao.render(gl.TRIANGLE_STRIP)
+                self.quad_decal_prog["u_dest"].value = (0.0, 0.0, float(VIEW_W), float(VIEW_H))
+                self.quad_decal_prog["u_src"].value = (float(cam_ix), float(cam_iy), float(VIEW_W), float(VIEW_H))
+                self.quad_decal_vao.render(gl.TRIANGLE_STRIP)
 
             # 5. Редкие динамические слои пола (круги на воде и капканы)
             has_ripples = bool(fx_mgr and fx_mgr.ripples)

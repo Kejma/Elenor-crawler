@@ -148,7 +148,7 @@ def register_mirror_puzzle_assets(assets):
         assets[rail_key] = (rl_d, rl_n)
 
 
-def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visibility):
+def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visibility, *, layer=None):
     """
     Рисует широкий (52 px) полупрозрачный поток света повышенной интенсивности,
     либо рассеянный конус света (если в излучателе нет фокусирующей линзы),
@@ -158,12 +158,20 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
     if not puzzles:
         return
 
-    beam_surf = getattr(game, "_mirror_beam_surf", None)
-    target_size = (VIEW_W * SCALE, VIEW_H * SCALE)
-    if beam_surf is None or beam_surf.get_size() != target_size:
-        beam_surf = pygame.Surface(target_size, pygame.SRCALPHA)
-        game._mirror_beam_surf = beam_surf
-    beam_surf.fill((0, 0, 0, 0))
+    if layer is None:
+        beam_surf = getattr(game, "_mirror_beam_surf", None)
+        target_size = (VIEW_W * SCALE, VIEW_H * SCALE)
+        if beam_surf is None or beam_surf.get_size() != target_size:
+            beam_surf = pygame.Surface(target_size, pygame.SRCALPHA)
+            game._mirror_beam_surf = beam_surf
+        beam_surf.fill((0, 0, 0, 0))
+        draw_line = lambda col, a, b, w=1: pygame.draw.line(beam_surf, col, a, b, w)
+        draw_circle = lambda col, c, r, w=0: pygame.draw.circle(beam_surf, col, c, r, w)
+        draw_poly = lambda col, pts, w=0: pygame.draw.polygon(beam_surf, col, pts, w)
+    else:
+        draw_line = layer.line
+        draw_circle = layer.circle
+        draw_poly = layer.polygon
 
     now_sec = pygame.time.get_ticks() * 0.001
     pulse = 0.93 + 0.07 * math.sin(now_sec * 4.5)
@@ -185,7 +193,7 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
                     p1 = (ox + dx * dist_px + px_x * span_px, oy + dy * dist_px + px_y * span_px)
                     p2 = (ox + dx * dist_px - px_x * span_px, oy + dy * dist_px - px_y * span_px)
                     col_c = (cr, cg, cb, int(alpha_c * pulse)) if step_cone < 2 else (255, 220, 220, int(alpha_c * pulse))
-                    pygame.draw.polygon(beam_surf, col_c, [(ox, oy), p1, p2])
+                    draw_poly(col_c, [(ox, oy), p1, p2])
 
     # 2. Собираем видимые сегменты сфокусированного потока света
     vis_segs = []
@@ -201,13 +209,12 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
 
     if vis_segs:
         any_drawn = True
-        # Повышенная на ~28% интенсивность полупрозрачных слоёв широкого потока света (52 px -> 14 px)
         layers = [
-            (52, 0.00, int(25 * pulse)),  # Широкое мягкое рассеивание (52 px)
-            (40, 0.05, int(46 * pulse)),  # Сочная цветная кромка света (40 px)
-            (28, 0.25, int(68 * pulse)),  # Основной полупрозрачный поток (28 px)
-            (20, 0.60, int(92 * pulse)),  # Переходный горячий слой (20 px)
-            (14, 0.94, int(122 * pulse)), # Яркая полупрозрачная белая середина (14 px)
+            (52, 0.00, int(25 * pulse)),
+            (40, 0.05, int(46 * pulse)),
+            (28, 0.25, int(68 * pulse)),
+            (20, 0.60, int(92 * pulse)),
+            (14, 0.94, int(122 * pulse)),
         ]
         for width_px, white_mix, alpha_val in layers:
             rad_joint = width_px // 2
@@ -216,9 +223,9 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
                 lg = min(255, int(cg * (1.0 - white_mix) + 255 * white_mix))
                 lb = min(255, int(cb * (1.0 - white_mix) + 255 * white_mix))
                 rgba = (lr, lg, lb, alpha_val)
-                pygame.draw.line(beam_surf, rgba, p0, p1, width_px)
-                pygame.draw.circle(beam_surf, rgba, p0, rad_joint)
-                pygame.draw.circle(beam_surf, rgba, p1, rad_joint)
+                draw_line(rgba, p0, p1, width_px)
+                draw_circle(rgba, p0, rad_joint)
+                draw_circle(rgba, p1, rad_joint)
 
     for ctrl in puzzles:
         for wx, wy, h_kind, b_col in ctrl.hit_points:
@@ -232,12 +239,11 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
             cr, cg, cb = b_col
             if h_kind == "receiver":
                 r_p = 22 + int(math.sin(now_sec * 6.0) * 3)
-                pygame.draw.circle(beam_surf, (cr, cg, cb, 60), (hx, hy), r_p + 8)
-                pygame.draw.circle(beam_surf, (cr, cg, cb, 115), (hx, hy), r_p)
-                pygame.draw.circle(beam_surf, (255, 255, 255, 155), (hx, hy), 10)
+                draw_circle((cr, cg, cb, 60), (hx, hy), r_p + 8)
+                draw_circle((cr, cg, cb, 115), (hx, hy), r_p)
+                draw_circle((255, 255, 255, 155), (hx, hy), 10)
             elif h_kind in ("back_blocked", "wall", "blocked"):
-                pygame.draw.circle(beam_surf, (cr, cg, cb, 70), (hx, hy), 18)
-
+                draw_circle((cr, cg, cb, 70), (hx, hy), 18)
 
     # Чёткая отрисовка рабочей грани и глухой спинки каждого видимого зеркала
     for ctrl in puzzles:
@@ -257,28 +263,29 @@ def render_mirror_puzzles_beams(screen, game, cam_x, cam_y, visible_tiles, visib
                 p_a, p_b = (mcx - 15, mcy + 15), (mcx + 15, mcy - 15)
 
             if getattr(m, "is_double", False):
-                pygame.draw.line(beam_surf, (235, 185, 60), p_a, p_b, 8)
-                pygame.draw.line(beam_surf, (140, 240, 255), p_a, p_b, 5)
-                pygame.draw.line(beam_surf, (255, 255, 255), p_a, p_b, 2)
+                draw_line((235, 185, 60), p_a, p_b, 8)
+                draw_line((140, 240, 255), p_a, p_b, 5)
+                draw_line((255, 255, 255), p_a, p_b, 2)
                 for sgn in (-1, 1):
                     nx = sgn * 7
                     ny = sgn * (-1 if is_bs else 1) * 7
-                    pygame.draw.circle(beam_surf, (185, 248, 255), (mcx + nx, mcy + ny), 3)
+                    draw_circle((185, 248, 255), (mcx + nx, mcy + ny), 3)
             else:
                 fnx, fny = SINGLE_FRONT_NORMAL[m.mirror_ori % 4]
                 back_apex = (mcx - fnx * 15, mcy - fny * 15)
-                pygame.draw.polygon(beam_surf, (42, 28, 26), [p_a, p_b, back_apex])
-                pygame.draw.polygon(beam_surf, (22, 16, 18), [p_a, p_b, back_apex], 2)
+                draw_poly((42, 28, 26), [p_a, p_b, back_apex])
+                draw_poly((22, 16, 18), [p_a, p_b, back_apex], 2)
 
                 f_a = (p_a[0] + fnx * 2, p_a[1] + fny * 2)
                 f_b = (p_b[0] + fnx * 2, p_b[1] + fny * 2)
-                pygame.draw.line(beam_surf, (110, 225, 255), f_a, f_b, 5)
-                pygame.draw.line(beam_surf, (250, 255, 255), f_a, f_b, 2)
+                draw_line((110, 225, 255), f_a, f_b, 5)
+                draw_line((250, 255, 255), f_a, f_b, 2)
 
                 glint_c = (mcx + fnx * 8, mcy + fny * 8)
-                pygame.draw.line(beam_surf, (150, 240, 255), glint_c, (glint_c[0] + fnx * 4, glint_c[1]), 2)
-                pygame.draw.line(beam_surf, (150, 240, 255), glint_c, (glint_c[0], glint_c[1] + fny * 4), 2)
-    if not any_drawn:
+                draw_line((150, 240, 255), glint_c, (glint_c[0] + fnx * 4, glint_c[1]), 2)
+                draw_line((150, 240, 255), glint_c, (glint_c[0], glint_c[1] + fny * 4), 2)
+
+    if layer is not None or not any_drawn:
         return
     from elenor.rendering.visibility import mask_overlay
     mask_overlay(beam_surf, visibility, game.__dict__)

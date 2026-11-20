@@ -27,6 +27,8 @@ class FXManager:
             "eye_adaptation": True,
             "canopy_wind": True,
             "color_grade": True,
+            "heat_combat": True,
+            "night_rain": True,
         }
 
         self.eye_adapt_params = {
@@ -46,8 +48,13 @@ class FXManager:
         self.decal_revision = 0
 
         self.wall_grid_np = np.zeros((MAP_COLS, MAP_ROWS), dtype=np.float32)
+        self.outdoor_grid_np = np.zeros((MAP_COLS, MAP_ROWS), dtype=np.uint8)
+        self.weather_rain = 0.0
+        self.weather_target = 0.0
+        self.weather_timer = random.uniform(10.0, 22.0)
 
         self.ripples = []
+        self.gibs = []
         self.dust_motes = []
         self._mote_chunks = {}
         self._free_motes = []
@@ -137,6 +144,7 @@ class FXManager:
         self.has_decals = False
         self.decal_revision += 1
         self.ripples.clear()
+        self.gibs.clear()
 
     def rebuild_wall_grid(self, dungeon):
         """Строит карту стен для Ambient Occlusion (БЕЗ деревьев 5!) и заселяет зоны тумана и спор."""
@@ -152,6 +160,15 @@ class FXManager:
                 # Деревья (5) не включены, чтобы вокруг них не было квадратных рамок AO!
                 if dungeon.grid[ry][rx] in OPAQUE_WALL_TILES:
                     self.wall_grid_np[rx, ry] = 1.0
+        outdoor = np.zeros(size, dtype=np.uint8)
+        if dungeon.campaign == "jungle" and not getattr(dungeon, "interior", None):
+            outdoor.fill(255)
+        elif dungeon.campaign == "rats" and dungeon.floor_num == 1:
+            for ry in range(dungeon.height):
+                for rx in range(dungeon.width):
+                    if dungeon.grid[ry][rx] in (2, 3, 5, 9):
+                        outdoor[rx, ry] = 255
+        self.outdoor_grid_np = outdoor
 
         self.active_clouds = []
         for fz in getattr(dungeon, "fog_zones", []):
@@ -193,18 +210,175 @@ class FXManager:
         self.decal_revision += 1
         cx = int(wx * TILE_W)
         cy = int((wy + 0.25) * TILE_H)
-        n_drops = count * 2 if is_kill else count
-        spread = 7 if is_kill else 5
+        palette = [
+            (142, 14, 22, 230),
+            (178, 20, 28, 240),
+            (102, 10, 16, 220),
+            (205, 24, 32, 235),
+        ]
+        if is_kill:
+            for _ in range(random.randint(2, 3)):
+                pw = random.randint(8, 15)
+                ph = random.randint(5, 9)
+                px = cx + random.randint(-5, 5) - pw // 2
+                py = cy + random.randint(-3, 4) - ph // 2
+                pygame.draw.ellipse(self.decal_surf, random.choice(palette[:3]), (px, py, pw, ph))
+            for _ in range(random.randint(4, 7)):
+                ang = random.uniform(0.0, math.tau)
+                dist = random.uniform(7.0, 17.0)
+                ex = int(cx + math.cos(ang) * dist)
+                ey = int(cy + math.sin(ang) * dist * 0.78)
+                pygame.draw.line(self.decal_surf, random.choice(palette), (cx, cy), (ex, ey), random.choice([1, 2]))
+        else:
+            pw = random.randint(4, 7)
+            ph = random.randint(3, 5)
+            pygame.draw.ellipse(self.decal_surf, palette[0], (cx - pw // 2, cy - ph // 2, pw, ph))
+
+        n_drops = count * 6 if is_kill else count * 3
+        spread = 15 if is_kill else 10
         for _ in range(n_drops):
-            ox = cx + random.randint(-spread, spread)
-            oy = cy + random.randint(-spread + 1, spread + 1)
-            col = random.choice([
-                (135, 16, 24, 215),
-                (168, 22, 30, 225),
-                (98, 12, 18, 200),
-            ])
-            sz = random.choice([1, 1, 2]) if not is_kill else random.choice([1, 2, 2, 3])
+            ang = random.uniform(0.0, math.tau)
+            r = (random.random() ** 0.65) * spread
+            ox = int(cx + math.cos(ang) * r)
+            oy = int(cy + math.sin(ang) * r * 0.82)
+            col = random.choice(palette)
+            sz = random.choice([1, 1, 2, 2]) if not is_kill else random.choice([1, 2, 2, 3, 3])
             pygame.draw.rect(self.decal_surf, col, (ox, oy, sz, sz))
+
+    def _splat_wall_blood(self, wx, wy, dx=0.0, dy=0.0, big=False):
+        self.has_decals = True
+        self.decal_revision += 1
+        cx = int(wx * TILE_W + dx * 3.0)
+        cy = int(wy * TILE_H + dy * 3.0)
+        blood_pal = [
+            (148, 12, 20, 240),
+            (188, 18, 28, 245),
+            (108, 8, 14, 235),
+            (218, 24, 34, 240),
+        ]
+        n_splat = random.randint(10, 18) if big else random.randint(5, 9)
+        rad = 8 if big else 5
+        for _ in range(n_splat):
+            sx = cx + random.randint(-rad, rad)
+            sy = cy + random.randint(-rad, rad)
+            sz = random.choice([2, 3, 3, 4]) if big else random.choice([1, 2, 2, 3])
+            pygame.draw.rect(self.decal_surf, random.choice(blood_pal), (sx, sy, sz, sz))
+        n_drips = random.randint(3, 6) if big else random.randint(1, 3)
+        for _ in range(n_drips):
+            dr_x = cx + random.randint(-rad + 1, rad - 1)
+            dr_y = cy + random.randint(-3, 2)
+            dr_len = random.randint(6, 16) if big else random.randint(4, 10)
+            pygame.draw.line(self.decal_surf, random.choice(blood_pal[:2]), (dr_x, dr_y), (dr_x, dr_y + dr_len), random.choice([1, 2]))
+
+    def spawn_gibs(self, wx, wy, count=2, is_boss=False):
+        for _ in range(count):
+            ang = random.uniform(0.0, math.tau)
+            spd = random.uniform(4.2, 13.5) if is_boss else random.uniform(2.4, 6.2)
+            roll = random.random()
+            if is_boss and roll > 0.88:
+                kind = "crown"
+                col = (242, 195, 52)
+                w, h = 2, 2
+            elif roll > 0.72:
+                kind = "bone"
+                col = (224, 214, 194)
+                w, h = 3, 1
+            elif roll > 0.48:
+                kind = "limb"
+                col = random.choice([(135, 34, 40), (112, 22, 28)])
+                w, h = 3, 2
+            else:
+                kind = "meat"
+                col = random.choice([(172, 22, 30), (140, 14, 22), (195, 32, 38)])
+                w, h = 2, 2
+            self.gibs.append({
+                "wx": float(wx) + random.uniform(-0.2, 0.2),
+                "wy": float(wy) + random.uniform(-0.2, 0.2),
+                "z": random.uniform(3.0, 9.0) if is_boss else random.uniform(2.0, 6.0),
+                "vx": math.cos(ang) * spd,
+                "vy": math.sin(ang) * spd,
+                "vz": random.uniform(28.0, 68.0) if is_boss else random.uniform(18.0, 42.0),
+                "kind": kind,
+                "color": col,
+                "w": w,
+                "h": h,
+                "trail_cd": 0.0,
+                "life": random.uniform(2.2, 3.8),
+            })
+
+    def add_boss_bloodbath(self, wx, wy, dungeon):
+        self.has_decals = True
+        self.decal_revision += 1
+        cx = int(wx * TILE_W)
+        cy = int((wy + 0.2) * TILE_H)
+        blood_pal = [
+            (148, 12, 20, 240),
+            (188, 18, 28, 245),
+            (108, 8, 14, 235),
+            (218, 24, 34, 240),
+        ]
+        # Огромное озеро крови вокруг места гибели босса
+        for _ in range(14):
+            pw = random.randint(20, 46)
+            ph = random.randint(14, 30)
+            px = cx + random.randint(-26, 26) - pw // 2
+            py = cy + random.randint(-18, 18) - ph // 2
+            pygame.draw.ellipse(self.decal_surf, random.choice(blood_pal[:3]), (px, py, pw, ph))
+
+        # 95 мощных артериальных лучей на 12-15 тайлов — достанут до всех стен зала!
+        for _ in range(95):
+            ang = random.uniform(0.0, math.tau)
+            dx, dy = math.cos(ang), math.sin(ang)
+            max_px = random.uniform(85.0, 240.0)
+            step = 3.0
+            d = 4.0
+            while d < max_px:
+                px = int(cx + dx * d)
+                py = int(cy + dy * d)
+                tx, ty = px // TILE_W, py // TILE_H
+                if not (0 <= tx < dungeon.width and 0 <= ty < dungeon.height):
+                    break
+                if dungeon.grid[ty][tx] in OPAQUE_WALL_TILES:
+                    self._splat_wall_blood(px / TILE_W, py / TILE_H, dx, dy, big=True)
+                    # Плюс лужица на полу прямо у подножия забрызганной стены
+                    bx_f = int(px - dx * 5.0)
+                    by_f = int(py - dy * 5.0)
+                    pygame.draw.ellipse(self.decal_surf, random.choice(blood_pal[:2]), (bx_f - 5, by_f - 3, 10, 6))
+                    break
+                chance = 0.85 if d < 55.0 else (0.55 if d < 120.0 else 0.32)
+                if random.random() < chance:
+                    sz = random.choice([2, 3, 3]) if d < 50.0 else random.choice([1, 2, 2])
+                    pygame.draw.rect(self.decal_surf, random.choice(blood_pal), (px + random.randint(-3, 3), py + random.randint(-3, 3), sz, sz))
+                d += step
+
+        # 35 летающих кусков мяса, костей и короны — полетят по всему залу и разобьются о стены!
+        self.spawn_gibs(wx, wy, count=35, is_boss=True)
+
+        from elenor.entities import Particle
+        for _ in range(140):
+            ang = random.uniform(0.0, math.tau)
+            spd = random.uniform(1.8, 7.5)
+            roll = random.random()
+            if roll < 0.72:
+                pcol = random.choice([(195, 20, 28), (140, 12, 20), (235, 32, 40)])
+                psz = random.uniform(2.2, 4.6)
+            elif roll < 0.88:
+                pcol = (110, 22, 26)
+                psz = random.uniform(3.2, 5.0)
+            elif roll < 0.95:
+                pcol = (225, 215, 195)
+                psz = random.uniform(2.0, 3.0)
+            else:
+                pcol = (255, 210, 65)
+                psz = random.uniform(2.2, 3.4)
+            self.game.particles.append(Particle(
+                wx + random.uniform(-0.4, 0.4),
+                wy + random.uniform(-0.4, 0.4),
+                math.cos(ang) * spd,
+                math.sin(ang) * spd,
+                pcol, size=psz, life=random.uniform(0.45, 1.05),
+            ))
+        self.trigger_shake(5.5, 0.55)
 
     def add_barrel_debris(self, tx, ty):
         self.has_decals = True
@@ -251,6 +425,25 @@ class FXManager:
     def update(self, dt, player, dungeon, mobs=None, add_popup=None):
         if dt <= 0:
             return
+        if dungeon.campaign == "jungle" and not getattr(dungeon, "interior", None):
+            self.weather_timer -= dt
+            if self.weather_timer <= 0.0:
+                roll = random.random()
+                if roll < 0.50:
+                    self.weather_target = 0.0
+                elif roll < 0.82:
+                    self.weather_target = random.uniform(0.28, 0.52)
+                else:
+                    self.weather_target = random.uniform(0.58, 0.82)
+                self.weather_timer = random.uniform(18.0, 42.0)
+            diff_w = self.weather_target - self.weather_rain
+            step_w = 0.07 * dt
+            if abs(diff_w) <= step_w:
+                self.weather_rain = self.weather_target
+            else:
+                self.weather_rain += step_w if diff_w > 0.0 else -step_w
+        else:
+            self.weather_rain = 0.0
         if self.shake_timer > 0.0:
             self.shake_timer = max(0.0, self.shake_timer - dt)
             fade = self.shake_timer / self.shake_max_timer
@@ -269,6 +462,67 @@ class FXManager:
             rp["timer"] -= dt
             if rp["timer"] <= 0.0:
                 self.ripples.remove(rp)
+
+        for gb in list(self.gibs):
+            gb["life"] -= dt
+            gb["trail_cd"] -= dt
+            nx = gb["wx"] + gb["vx"] * dt
+            ny = gb["wy"] + gb["vy"] * dt
+
+            tx_n, ty_c = int(nx), int(gb["wy"])
+            if 0 <= tx_n < dungeon.width and 0 <= ty_c < dungeon.height and dungeon.grid[ty_c][tx_n] in OPAQUE_WALL_TILES:
+                self._splat_wall_blood(nx, gb["wy"], 1.0 if gb["vx"] > 0 else -1.0, 0.0, big=(abs(gb["vx"]) > 5.0))
+                gb["vx"] = -gb["vx"] * 0.40
+                gb["vy"] *= 0.65
+            else:
+                gb["wx"] = nx
+
+            tx_c, ty_n = int(gb["wx"]), int(ny)
+            if 0 <= tx_c < dungeon.width and 0 <= ty_n < dungeon.height and dungeon.grid[ty_n][tx_c] in OPAQUE_WALL_TILES:
+                self._splat_wall_blood(gb["wx"], ny, 0.0, 1.0 if gb["vy"] > 0 else -1.0, big=(abs(gb["vy"]) > 5.0))
+                gb["vy"] = -gb["vy"] * 0.40
+                gb["vx"] *= 0.65
+            else:
+                gb["wy"] = ny
+
+            gb["z"] += gb["vz"] * dt
+            gb["vz"] -= 130.0 * dt
+            if gb["z"] <= 0.0:
+                gb["z"] = 0.0
+                if abs(gb["vz"]) > 11.0:
+                    gb["vz"] = -gb["vz"] * 0.44
+                    gb["vx"] *= 0.68
+                    gb["vy"] *= 0.68
+                    # Брызг крови в точке отскока от пола
+                    bx_p = int(gb["wx"] * TILE_W)
+                    by_p = int(gb["wy"] * TILE_H)
+                    pygame.draw.ellipse(self.decal_surf, (152, 16, 24, 225), (bx_p - 3, by_p - 2, 6, 4))
+                    self.has_decals = True
+                    self.decal_revision += 1
+                else:
+                    gb["vz"] = 0.0
+                    drag = max(0.0, 1.0 - 8.5 * dt)
+                    gb["vx"] *= drag
+                    gb["vy"] *= drag
+
+            spd_cur = math.hypot(gb["vx"], gb["vy"])
+            if gb["trail_cd"] <= 0.0 and spd_cur > 1.1:
+                gb["trail_cd"] = 0.025
+                bx_p = int(gb["wx"] * TILE_W) + random.randint(-1, 1)
+                by_p = int(gb["wy"] * TILE_H) + random.randint(-1, 1)
+                pygame.draw.rect(self.decal_surf, random.choice([(158, 16, 24, 220), (195, 22, 30, 230)]), (bx_p, by_p, random.choice([1, 2]), random.choice([1, 2])))
+                self.has_decals = True
+                self.decal_revision += 1
+
+            if (gb["z"] <= 0.0 and spd_cur < 0.25) or gb["life"] <= 0.0:
+                # Впекаем остановившийся кусок навсегда в пол
+                bx_p = int(gb["wx"] * TILE_W)
+                by_p = int(gb["wy"] * TILE_H)
+                pygame.draw.ellipse(self.decal_surf, (125, 12, 18, 220), (bx_p - 3, by_p - 1, 6, 4))
+                pygame.draw.rect(self.decal_surf, (*gb["color"], 245), (bx_p - gb["w"] // 2, by_p - gb["h"] // 2, gb["w"], gb["h"]))
+                self.has_decals = True
+                self.decal_revision += 1
+                self.gibs.remove(gb)
 
         # Обновление облаков тумана и ядовитого газа
         for cld in list(self.active_clouds):
@@ -605,7 +859,7 @@ class FXManager:
         if not self.panel_open:
             return
 
-        pw, ph = 376, 462
+        pw, ph = 376, 534
         px, py = SCREEN_W - pw - 16, 36
         panel_rect = pygame.Rect(px, py, pw, ph)
         hov_k = next((k for k, rect in self.toggle_rects.items() if rect.collidepoint(mouse_pos)), None)
@@ -630,6 +884,8 @@ class FXManager:
                 ("eye_adaptation",    "Адаптация глаз (Eye Adaptation)"),
                 ("canopy_wind",       "Ветер в кронах деревьев"),
                 ("color_grade",       "Биомный цветокор (Cinematic)"),
+                ("heat_combat",       "Марево огня + боевой пост-FX"),
+                ("night_rain",        "Ночной дождь и мокрые полы"),
             ]
 
             self.toggle_rects = {}
