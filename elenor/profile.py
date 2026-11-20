@@ -132,28 +132,36 @@ def apply_display_mode(prof, game=None):
     prof["resolution_idx"] = r_idx
     target_w, target_h, _ = avail[r_idx]
 
-    flags = 0
-    if w_mode == "borderless":
-        flags = pygame.NOFRAME
-    elif w_mode == "fullscreen":
-        flags = pygame.FULLSCREEN
-
+    flags = pygame.NOFRAME if w_mode in ("borderless", "fullscreen") else 0
     old_gl = getattr(game, "gl_window", None)
+    if w_mode == "fullscreen":
+        desktops = pygame.display.get_desktop_sizes()
+        if desktops:
+            from pygame._sdl2.video import Window
+
+            display_index = Window.from_display_module().display_index if old_gl is not None else 0
+            target_w, target_h = desktops[min(max(display_index, 0), len(desktops) - 1)]
+    size = target_w, target_h
+
     gl_window = None
     if old_gl is not None:
-        old_gl.collect(game.dungeon)
-        game.renderer.gpu_shader = None
-        old_gl.close()
-        game.gl_window = None
-        pygame.display.quit()
-        pygame.display.init()
+        try:
+            real_w, real_h = _resize_gl_window(old_gl, size, bool(flags & pygame.NOFRAME))
+            gl_window, disp_surf = old_gl, game.display_surface
+        except (pygame.error, RuntimeError, AttributeError):
+            old_gl.collect(game.dungeon)
+            game.renderer.gpu_shader = None
+            old_gl.close()
+            game.gl_window = None
+            pygame.display.quit()
+            pygame.display.init()
 
-    if game is not None:
+    if game is not None and gl_window is None:
         if game.renderer.gpu_shader is not None:
             game.renderer.gpu_shader.ctx.release()
             game.renderer.gpu_shader = None
         try:
-            disp_surf, gl_window = _open_gl_window((target_w, target_h), flags)
+            disp_surf, gl_window = _open_gl_window(size, flags)
             game.renderer.gpu_shader = gl_window.shader
         except Exception as exc:
             print(f"[GL] Прямой вывод недоступен ({exc}).")
@@ -168,7 +176,10 @@ def apply_display_mode(prof, game=None):
             game.renderer.init_standalone_shader()
     pygame.display.set_caption("Elenor-crawler")
 
-    real_w, real_h = disp_surf.get_size()
+    if gl_window is None or gl_window is not old_gl:
+        real_w, real_h = disp_surf.get_size()
+    if gl_window is not None:
+        gl_window.window_size = (real_w, real_h)
     # Считаем вписывание 1920x1080 в реальное окно с сохранением пропорций (чёткие пиксели без мыла!)
     scale_factor = min(real_w / float(SCREEN_W), real_h / float(SCREEN_H))
     scaled_w = max(1, int(round(SCREEN_W * scale_factor)))
@@ -181,6 +192,29 @@ def apply_display_mode(prof, game=None):
         game.gl_window = gl_window
         game.viewport_rect = (off_x, off_y, scaled_w, scaled_h)
     return disp_surf, (off_x, off_y, scaled_w, scaled_h)
+
+
+def _resize_gl_window(gl_window, size, borderless):
+    """Resize the SDL window in place to retain the context and its resources."""
+    from pygame._sdl2.video import WINDOWPOS_CENTERED, Window
+
+    window = Window.from_display_module()
+    old_w, old_h = window.size
+    if pygame.display.get_driver() == "offscreen" and (old_w, old_h) != size:
+        # SDL's offscreen EGL drawable keeps its original allocation.
+        raise pygame.error("Offscreen OpenGL drawable requires recreation")
+    scale_x = gl_window.drawable[0] / old_w
+    scale_y = gl_window.drawable[1] / old_h
+    if window.borderless != borderless:
+        window.borderless = borderless
+        if window.borderless != borderless:
+            raise pygame.error("SDL did not apply the window border mode")
+    if window.size != size:
+        window.size = size
+    window.position = (WINDOWPOS_CENTERED, WINDOWPOS_CENTERED)
+    width, height = window.size
+    gl_window.drawable = round(width * scale_x), round(height * scale_y)
+    return width, height
 
 
 def _open_gl_window(size, flags):

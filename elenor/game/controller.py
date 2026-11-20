@@ -73,12 +73,12 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.reset_run()
 
 
-    def play_spatial(self, name, sx, sy, max_dist=18.0, base_gain=1.0):
+    def play_spatial(self, name, sx, sy, max_dist=18.0, base_gain=1.0, *, through_walls=False):
         """Удобный хелпер для запуска пространственного звука окружения."""
         if hasattr(self, "sfx") and hasattr(self.sfx, "play_spatial"):
             px = getattr(self.player, "x", None)
             py = getattr(self.player, "y", None)
-            dungeon = getattr(self, "dungeon", None)
+            dungeon = None if through_walls else getattr(self, "dungeon", None)
             self.sfx.play_spatial(name, sx, sy, px, py, dungeon=dungeon, max_dist=max_dist, base_gain=base_gain)
         else:
             self.sfx.play(name)
@@ -131,9 +131,20 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
                         m.alert_to_combat(self.sfx, self.add_popup)
 
 
+    def finish_rat_campaign(self):
+        if not self.rat_campaign_complete:
+            return
+        self.cash_in_gems()
+        self.rat_campaign_complete = False
+        self.in_main_menu = True
+        self.main_menu.can_resume = False
+        self.player.buffered_combat = None
+        self.sfx.play("ui")
+
     def reset_run(self, campaign=None, *, seed=None):
         self.campaign = campaign or getattr(self, "campaign", "rats")
         self.run_seed = random.SystemRandom().getrandbits(64) if seed is None else seed
+        self.rat_campaign_complete = False
         self.jungle_locations = {}
         self.fishing_catches = {}
         self.enemy_voice_cooldown = 0.0

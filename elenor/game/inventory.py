@@ -175,8 +175,8 @@ class InventoryMixin:
         self.add_popup(self.player.x, self.player.y, f"Выброшено: {item.name}", (185, 175, 165))
 
 
-    def try_sell_gems_to_npc(self, obj, speaker_name="Скупщик Шнырь"):
-        """Универсальная механика продажи всех самоцветов из инвентаря любому торговцу/NPC."""
+    def cash_in_gems(self):
+        """Convert carried gems at their normal sale value."""
         gems_sold = 0
         total_cp_earned = 0
         for idx in range(self.player.max_possible_slots):
@@ -186,12 +186,16 @@ class InventoryMixin:
                 total_cp_earned += itm.copper_value
                 self.player.remove_item_everywhere(itm)
 
-        if gems_sold <= 0:
-            return False
+        if gems_sold:
+            self.player.gold += total_cp_earned
+            self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + total_cp_earned
+            save_profile(self.profile)
+        return gems_sold, total_cp_earned
 
-        self.player.gold += total_cp_earned
-        self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + total_cp_earned
-        save_profile(self.profile)
+    def try_sell_gems_to_npc(self, obj, speaker_name="Скупщик Шнырь"):
+        gems_sold, total_cp_earned = self.cash_in_gems()
+        if not gems_sold:
+            return False
         val_str = format_copper_Trigger(total_cp_earned)
         self.sfx.play("coin_pickup")
         self.add_log("event", f"Продано самоцветов: {gems_sold} шт. Выручка +{val_str} отправлена в казну!", COIN_TEXT_COLOR)

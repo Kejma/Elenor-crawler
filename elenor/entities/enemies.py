@@ -209,7 +209,9 @@ class Enemy:
         self.attack_cd = 0.0
         self.cast_windup_timer = 0.0
         self.cast_windup_max = 0.65
-        self.pending_pentagram = False
+        self.pending_pentagram = None
+        self._pentagram_target = None
+        self._pentagram_sight_key = None
         self.jungle_home = (self.x, self.y) if kind in ATTACKS else None
         self.jungle_windup = None
         self.jungle_dash = None
@@ -485,12 +487,12 @@ class Enemy:
                     self.patrol_dir = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)])
                     self.patrol_timer = random.uniform(1.5, 3.2)
                 if self.patrol_dir != (0, 0):
-                    if self.patrol_dir[0] != 0:
-                        self.facing = 1 if self.patrol_dir[0] > 0 else -1
                     old_x, old_y = self.x, self.y
-                    self._step_with_collision(self.patrol_dir[0], self.patrol_dir[1], dt * 0.45, dungeon, all_mobs)
-                    if math.hypot(self.x - old_x, self.y - old_y) < 0.001:
-                        self.patrol_dir = (-self.patrol_dir[0], -self.patrol_dir[1])
+                    self._step_with_collision(*self.patrol_dir, dt * .45, dungeon, all_mobs, patrol=True)
+                    if (self.x, self.y) == (old_x, old_y):
+                        self.patrol_dir = (0, 0)
+                    elif self.x != old_x:
+                        self.facing = 1 if self.x > old_x else -1
             return
 
         # --- COMBAT AI WITH FULL A* PATHFINDING, PENTAGRAM CASTING & BOSS CRIES ---
@@ -516,12 +518,20 @@ class Enemy:
 
         # 1. If currently channeling a dark spell (windup before pentagram appears!)
         if self.cast_windup_timer > 0.0:
+            sight_key = (self.x, self.y, player.x, player.y, dungeon.geometry_revision)
+            if sight_key != self._pentagram_sight_key:
+                self._pentagram_sight_key = sight_key
+                if dist <= 9.5 and dungeon.has_line_of_sight(self.x, self.y, player.x, player.y, 9.5):
+                    self._pentagram_target = (player.x, player.y)
             self.cast_windup_timer -= dt
             if self.cast_windup_timer <= 0.0:
                 self.cast_windup_timer = 0.0
-                self.pending_pentagram = True
-                if dist > 0.001:
-                    self.trigger_bump((dx / dist) * 0.35, (dy / dist) * 0.35)
+                self.pending_pentagram = self._pentagram_target
+                target_x, target_y = self._pentagram_target
+                cast_dx, cast_dy = target_x - self.x, target_y - self.y
+                cast_dist = math.hypot(cast_dx, cast_dy)
+                if cast_dist > .001:
+                    self.trigger_bump(cast_dx / cast_dist * .35, cast_dy / cast_dist * .35)
             return
 
         if dist < 0.001:
@@ -555,6 +565,8 @@ class Enemy:
                 if self.kind in ("rat_cultist", "rat_king"):
                     self.cast_windup_max = 0.58 if self.is_boss else 0.68
                     self.cast_windup_timer = self.cast_windup_max
+                    self._pentagram_target = (player.x, player.y)
+                    self._pentagram_sight_key = None
                     self.attack_cd = (1.85 if self.is_boss else 2.55) + cd_jitter
                     if hasattr(sfx, "play_spatial"):
                         sfx.play_spatial("spell_windup", self.x, self.y, player.x, player.y, dungeon, max_dist=18.0)
@@ -601,8 +613,8 @@ class Enemy:
         if d > 0.001:
             self._step_with_collision(dx / d, dy / d, dt, dungeon, all_mobs)
 
-    def _step_with_collision(self, dir_x, dir_y, dt, dungeon, all_mobs):
-        if abs(dir_x) > 0.15:
+    def _step_with_collision(self, dir_x, dir_y, dt, dungeon, all_mobs, *, patrol=False):
+        if not patrol and abs(dir_x) > 0.15:
             self.facing = 1 if dir_x > 0 else -1
         sep_x, sep_y = 0.0, 0.0
         for other in all_mobs:
@@ -649,7 +661,7 @@ class Enemy:
             self.y = ty
             moved_any = True
 
-        if not moved_any:
+        if not moved_any and not patrol:
             cx, cy = int(self.x) + 0.5, int(self.y) + 0.5
             self.x += (cx - self.x) * min(1.0, 8.0 * dt)
             self.y += (cy - self.y) * min(1.0, 8.0 * dt)

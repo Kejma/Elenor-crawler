@@ -141,8 +141,11 @@ class CombatMixin:
             and math.hypot(ref_wx - (obj.x + 0.5), ref_wy - (obj.y + 0.5)) <= max_cursor_dist
         ]
         if nearby_loot:
-            nearby_loot.sort(key=lambda o: math.hypot(ref_wx - (o.x + 0.5), ref_wy - (o.y + 0.5)))
-            return self._pickup_loot_object(nearby_loot[0])
+            closest = min(nearby_loot, key=lambda o: (ref_wx - o.x - .5) ** 2 + (ref_wy - o.y - .5) ** 2)
+            coin = next((obj for obj in nearby_loot
+                         if obj.x == closest.x and obj.y == closest.y and obj.item
+                         and obj.item.type == "currency_coin"), closest)
+            return self._pickup_loot_object(coin)
 
         nearby_doors = [
             ((dx, dy), door)
@@ -200,10 +203,11 @@ class CombatMixin:
             if not lev.pulled and math.hypot(px - cx, py - cy) <= 1.70 and math.hypot(ref_wx - cx, ref_wy - cy) <= max_cursor_dist:
                 lev.pulled = True
                 for d in lev.target_doors:
+                    if not d.is_open:
+                        self.play_spatial("door", d.x + .5, d.y + .5, max_dist=64.0, through_walls=True)
                     d.locked = False
                     d.is_open = True
                 self.dungeon.invalidate_light_cache()
-                self.play_spatial("door", cx, cy)
                 self.emit_noise(cx, cy, 7.0)
                 self.trigger_event_thought("lever_pull")
                 self.add_popup(cx, cy, "ОТКРЫТО!", (130, 245, 160))
@@ -1177,9 +1181,10 @@ class CombatMixin:
             if getattr(m, "is_boss", False):
                 # За босса выдаём платину и снаряжение повышенной редкости.
                 plat = self.make_item("coin_platinum")
-                boss_gear = self.roll_item_by_rarity(allowed_types=["equipment"], luck=self.player.luck + 4)
                 self.objects.append(Interactable(drop_tx, drop_ty, "loot", plat))
-                self.objects.append(Interactable(max(1, drop_tx - 1), drop_ty, "loot", boss_gear))
+                if m.kind != "rat_king":
+                    boss_gear = self.roll_item_by_rarity(allowed_types=["equipment"], luck=self.player.luck + 4)
+                    self.objects.append(Interactable(max(1, drop_tx - 1), drop_ty, "loot", boss_gear))
                 self.sfx.play("coin_drop")
             else:
                 # С обычных мобов деньги падают нечасто, а самоцветы — в 10 раз реже!
@@ -1222,7 +1227,8 @@ class CombatMixin:
                 # Победа над боссом — ВАЖНАЯ реплика!
                 self.set_thought(self.pick_text(defeat_pool, "boss_defeat"), important=True)
                 self.add_popup(m.x, m.y - 0.8, "БОСС ПОВЕРЖЕН!", (255, 215, 65))
-                self.objects.append(Interactable(drop_tx, drop_ty, "stairs"))
+                if self.campaign == "rats":
+                    self.rat_campaign_complete = True
             elif m.is_boss and m.jungle_home is not None:
                 self.trigger_event_thought("jungle_guardian_defeated", force_important=True, enemy=name)
                 gear = self.roll_item_by_rarity(allowed_types=["equipment"])
@@ -1233,7 +1239,7 @@ class CombatMixin:
                 if self.can_trigger_background_thought(chance=0.22):
                     self.set_thought(self.pick_text(self.player.thoughts["kill"], "player_kill"), important=False, chance=1.0)
 
-            if self.player.gain_xp(m.xp_value):
+            if self.player.gain_xp(m.xp_value) and m.kind != "rat_king":
                 self.trigger_levelup_shine()
 
             for _ in range(14):

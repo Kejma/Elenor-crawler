@@ -7,7 +7,7 @@ import pygame
 from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, FALLEN_LOG
 from elenor.entities import Enemy, Interactable, Particle
 from elenor.rendering.effects import STEP_LIQUID_TILES
-from elenor.missions.rats import update_mission_audio
+from elenor.missions.rats import get_mission_texts, update_mission_audio
 from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas
 
 
@@ -87,7 +87,7 @@ def main():
         if window is None:
             present_logical_canvas(game.display_surface, screen, game.viewport_rect)
         else:
-            window.present(game.viewport_rect, game.display_surface.get_size(), gameplay,
+            window.present(game.viewport_rect, window.window_size, gameplay,
                            profile.stages if present_start is not None else None)
         pygame.display.flip()
         if present_start is not None:
@@ -95,7 +95,7 @@ def main():
             place = f"{game.campaign}/{game.dungeon.floor_num}/{game.dungeon.interior or 'surface'}"
             disabled = ",".join(key for key, enabled in game.fx.flags.items() if not enabled) or "-"
             backend = "gl-direct" if window is not None else ("gl" if gpu else "cpu")
-            width, height = game.display_surface.get_size()
+            width, height = window.window_size if window is not None else game.display_surface.get_size()
             profile.end(f"{place} seed={game.run_seed} backend={backend} res={width}x{height} off={disabled}",
                         present_start)
 
@@ -140,6 +140,9 @@ def main():
                 game.player.buffered_combat = None
 
             key_down = event.type == pygame.KEYDOWN and not getattr(event, "repeat", False)
+            if game.rat_campaign_complete and key_down and event.key in (pygame.K_SPACE, pygame.K_ESCAPE):
+                game.finish_rat_campaign()
+                continue
             if game.map_open:
                 if key_down and event.key in (pygame.K_m, pygame.K_ESCAPE):
                     game.map_open = False
@@ -597,15 +600,16 @@ def main():
                         m.apply_status("burn", 2.4, game.add_popup, dmg_val=vfx["dmg"])
                         game.record_combat_growth(m, vfx.get("growth_credit"))
                         break
-                if getattr(m, "pending_pentagram", False):
-                    m.pending_pentagram = False
+                if m.pending_pentagram:
+                    target_x, target_y = m.pending_pentagram
+                    m.pending_pentagram = None
                     p_dmg = random.randint(m.dmg_min + 3, m.dmg_max + 5)
                     game.sfx.play("magic")
                     game.visual_fx.append({
                         "kind": "blood_pentagram",
                         "source": m,
-                        "x": game.player.x,
-                        "y": game.player.y,
+                        "x": target_x,
+                        "y": target_y,
                         "radius": 1.15 if not m.is_boss else 1.40,
                         "dmg": p_dmg,
                         "color": (245, 40, 65),
@@ -1084,6 +1088,16 @@ def main():
                 rect = label.get_rect(midbottom=(VIEW_W * SCALE // 2, VIEW_H * SCALE - 16))
                 pygame.draw.rect(screen, (23, 32, 27), rect.inflate(18, 8), border_radius=4)
                 screen.blit(label, rect)
+
+        if game.rat_campaign_complete:
+            prompt = get_mission_texts(game.loc)["finish_prompt"]
+            label = hud_label(game.renderer.font_ui, prompt, (246, 225, 178))
+            rect = label.get_rect(midbottom=(SCREEN_W // 2, VIEW_H * SCALE - 16))
+            pill = rect.inflate(24, 10)
+            pygame.draw.rect(screen, (26, 20, 32), pill, border_radius=5)
+            screen.blit(label, rect)
+            if window is not None:
+                window.mark_world_rect(*pill)
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)
