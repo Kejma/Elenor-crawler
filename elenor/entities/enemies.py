@@ -94,6 +94,7 @@ MOB_PROFILES = {
         "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 22,
     },
     "jungle_gremlin": {
+        "blood_color": "green",
         "sprite": "jungle_gremlin", "hp": 16, "speed": 3.45, "dmg_min": 4, "dmg_max": 8,
         "phys_def": 1, "mag_def": 1, "detect_range": 6.0, "perception": 1.25,
         "is_ranged": False, "is_boss": False, "size_tiles": 1, "xp": 16,
@@ -182,6 +183,7 @@ class Enemy:
 
         prof = MOB_PROFILES.get(kind, MOB_PROFILES["rat"])
         self.sprite = prof["sprite"]
+        self.blood_color = prof.get("blood_color", "red")
         self.max_hp = round(prof["hp"] * (1.06 if prof.get("is_boss") else 1.16))
         self.hp = self.max_hp
         self.speed = prof["speed"]

@@ -68,6 +68,7 @@ class GPUPostFX:
                 uniform sampler2D u_fov;
                 uniform sampler2D u_walls;
                 uniform sampler2D u_outdoor;
+                uniform sampler2D u_diffuse;
                 uniform vec2 u_cam;
                 uniform float u_time;
                 uniform float u_rain_wetness;
@@ -153,7 +154,11 @@ class GPUPostFX:
                                     : clamp(1.0 - float(dist_edge) / 8.0, 0.0, 1.0);
                                 float eff_w = is_blood ? 0.80 : water;
                                 float strength = fade * (is_feature ? (0.44 * eff_w + 0.12) : (0.22 * eff_w));
-                                vec3 ref_tint = is_blood ? vec3(0.96, 0.62, 0.66) : vec3(0.84, 0.94, 1.03);
+                                vec3 ref_tint = vec3(0.84, 0.94, 1.03);
+                                if (is_blood) {{
+                                    vec3 albedo = texelFetch(u_diffuse, p, 0).rgb;
+                                    ref_tint = albedo.g > albedo.r ? vec3(0.62, 0.96, 0.66) : vec3(0.96, 0.62, 0.66);
+                                }}
                                 vec3 ref_col = texelFetch(u_scene, sp, 0).rgb * ref_tint;
                                 out_rgb = mix(out_rgb, max(out_rgb * 0.65, ref_col), strength);
                             }}
@@ -163,7 +168,7 @@ class GPUPostFX:
                 }}
             """,
         )
-        for unit, name in enumerate(("u_scene", "u_mat", "u_ent_y", "u_fov", "u_walls", "u_outdoor")):
+        for unit, name in enumerate(("u_scene", "u_mat", "u_ent_y", "u_fov", "u_walls", "u_outdoor", "u_diffuse")):
             self.reflect_prog[name].value = unit
         self._u_refl_cam = self.reflect_prog["u_cam"]
         self._u_refl_time = self.reflect_prog["u_time"]
@@ -435,7 +440,7 @@ class GPUPostFX:
 
     def render(
         self, src_tex, src_fbo, mat_tex, ent_y_tex, fov_tex, walls_tex,
-        cam, time_sec, *, viewer=(VIEW_W * 0.5, VIEW_H * 0.5),
+        cam, time_sec, *, diffuse_tex, viewer=(VIEW_W * 0.5, VIEW_H * 0.5),
         enable_reflections=True, enable_bloom=True, enable_eye_adaptation=True,
         enable_color_grade=True, color_grade=None,
         enable_heat_combat=True, combat_fx=(0.0, 0.0), rain_amt=0.0, outdoor_tex=None,
@@ -460,6 +465,7 @@ class GPUPostFX:
             walls_tex.use(4)
             self._u_refl_wet.value = float(rain_amt)
             (outdoor_tex or walls_tex).use(5)
+            diffuse_tex.use(6)
             self.reflect_vao.render(gl.TRIANGLE_STRIP)
             cur_tex, cur_fbo = self.tex_refl, self.reflect_fbo
 

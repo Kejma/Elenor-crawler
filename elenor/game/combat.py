@@ -6,6 +6,7 @@ from elenor.entities.objects import JUNGLE_CHESTS, JUNGLE_KEY_COLORS, JUNGLE_VAS
 from elenor.config import COIN_TEXT_COLOR, COMBAT_INPUT_WINDOW
 from elenor.audio.abilities import ability_sound
 from elenor.data.abilities import PASSIVES, spell_school
+from elenor.data.blood import BLOOD_PALETTES
 from elenor.missions.rats import get_mission_texts, handle_mission_object_interaction
 from elenor.profile import save_profile
 
@@ -718,7 +719,7 @@ class CombatMixin:
 
                 m.hit_flash_timer = 0.12
                 m.hit_flash_crit = is_crit
-                self.fx.add_blood_splatter(m.x, m.y, count=6 if is_crit else 3, is_kill=False)
+                self.fx.add_blood_splatter(m.x, m.y, count=6 if is_crit else 3, is_kill=False, blood_color=m.blood_color)
 
                 y_pop_off = -0.22 * hit_i
                 if is_crit:
@@ -1149,9 +1150,9 @@ class CombatMixin:
                 self.fx.add_boss_bloodbath(m.x, m.y, self.dungeon)
                 self.sfx.play("crit")
             else:
-                self.fx.add_blood_splatter(m.x, m.y, count=10, is_kill=True)
+                self.fx.add_blood_splatter(m.x, m.y, count=10, is_kill=True, blood_color=m.blood_color)
                 if random.random() < 0.75:
-                    self.fx.spawn_gibs(m.x, m.y, count=random.randint(1, 3), is_boss=False)
+                    self.fx.spawn_gibs(m.x, m.y, count=random.randint(1, 3), blood_color=m.blood_color)
             if getattr(m, "no_rewards", False):
                 self.add_log("combat", f"Враг из засады повержен: {m.kind} (0 опыта).", (165, 165, 175))
                 for _ in range(10):
@@ -1237,10 +1238,11 @@ class CombatMixin:
                 spd = random.uniform(0.8, 3.2)
                 self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, (220, 210, 195), 3.0, 0.45))
             if m.kind != "rat_king":
+                colors = BLOOD_PALETTES[m.blood_color].particles
                 for _ in range(18):
                     ang = random.uniform(0, 6.28)
                     spd = random.uniform(1.0, 3.8)
-                    bcol = random.choice([(185, 18, 26), (135, 12, 20), (225, 28, 36)])
+                    bcol = random.choice(colors)
                     self.particles.append(Particle(m.x, m.y, math.cos(ang) * spd, math.sin(ang) * spd, bcol, random.uniform(1.8, 3.4), random.uniform(0.22, 0.48)))
 
 

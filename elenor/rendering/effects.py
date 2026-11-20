@@ -3,6 +3,8 @@ import random
 import pygame
 import numpy as np
 from elenor.config import OPAQUE_WALL_TILES, MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
+from elenor.data.blood import BLOOD_PALETTES
+
 
 class FXManager:
     """Управляет всеми графическими эффектами, объёмным туманом, вечными декалями и панелями [F2] / [F3]."""
@@ -205,17 +207,12 @@ class FXManager:
         })
 
     # --- ПАМЯТЬ ПОЛЯ БОЯ (ВЕЧНЫЕ ДЕКАЛИ НА ПОЛУ) ---
-    def add_blood_splatter(self, wx, wy, count=5, is_kill=False):
+    def add_blood_splatter(self, wx, wy, count=5, is_kill=False, *, blood_color="red"):
         self.has_decals = True
         self.decal_revision += 1
         cx = int(wx * TILE_W)
         cy = int((wy + 0.25) * TILE_H)
-        palette = [
-            (142, 14, 22, 230),
-            (178, 20, 28, 240),
-            (102, 10, 16, 220),
-            (205, 24, 32, 235),
-        ]
+        palette = BLOOD_PALETTES[blood_color].floor
         if is_kill:
             for _ in range(random.randint(2, 3)):
                 pw = random.randint(8, 15)
@@ -245,17 +242,12 @@ class FXManager:
             sz = random.choice([1, 1, 2, 2]) if not is_kill else random.choice([1, 2, 2, 3, 3])
             pygame.draw.rect(self.decal_surf, col, (ox, oy, sz, sz))
 
-    def _splat_wall_blood(self, wx, wy, dx=0.0, dy=0.0, big=False):
+    def _splat_wall_blood(self, wx, wy, dx=0.0, dy=0.0, big=False, *, blood_color="red"):
         self.has_decals = True
         self.decal_revision += 1
         cx = int(wx * TILE_W + dx * 3.0)
         cy = int(wy * TILE_H + dy * 3.0)
-        blood_pal = [
-            (148, 12, 20, 240),
-            (188, 18, 28, 245),
-            (108, 8, 14, 235),
-            (218, 24, 34, 240),
-        ]
+        blood_pal = BLOOD_PALETTES[blood_color].wall
         n_splat = random.randint(10, 18) if big else random.randint(5, 9)
         rad = 8 if big else 5
         for _ in range(n_splat):
@@ -270,7 +262,8 @@ class FXManager:
             dr_len = random.randint(6, 16) if big else random.randint(4, 10)
             pygame.draw.line(self.decal_surf, random.choice(blood_pal[:2]), (dr_x, dr_y), (dr_x, dr_y + dr_len), random.choice([1, 2]))
 
-    def spawn_gibs(self, wx, wy, count=2, is_boss=False):
+    def spawn_gibs(self, wx, wy, count=2, is_boss=False, *, blood_color="red"):
+        palette = BLOOD_PALETTES[blood_color]
         for _ in range(count):
             ang = random.uniform(0.0, math.tau)
             spd = random.uniform(4.2, 13.5) if is_boss else random.uniform(2.4, 6.2)
@@ -285,11 +278,11 @@ class FXManager:
                 w, h = 3, 1
             elif roll > 0.48:
                 kind = "limb"
-                col = random.choice([(135, 34, 40), (112, 22, 28)])
+                col = random.choice(palette.limb)
                 w, h = 3, 2
             else:
                 kind = "meat"
-                col = random.choice([(172, 22, 30), (140, 14, 22), (195, 32, 38)])
+                col = random.choice(palette.meat)
                 w, h = 2, 2
             self.gibs.append({
                 "wx": float(wx) + random.uniform(-0.2, 0.2),
@@ -300,6 +293,7 @@ class FXManager:
                 "vz": random.uniform(28.0, 68.0) if is_boss else random.uniform(18.0, 42.0),
                 "kind": kind,
                 "color": col,
+                "blood_color": blood_color,
                 "w": w,
                 "h": h,
                 "trail_cd": 0.0,
@@ -311,12 +305,7 @@ class FXManager:
         self.decal_revision += 1
         cx = int(wx * TILE_W)
         cy = int((wy + 0.2) * TILE_H)
-        blood_pal = [
-            (148, 12, 20, 240),
-            (188, 18, 28, 245),
-            (108, 8, 14, 235),
-            (218, 24, 34, 240),
-        ]
+        blood_pal = BLOOD_PALETTES["red"].wall
         # Огромное озеро крови вокруг места гибели босса
         for _ in range(14):
             pw = random.randint(20, 46)
@@ -464,6 +453,8 @@ class FXManager:
                 self.ripples.remove(rp)
 
         for gb in list(self.gibs):
+            blood_color = gb["blood_color"]
+            palette = BLOOD_PALETTES[blood_color]
             gb["life"] -= dt
             gb["trail_cd"] -= dt
             nx = gb["wx"] + gb["vx"] * dt
@@ -471,7 +462,7 @@ class FXManager:
 
             tx_n, ty_c = int(nx), int(gb["wy"])
             if 0 <= tx_n < dungeon.width and 0 <= ty_c < dungeon.height and dungeon.grid[ty_c][tx_n] in OPAQUE_WALL_TILES:
-                self._splat_wall_blood(nx, gb["wy"], 1.0 if gb["vx"] > 0 else -1.0, 0.0, big=(abs(gb["vx"]) > 5.0))
+                self._splat_wall_blood(nx, gb["wy"], 1.0 if gb["vx"] > 0 else -1.0, 0.0, big=(abs(gb["vx"]) > 5.0), blood_color=blood_color)
                 gb["vx"] = -gb["vx"] * 0.40
                 gb["vy"] *= 0.65
             else:
@@ -479,7 +470,7 @@ class FXManager:
 
             tx_c, ty_n = int(gb["wx"]), int(ny)
             if 0 <= tx_c < dungeon.width and 0 <= ty_n < dungeon.height and dungeon.grid[ty_n][tx_c] in OPAQUE_WALL_TILES:
-                self._splat_wall_blood(gb["wx"], ny, 0.0, 1.0 if gb["vy"] > 0 else -1.0, big=(abs(gb["vy"]) > 5.0))
+                self._splat_wall_blood(gb["wx"], ny, 0.0, 1.0 if gb["vy"] > 0 else -1.0, big=(abs(gb["vy"]) > 5.0), blood_color=blood_color)
                 gb["vy"] = -gb["vy"] * 0.40
                 gb["vx"] *= 0.65
             else:
@@ -496,7 +487,7 @@ class FXManager:
                     # Брызг крови в точке отскока от пола
                     bx_p = int(gb["wx"] * TILE_W)
                     by_p = int(gb["wy"] * TILE_H)
-                    pygame.draw.ellipse(self.decal_surf, (152, 16, 24, 225), (bx_p - 3, by_p - 2, 6, 4))
+                    pygame.draw.ellipse(self.decal_surf, palette.bounce, (bx_p - 3, by_p - 2, 6, 4))
                     self.has_decals = True
                     self.decal_revision += 1
                 else:
@@ -510,7 +501,7 @@ class FXManager:
                 gb["trail_cd"] = 0.025
                 bx_p = int(gb["wx"] * TILE_W) + random.randint(-1, 1)
                 by_p = int(gb["wy"] * TILE_H) + random.randint(-1, 1)
-                pygame.draw.rect(self.decal_surf, random.choice([(158, 16, 24, 220), (195, 22, 30, 230)]), (bx_p, by_p, random.choice([1, 2]), random.choice([1, 2])))
+                pygame.draw.rect(self.decal_surf, random.choice(palette.trail), (bx_p, by_p, random.choice([1, 2]), random.choice([1, 2])))
                 self.has_decals = True
                 self.decal_revision += 1
 
@@ -518,7 +509,7 @@ class FXManager:
                 # Впекаем остановившийся кусок навсегда в пол
                 bx_p = int(gb["wx"] * TILE_W)
                 by_p = int(gb["wy"] * TILE_H)
-                pygame.draw.ellipse(self.decal_surf, (125, 12, 18, 220), (bx_p - 3, by_p - 1, 6, 4))
+                pygame.draw.ellipse(self.decal_surf, palette.settled, (bx_p - 3, by_p - 1, 6, 4))
                 pygame.draw.rect(self.decal_surf, (*gb["color"], 245), (bx_p - gb["w"] // 2, by_p - gb["h"] // 2, gb["w"], gb["h"]))
                 self.has_decals = True
                 self.decal_revision += 1

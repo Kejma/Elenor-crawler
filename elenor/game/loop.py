@@ -657,7 +657,7 @@ def main():
                             m.hp -= dmg
                             m.hit_flash_timer = 0.12
                             m.hit_flash_crit = is_crit
-                            game.fx.add_blood_splatter(m.x, m.y, count=6 if is_crit else 3, is_kill=False)
+                            game.fx.add_blood_splatter(m.x, m.y, count=6 if is_crit else 3, is_kill=False, blood_color=m.blood_color)
 
                             if pr.knockback > 0:
                                 v_len = max(0.001, math.hypot(pr.vx, pr.vy))

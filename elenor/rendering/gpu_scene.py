@@ -226,7 +226,8 @@ class GPUSceneRenderer:
                     if (d.a <= 0.02) discard;
                     out_diff = d;
                     out_norm = vec4(0.0);
-                    float is_liq = (d.r > d.g * 1.45 && d.r > 0.22) ? 1.0 : 0.0;
+                    float dominant = max(d.r, d.g);
+                    float is_liq = (dominant > min(d.r, d.g) * 1.45 && dominant > 0.22) ? 1.0 : 0.0;
                     out_em = vec4(0.0, mix(0.10, 0.88, is_liq), is_liq * 0.28, d.a);
                 }
             """,

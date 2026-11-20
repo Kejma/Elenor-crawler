@@ -46,7 +46,7 @@ def hit(game, mob, item, power, credit, nx, ny):
     mob.hit_flash_timer = 0.12
     fx = getattr(game, "fx", None)
     if fx is not None:
-        fx.add_blood_splatter(mob.x, mob.y, count=4, is_kill=False)
+        fx.add_blood_splatter(mob.x, mob.y, count=4, is_kill=False, blood_color=mob.blood_color)
     _spawn_particles(
         game,
         mob.x,

@@ -754,7 +754,7 @@ class GPULightShader:
             out_tex, out_fbo = self.postfx.render(
                 src_tex, src_fbo, self.tex_emissive, self.tex_ent_y, fov_for_post, self.tex_walls,
                 (float(cam_x), float(cam_y)), float(time_sec),
-                viewer=viewer,
+                diffuse_tex=self.tex_diff, viewer=viewer,
                 enable_reflections=enable_reflections, enable_bloom=enable_bloom,
                 enable_eye_adaptation=enable_eye_adaptation,
                 enable_color_grade=enable_color_grade, color_grade=color_grade,
