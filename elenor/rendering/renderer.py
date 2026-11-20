@@ -43,7 +43,7 @@ class Renderer(UIRendererMixin):
         pygame.draw.ellipse(self._shadow_big, (8, 6, 12, 120), (0, 0, 20, 6))
         self.light_occlusion = LightOcclusion()
         self.fog_renderer = FogRenderer(self.light_occlusion)
-        self.init_standalone_shader()
+        self.gpu_shader = None
         self._diff_pixels = bytearray(VIEW_W * CANVAS_H * 4)
         self._norm_pixels = bytearray(VIEW_W * CANVAS_H * 4)
         self._emissive_pixels = bytearray(VIEW_W * CANVAS_H * 4)

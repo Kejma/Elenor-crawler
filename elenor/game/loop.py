@@ -8,7 +8,7 @@ from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CA
 from elenor.entities import Enemy, Interactable, Particle
 from elenor.rendering.effects import STEP_LIQUID_TILES
 from elenor.missions.rats import get_mission_texts, update_mission_audio
-from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas
+from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas, save_profile
 
 
 from elenor.game.controller import GameController
@@ -120,6 +120,15 @@ def main():
                 break
             if not game.in_main_menu:
                 continue
+            pending_display = game.main_menu.pending_display
+            if pending_display is not None:
+                setting, value = pending_display
+                game.main_menu.pending_display = None
+                requested_profile = dict(game.profile, **{setting: value})
+                apply_display_mode(requested_profile, game)
+                game.profile.update(requested_profile)
+                save_profile(game.profile)
+                mouse_pos = map_window_to_logical(pygame.mouse.get_pos(), game.viewport_rect)
             screen = game.gl_window.canvas if game.gl_window is not None else software_canvas
             game.main_menu.update(dt)
             game.main_menu.render(screen, dt, mouse_pos)

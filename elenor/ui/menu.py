@@ -4,7 +4,7 @@ from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER
 from elenor.rendering.normals import LiveLightPreview
 
 
-from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, apply_display_mode, get_available_resolutions, resolution_index, WINDOW_MODES_LIST
+from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, get_available_resolutions, resolution_index, WINDOW_MODES_LIST
 from elenor.data.economy import format_copper_Trigger
 from elenor.rendering.appearance import HERO_TYPES_ORDER, HERO_CUSTOMIZATION_DB, build_custom_hero_sprite
 from elenor.ui.clipboard import paste_text
@@ -24,6 +24,7 @@ class MainMenuController:
         self.meltdown_active = False
         self.confirm_reset_timer = 0.0
         self.open_dropdown = None
+        self.pending_display = None
         self.dropdown_item_rects = []
         self.can_resume = False
         self.seed_text = ""
@@ -90,12 +91,8 @@ class MainMenuController:
                 for opt_val, opt_rect in self.dropdown_item_rects:
                     if opt_rect.collidepoint(mouse_pos):
                         self.game.sfx.play("ui")
-                        if self.open_dropdown == "win_mode":
-                            prof["window_mode"] = opt_val
-                        elif self.open_dropdown == "resolution":
-                            prof["resolution_idx"] = opt_val
-                        save_profile(prof)
-                        apply_display_mode(prof, self.game)
+                        setting = "window_mode" if self.open_dropdown == "win_mode" else "resolution_idx"
+                        self.pending_display = setting, opt_val
                         self.open_dropdown = None
                         return True
                 self.open_dropdown = None
