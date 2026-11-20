@@ -3,6 +3,7 @@ import random
 
 
 from elenor.audio.voices import choose_voice, next_call_delay
+from elenor.data.blood import choose_blood_color
 from elenor.entities.effects import Projectile
 from elenor.entities.jungle_combat import ATTACKS, TRIBE, update_jungle_combat
 
@@ -74,16 +75,19 @@ MOB_PROFILES = {
         "is_ranged": False, "is_boss": True, "size_tiles": 2, "xp": 135,
     },
     "vedalken_mage": {
+        "blood_color": "vedalken",
         "sprite": "vedalken_mage", "hp": 26, "speed": 2.40, "dmg_min": 7, "dmg_max": 12,
         "phys_def": 2, "mag_def": 5, "detect_range": 6.8, "perception": 1.25,
         "is_ranged": True, "proj_color": (110, 235, 255), "is_boss": False, "size_tiles": 1, "xp": 28,
     },
     "vedalken_four_armed": {
+        "blood_color": "vedalken",
         "sprite": "vedalken_four_armed", "hp": 36, "speed": 2.60, "dmg_min": 9, "dmg_max": 14,
         "phys_def": 3, "mag_def": 6, "detect_range": 7.0, "perception": 1.30,
         "is_ranged": True, "proj_color": (185, 115, 255), "is_boss": False, "size_tiles": 1, "xp": 36,
     },
     "vedalken_arbiter": {
+        "blood_color": "vedalken",
         "sprite": "vedalken_arbiter", "hp": 280, "speed": 2.30, "dmg_min": 13, "dmg_max": 19,
         "phys_def": 5, "mag_def": 8, "detect_range": 8.8, "perception": 1.50,
         "is_ranged": True, "proj_color": (115, 245, 255), "is_boss": True, "size_tiles": 2, "xp": 190,
@@ -183,7 +187,7 @@ class Enemy:
 
         prof = MOB_PROFILES.get(kind, MOB_PROFILES["rat"])
         self.sprite = prof["sprite"]
-        self.blood_color = prof.get("blood_color", "red")
+        self.blood_color = choose_blood_color(prof.get("blood_color", "red"))
         self.max_hp = round(prof["hp"] * (1.06 if prof.get("is_boss") else 1.16))
         self.hp = self.max_hp
         self.speed = prof["speed"]

@@ -1,5 +1,6 @@
 """Shared color palettes for blood particles and decals."""
 
+from random import Random
 from typing import NamedTuple
 
 
@@ -36,3 +37,38 @@ _GREEN_BLOOD = BloodPalette(
 )
 
 BLOOD_PALETTES = {"red": _RED_BLOOD, "green": _GREEN_BLOOD}
+
+
+# Bake the shades once. Each enemy keeps one palette from spawn through death.
+def _vedalken_palette(blend):
+    red = 0.21 + 0.65 * blend
+    green = 0.43 - 0.30 * blend
+
+    def tint(color):
+        shade = color[0]
+        return round(shade * red), round(shade * green), round(shade * 0.92), *color[3:]
+
+    return BloodPalette(
+        floor=tuple(map(tint, _RED_BLOOD.floor)),
+        wall=tuple(map(tint, _RED_BLOOD.wall)),
+        bounce=tint(_RED_BLOOD.bounce),
+        trail=tuple(map(tint, _RED_BLOOD.trail)),
+        settled=tint(_RED_BLOOD.settled),
+        particles=tuple(map(tint, _RED_BLOOD.particles)),
+        limb=tuple(map(tint, _RED_BLOOD.limb)),
+        meat=tuple(map(tint, _RED_BLOOD.meat)),
+    )
+
+
+_VEDALKEN_SHADES = tuple(f"vedalken_{index}" for index in range(24))
+BLOOD_PALETTES.update(
+    (shade, _vedalken_palette(index / (len(_VEDALKEN_SHADES) - 1)))
+    for index, shade in enumerate(_VEDALKEN_SHADES)
+)
+_blood_rng = Random()
+
+
+def choose_blood_color(color):
+    if color == "vedalken":
+        return _blood_rng.choice(_VEDALKEN_SHADES)
+    return color

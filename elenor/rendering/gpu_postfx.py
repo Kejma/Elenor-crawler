@@ -157,7 +157,11 @@ class GPUPostFX:
                                 vec3 ref_tint = vec3(0.84, 0.94, 1.03);
                                 if (is_blood) {{
                                     vec3 albedo = texelFetch(u_diffuse, p, 0).rgb;
-                                    ref_tint = albedo.g > albedo.r ? vec3(0.62, 0.96, 0.66) : vec3(0.96, 0.62, 0.66);
+                                    if (albedo.b > max(albedo.r, albedo.g)) {{
+                                        ref_tint = mix(vec3(0.62), vec3(0.96), albedo / albedo.b);
+                                    }} else {{
+                                        ref_tint = albedo.g > albedo.r ? vec3(0.62, 0.96, 0.66) : vec3(0.96, 0.62, 0.66);
+                                    }}
                                 }}
                                 vec3 ref_col = texelFetch(u_scene, sp, 0).rgb * ref_tint;
                                 out_rgb = mix(out_rgb, max(out_rgb * 0.65, ref_col), strength);

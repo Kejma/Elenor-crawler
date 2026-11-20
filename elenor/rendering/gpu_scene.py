@@ -227,7 +227,9 @@ class GPUSceneRenderer:
                     out_diff = d;
                     out_norm = vec4(0.0);
                     float dominant = max(d.r, d.g);
-                    float is_liq = (dominant > min(d.r, d.g) * 1.45 && dominant > 0.22) ? 1.0 : 0.0;
+                    bool red_or_green = dominant > min(d.r, d.g) * 1.45 && dominant > 0.22;
+                    bool blue_or_purple = d.b > dominant && d.b > d.g * 1.45 && d.b > 0.22;
+                    float is_liq = (red_or_green || blue_or_purple) ? 1.0 : 0.0;
                     out_em = vec4(0.0, mix(0.10, 0.88, is_liq), is_liq * 0.28, d.a);
                 }
             """,
