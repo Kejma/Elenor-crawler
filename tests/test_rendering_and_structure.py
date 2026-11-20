@@ -66,24 +66,18 @@ class RenderingTests(unittest.TestCase):
         expected.blit(pygame.transform.scale(source, (16, 8)), (2, 2))
         self.assertEqual(pygame.image.tobytes(destination, "RGB"), pygame.image.tobytes(expected, "RGB"))
 
-    def test_native_windows_resolution_leaves_distinct_nonexclusive_modes(self):
+    def test_windowed_modes_keep_the_requested_client_resolution(self):
         from elenor.profile import _display_window_spec
 
-        desktop = (2560, 1440)
-        windowed, window_flags = _display_window_spec("windowed", desktop, desktop, windows=True)
-        borderless, border_flags = _display_window_spec("borderless", desktop, desktop, windows=True)
-        fullscreen, full_flags = _display_window_spec("fullscreen", desktop, desktop, windows=True)
-
-        self.assertEqual(window_flags, 0)
-        self.assertEqual(border_flags, pygame.NOFRAME)
-        self.assertEqual(full_flags, pygame.NOFRAME)
-        self.assertLess(windowed[1], borderless[1])
-        self.assertLess(borderless[1], fullscreen[1])
-        self.assertLess(fullscreen[1], desktop[1])
-        self.assertEqual(
-            _display_window_spec("windowed", (1920, 1080), desktop, windows=True),
-            ((1920, 1080), 0),
-        )
+        for target, desktop in (
+            ((2560, 1440), (2560, 1440)),
+            ((2560, 1440), (3840, 2160)),
+            ((3840, 2160), (3840, 2160)),
+        ):
+            with self.subTest(target=target, desktop=desktop):
+                self.assertEqual(_display_window_spec("windowed", target, desktop), (target, 0))
+                self.assertEqual(_display_window_spec("borderless", target, desktop), (target, pygame.NOFRAME))
+                self.assertEqual(_display_window_spec("fullscreen", target, desktop), (desktop, pygame.NOFRAME))
 
     def test_unavailable_direct_gl_recovers_software_window(self):
         profile = {}

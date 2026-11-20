@@ -1,7 +1,6 @@
 from elenor.paths import PROJECT_ROOT
 import json
 import os
-import sys
 import pygame
 from elenor.config import SCREEN_W, SCREEN_H
 
@@ -119,22 +118,11 @@ def resolution_index(profile, available):
     return next((i for i, (w, h, _) in enumerate(available) if w <= SCREEN_W and h <= SCREEN_H), 0)
 
 
-def _display_window_spec(mode, target, desktop, *, windows):
-    """Choose an SDL window size and flags without changing the monitor mode."""
-    width, height = desktop if mode == "fullscreen" else target
+def _display_window_spec(mode, target, desktop):
+    """Choose the client area and decorations without changing the monitor mode."""
+    size = desktop if mode == "fullscreen" else target
     flags = pygame.NOFRAME if mode in ("borderless", "fullscreen") else 0
-    if windows:
-        desktop_w, desktop_h = desktop
-        if mode != "fullscreen":
-            # Windowed modes fit above the taskbar even at the monitor's native resolution.
-            margin_w, margin_h = (2, 56) if flags else (32, 96)
-            factor = min(1.0, max(1, desktop_w - margin_w) / width, max(1, desktop_h - margin_h) / height)
-            return (max(1, round(width * factor)), max(1, round(height * factor))), flags
-        if width >= desktop_w and height >= desktop_h:
-            # Keep a sliver of desktop visible to avoid a monitor-covering WGL window.
-            width = max(1, desktop_w - 2)
-            height = max(1, desktop_h - 2)
-    return (width, height), flags
+    return size, flags
 
 
 def apply_display_mode(prof, game=None):
@@ -152,8 +140,7 @@ def apply_display_mode(prof, game=None):
     except pygame.error:
         desktops = ()
     desktop = desktops[0] if desktops else target
-    windows = sys.platform == "win32"
-    size, flags = _display_window_spec(w_mode, target, desktop, windows=windows)
+    size, flags = _display_window_spec(w_mode, target, desktop)
     spec = size, flags
     if game is not None and getattr(game, "display_spec", None) == spec:
         return game.display_surface, game.viewport_rect
@@ -184,7 +171,7 @@ def apply_display_mode(prof, game=None):
         try:
             disp_surf = pygame.display.set_mode(size, flags)
         except pygame.error:
-            size, flags = _display_window_spec("windowed", (SCREEN_W, SCREEN_H), desktop, windows=windows)
+            size, flags = _display_window_spec("windowed", (SCREEN_W, SCREEN_H), desktop)
             disp_surf = pygame.display.set_mode(size, flags)
             spec = size, flags
             prof["window_mode"] = "windowed"
