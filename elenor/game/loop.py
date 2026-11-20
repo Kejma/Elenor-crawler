@@ -4,8 +4,9 @@ import random
 from time import perf_counter
 import pygame
 
-from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, SHALLOW_WATER, FALLEN_LOG
+from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CANVAS_H, SCALE, THOUGHT_BOX_X, THOUGHT_BOX_W, TORCH_Z_HEIGHT, PIER, FALLEN_LOG
 from elenor.entities import Enemy, Interactable, Particle
+from elenor.rendering.effects import STEP_LIQUID_TILES
 from elenor.missions.rats import update_mission_audio
 from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas
 
@@ -498,7 +499,7 @@ def main():
                 if game.player.step_sound_cd <= 0.0:
                     game.player.step_sound_cd = 0.28
                     t_step = game.dungeon.grid[int(game.player.y)][int(game.player.x)]
-                    if t_step in (2, SHALLOW_WATER, 23, 32, 44):
+                    if t_step in STEP_LIQUID_TILES:
                         green = t_step in (23, 44)
                         game.sfx.play("step_water")
                         game.fx.add_water_ripple(game.player.x, game.player.y, green=green)
@@ -506,6 +507,8 @@ def main():
                         for _ in range(3):
                             ang = random.uniform(0, 6.28)
                             game.particles.append(Particle(game.player.x, game.player.y, math.cos(ang) * 1.4, math.sin(ang) * 1.4 - 0.8, splash, 2.2, 0.22))
+                    elif game.fx.add_blood_ripple(game.player.x, game.player.y):
+                        game.sfx.play("step_water")
                     elif t_step in (4, PIER, FALLEN_LOG):
                         game.sfx.play("step_wood")
                     elif t_step == 0:

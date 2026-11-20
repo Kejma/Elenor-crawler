@@ -1,9 +1,29 @@
+from functools import lru_cache
 import math
 import random
 import pygame
 import numpy as np
-from elenor.config import OPAQUE_WALL_TILES, MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
+from elenor.config import DEEP_WATER, SHALLOW_WATER, OPAQUE_WALL_TILES, MAP_COLS, MAP_ROWS, TILE_W, TILE_H, VIEW_W, VIEW_H, SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_GOLD, UI_BORDER_WOOD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM
 from elenor.data.blood import BLOOD_PALETTES
+
+
+STEP_LIQUID_TILES = frozenset((2, 23, 32, 44, SHALLOW_WATER, DEEP_WATER))
+_RIPPLE_COLORS = {
+    "water": ((85, 165, 210), (50, 110, 150)),
+    "green": ((128, 214, 102), (62, 137, 70)),
+    "blood": ((207, 61, 67), (135, 34, 42)),
+}
+
+
+@lru_cache(maxsize=32)
+def _ripple_pixels(rx, ry):
+    surf = pygame.Surface((2 * rx, 2 * ry))
+    pygame.draw.ellipse(surf, (255, 255, 255), surf.get_rect(), 1)
+    return tuple((int(x) - rx, int(y) - ry) for x, y in zip(*np.nonzero(pygame.surfarray.array2d(surf))))
+
+
+def _is_red_blood(color):
+    return color.a >= 180 and color.r > 75 and color.r > 2 * color.g and color.r > 2 * color.b
 
 
 class FXManager:
@@ -397,13 +417,50 @@ class FXManager:
 
     # --- КРУГИ НА ВОДЕ (СТРОГО ПОД ПОДОШВАМИ САПОГ: wy + 0.36!) ---
     def add_water_ripple(self, wx, wy, *, green=False):
-        self.ripples.append({
-            "wx": float(wx),
-            "wy": float(wy) + 0.36,
-            "green": green,
-            "timer": 0.55,
-            "max_timer": 0.55
-        })
+        self._add_ripple(wx, wy, "green" if green else "water")
+
+    def add_blood_ripple(self, wx, wy):
+        if not self.has_decals:
+            return False
+        px, py = int(wx * TILE_W), int((wy + .36) * TILE_H)
+        bounds = self.decal_surf.get_rect().clip((px - 2, py - 2, 5, 5))
+        coverage = sum(
+            _is_red_blood(self.decal_surf.get_at((x, y)))
+            for y in range(bounds.top, bounds.bottom)
+            for x in range(bounds.left, bounds.right)
+        )
+        if coverage < 17:
+            return False
+        self._add_ripple(wx, wy, "blood")
+        return True
+
+    def _add_ripple(self, wx, wy, kind):
+        self.ripples.append({"wx": wx, "wy": wy + .36, "kind": kind, "timer": .55, "max_timer": .55})
+
+    def draw_ripples(self, target, dungeon, cam_x, cam_y):
+        clip = target.get_clip()
+        grid = dungeon.grid
+        width, height = dungeon.width, dungeon.height
+        for ripple in self.ripples:
+            progress = 1 - ripple["timer"] / ripple["max_timer"]
+            rx, ry = int(2 + progress * 7), int(1 + progress * 4)
+            wx, wy = int(ripple["wx"] * TILE_W), int(ripple["wy"] * TILE_H)
+            sx, sy = int(wx - cam_x), int(wy - cam_y)
+            if not clip.colliderect((sx - rx, sy - ry, 2 * rx, 2 * ry)):
+                continue
+            kind = ripple["kind"]
+            color = _RIPPLE_COLORS[kind][progress >= .5]
+            for dx, dy in _ripple_pixels(rx, ry):
+                x, y = wx + dx, wy + dy
+                tx, ty = x // TILE_W, y // TILE_H
+                if not (0 <= tx < width and 0 <= ty < height and clip.collidepoint(sx + dx, sy + dy)):
+                    continue
+                if kind == "blood":
+                    if grid[ty][tx] in OPAQUE_WALL_TILES or not _is_red_blood(self.decal_surf.get_at((x, y))):
+                        continue
+                elif grid[ty][tx] not in STEP_LIQUID_TILES:
+                    continue
+                target.set_at((sx + dx, sy + dy), color)
 
     def trigger_shake(self, amplitude=1.8, duration=0.14):
         self.shake_amp = max(self.shake_amp, float(amplitude))

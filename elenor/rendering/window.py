@@ -142,6 +142,26 @@ class GLWindow:
             uniform bool has_dev_ui;
             out vec4 color;
 
+            vec4 ui_tap(sampler2D layer, ivec2 coord) {{
+                ivec2 end = ivec2({SCREEN_W - 1}, {SCREEN_H - 1});
+                vec4 tap = texelFetch(layer, clamp(coord, ivec2(0), end), 0);
+                return vec4(tap.rgb * tap.a, tap.a);
+            }}
+
+            vec4 sample_ui(sampler2D layer, ivec2 physical, ivec2 logical) {{
+                if (logical_scale.x >= 1.0 && logical_scale.y >= 1.0) {{
+                    vec4 tap = texelFetch(layer, logical, 0);
+                    return vec4(tap.rgb * tap.a, tap.a);
+                }}
+                // Sharpen the bilinear weights while retaining subpixel edge coverage.
+                vec2 point = (vec2(physical) + 0.5) * logical_scale - 0.5;
+                ivec2 corner = ivec2(floor(point));
+                vec2 weight = smoothstep(vec2(0.10), vec2(0.90), fract(point));
+                vec4 top = mix(ui_tap(layer, corner), ui_tap(layer, corner + ivec2(1, 0)), weight.x);
+                vec4 bottom = mix(ui_tap(layer, corner + ivec2(0, 1)), ui_tap(layer, corner + ivec2(1, 1)), weight.x);
+                return mix(top, bottom, weight.y);
+            }}
+
             void main() {{
                 ivec2 p = ivec2(gl_FragCoord.xy) - viewport.xy;
                 p.y = viewport.z - p.y - 1;
@@ -165,11 +185,11 @@ class GLWindow:
                         base = mix(base, fx.rgb, fx.a);
                     }}
                 }}
-                vec4 ui = texelFetch(overlay, logical, 0);
-                vec3 out_col = mix(base, ui.rgb, ui.a);
+                vec4 ui = sample_ui(overlay, p, logical);
+                vec3 out_col = base * (1.0 - ui.a) + ui.rgb;
                 if (has_dev_ui && logical.y < {_THOUGHT_Y}) {{
-                    vec4 dev = texelFetch(dev_ui, logical, 0);
-                    out_col = mix(out_col, dev.rgb, dev.a);
+                    vec4 dev = sample_ui(dev_ui, p, logical);
+                    out_col = out_col * (1.0 - dev.a) + dev.rgb;
                 }}
                 color = vec4(out_col, 1.0);
             }}

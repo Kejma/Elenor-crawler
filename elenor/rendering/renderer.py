@@ -544,8 +544,8 @@ class Renderer(UIRendererMixin):
             self.emissive_cache[key] = em
         return self.emissive_cache[key]
 
-    def _get_speech_bubble(self, text, txt_col, bg_col, border_col, max_w):
-        key = (text, txt_col, bg_col, border_col, max_w)
+    def _get_speech_bubble(self, text, txt_col, bg_col, border_col, max_w, *, backing_alpha=255):
+        key = (text, txt_col, bg_col, border_col, max_w, backing_alpha)
         surf = self._bubble_cache.get(key)
         if surf is None:
             if len(self._bubble_cache) >= 64:
@@ -555,8 +555,8 @@ class Renderer(UIRendererMixin):
             bw = max(s.get_width() for s in rendered) + 14
             bh = len(rendered) * 16 + 8
             surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
-            pygame.draw.rect(surf, bg_col, (0, 0, bw, bh), border_radius=4)
-            pygame.draw.rect(surf, border_col, (0, 0, bw, bh), 1, border_radius=4)
+            pygame.draw.rect(surf, (*bg_col, backing_alpha), (0, 0, bw, bh), border_radius=4)
+            pygame.draw.rect(surf, (*border_col, backing_alpha), (0, 0, bw, bh), 1, border_radius=4)
             for li, r_surf in enumerate(rendered):
                 surf.blit(r_surf, ((bw - r_surf.get_width()) // 2, 4 + li * 16))
             self._bubble_cache[key] = surf
@@ -662,15 +662,7 @@ class Renderer(UIRendererMixin):
 
             # 2. Круги на воде при ходьбе по лужам
             if fx_mgr and fx_mgr.ripples:
-                for rp in fx_mgr.ripples:
-                    prog_r = 1.0 - (rp["timer"] / rp["max_timer"])
-                    rx_s = int(rp["wx"] * TILE_W - cam_x)
-                    ry_s = int(rp["wy"] * TILE_H - cam_y)
-                    rad_w = max(2, int(2 + prog_r * 7))
-                    rad_h = max(1, int(1 + prog_r * 4))
-                    palette = ((128, 214, 102), (62, 137, 70)) if rp["green"] else ((85, 165, 210), (50, 110, 150))
-                    col_r = palette[prog_r >= 0.5]
-                    pygame.draw.ellipse(self.diff_canvas, col_r, (rx_s - rad_w, ry_s - rad_h, rad_w * 2, rad_h * 2), 1)
+                fx_mgr.draw_ripples(self.diff_canvas, dungeon, cam_x, cam_y)
 
             game_ref = ui_texts.get("_game_ref")
             physical_states = getattr(game_ref, "physical_effects", ())
@@ -952,7 +944,7 @@ class Renderer(UIRendererMixin):
             if fx_mgr and fx_mgr.shake_timer > 0.0:
                 ca_str = min(1.0, (fx_mgr.shake_timer / max(0.01, fx_mgr.shake_max_timer)) * (fx_mgr.shake_amp / 1.8))
             hp_ratio = player.hp / max(1.0, float(player.max_hp))
-            low_hp = max(0.0, min(1.0, (0.35 - hp_ratio) / 0.35))
+            low_hp = max(0.0, min(1.0, (0.20 - hp_ratio) / 0.20))
             w_grid = fx_mgr.wall_grid_np if fx_mgr else None
             extra_gl = {}
             if scene_on_gpu:
@@ -1463,7 +1455,7 @@ class Renderer(UIRendererMixin):
                         bsy = int(((player.y + dir_y * rim_d - 0.6) * TILE_H - cam_y) * SCALE)
                         txt_col = (165, 160, 150)
 
-                    bubble = self._get_speech_bubble(m.current_speech, txt_col, (20, 18, 26), UI_BORDER_WOOD, 250)
+                    bubble = self._get_speech_bubble(m.current_speech, txt_col, (20, 18, 26), UI_BORDER_WOOD, 250, backing_alpha=178)
                     bw, bh = bubble.get_size()
                     bx = max(8, min(SCREEN_W - bw - 8, bsx - bw // 2))
                     by = max(6, min(VIEW_H * SCALE - bh - 6, bsy - bh - 12))

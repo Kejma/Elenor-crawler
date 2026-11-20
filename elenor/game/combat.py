@@ -361,7 +361,10 @@ class CombatMixin:
         elif obj.kind == "chest":
             opened = True
             if random.randint(1, 20) + self.player.cunning >= 11:
-                treasure = self.roll_currency_or_gem_drop(allow_gem=True, force_gem=(random.random() < 0.55))
+                if random.random() < 0.60:
+                    treasure = self.roll_item_by_rarity(allowed_types=["equipment"])
+                else:
+                    treasure = self.roll_currency_or_gem_drop()
                 self.objects.append(Interactable(obj.x, obj.y, "loot", treasure))
                 self.play_spatial("coin_drop", ox_c, oy_c)
                 self.emit_noise(ox_c, oy_c, 4.0)
@@ -1172,11 +1175,11 @@ class CombatMixin:
             self.add_log("combat", f"Враг повержен: {name} (+{m.xp_value} опыта).", (135, 245, 160))
             drop_tx, drop_ty = int(m.x), int(m.y)
             if getattr(m, "is_boss", False):
-                # С Босса высыпается платина и редкий самоцвет!
+                # За босса выдаём платину и снаряжение повышенной редкости.
                 plat = self.make_item("coin_platinum")
-                gem_boss = self.make_item(random.choice(["gem_ruby", "gem_diamond"]))
+                boss_gear = self.roll_item_by_rarity(allowed_types=["equipment"], luck=self.player.luck + 4)
                 self.objects.append(Interactable(drop_tx, drop_ty, "loot", plat))
-                self.objects.append(Interactable(max(1, drop_tx - 1), drop_ty, "loot", gem_boss))
+                self.objects.append(Interactable(max(1, drop_tx - 1), drop_ty, "loot", boss_gear))
                 self.sfx.play("coin_drop")
             else:
                 # С обычных мобов деньги падают нечасто, а самоцветы — в 10 раз реже!
@@ -1185,7 +1188,7 @@ class CombatMixin:
                     loot_drop = self.roll_currency_or_gem_drop(allow_gem=True, gem_mult=0.1)
                     self.objects.append(Interactable(drop_tx, drop_ty, "loot", loot_drop))
                     self.play_spatial("coin_drop", drop_tx + 0.5, drop_ty + 0.5)
-                if m.jungle_home is not None and self.dungeon.floor_num >= 2 and random.random() < 0.14:
+                if random.random() < (0.18 if self.dungeon.floor_num >= 2 else 0.10):
                     gear = self.roll_item_by_rarity(allowed_types=["equipment"])
                     self.objects.append(Interactable(drop_tx, drop_ty, "loot", gear))
 
