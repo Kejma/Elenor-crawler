@@ -193,30 +193,49 @@ class GPULightShader:
                 return texelFetch(u_walls, cell, 0).r == 0.0;
             }}
 
-            float wall_face_distance(vec2 pixel, vec2 world, vec2 to_light, float distance) {{
+            float sample_ray_visibility(int index, vec2 to_light) {{
+                float distance = length(to_light);
+                if (distance < 0.5) return 1.0;
+                float angle = atan(-to_light.y, -to_light.x) * {SHADOW_RAYS / (2 * np.pi)};
+                float receiver = distance - 1.0;
+                float spread = (.60 + min(distance * .013, 1.50)) * {SHADOW_RAYS / (2 * np.pi)} / max(distance, 7.0);
+                return .58 * shadow_coverage(index, angle, receiver)
+                    + .21 * (shadow_coverage(index, angle - spread, receiver)
+                           + shadow_coverage(index, angle + spread, receiver));
+            }}
+
+            bool face_visible(vec2 pt) {{
+                ivec2 sp = clamp(ivec2(floor(pt - u_cam)), ivec2(0), ivec2({VIEW_W - 1}, {VIEW_H - 1}));
+                return texelFetch(u_fov, sp, 0).r > 0.05;
+            }}
+
+            float wall_shadow(int index, vec2 pixel, vec2 world, vec2 to_light) {{
                 vec2 tile_size = vec2({float(TILE_W)}, {float(TILE_H)});
                 vec2 local = mod(world, tile_size);
+                vec2 tile_min = world - local;
+                vec2 tile_center = tile_min + tile_size * .5;
+                vec2 light_world = world + to_light;
                 vec2 viewer_world = u_viewer + world - pixel;
-                vec2 view = viewer_world - (world - local + tile_size * .5);
+                vec2 view = viewer_world - tile_center;
                 bvec2 positive = greaterThan(view, vec2(0.0));
                 vec2 side = mix(vec2(-1.0), vec2(1.0), positive);
-                vec2 edge = world - local + mix(vec2(0.0), tile_size, positive);
-                vec2 exits = abs(edge - world) * distance / max(abs(to_light), vec2(.001));
-                vec2 direction = to_light / distance;
-                vec2 near = edge + side * .75;
-                bool face_x = (viewer_world.x - edge.x) * side.x >= 0.0 && open_wall_face(vec2(near.x, world.y));
-                bool face_y = (viewer_world.y - edge.y) * side.y >= 0.0 && open_wall_face(vec2(world.x, near.y));
-                float res = -1.0;
-                if (face_x && to_light.x * side.x > 0.0 && exits.x <= distance
-                    && open_wall_face(vec2(near.x, world.y + direction.y * (exits.x + .75)))) {{
-                    res = exits.x + 2.4 * distance / max(abs(to_light.x), .001);
+                vec2 edge = tile_min + mix(vec2(0.0), tile_size, positive);
+                vec2 near = edge + side * 1.25;
+                vec2 vis_near = edge + side * 0.75;
+                bool face_x = (viewer_world.x - edge.x) * side.x >= 0.0 && open_wall_face(vec2(near.x, tile_center.y));
+                bool face_y = (viewer_world.y - edge.y) * side.y >= 0.0 && open_wall_face(vec2(tile_center.x, near.y));
+                float vis = 0.0;
+                if (face_x && (light_world.x - edge.x) * side.x > 0.0) {{
+                    float cy = clamp(world.y, tile_min.y + 1.0, tile_min.y + tile_size.y - 1.0);
+                    if (face_visible(vec2(vis_near.x, cy)))
+                        vis = max(vis, sample_ray_visibility(index, light_world - vec2(near.x, cy)));
                 }}
-                if (face_y && to_light.y * side.y > 0.0 && exits.y <= distance
-                    && open_wall_face(vec2(world.x + direction.x * (exits.y + .75), near.y))) {{
-                    float ry = exits.y + 2.4 * distance / max(abs(to_light.y), .001);
-                    res = (res < 0.0) ? ry : min(res, ry);
+                if (face_y && (light_world.y - edge.y) * side.y > 0.0) {{
+                    float cx = clamp(world.x, tile_min.x + 1.0, tile_min.x + tile_size.x - 1.0);
+                    if (face_visible(vec2(cx, vis_near.y)))
+                        vis = max(vis, sample_ray_visibility(index, light_world - vec2(cx, near.y)));
                 }}
-                return res;
+                return vis;
             }}
 
             float prop_visibility(vec2 world, vec2 to_light, float distance, float light_height) {{
@@ -239,20 +258,11 @@ class GPULightShader:
             }}
 
             float surface_shadow(int index, vec2 pixel, vec2 world, vec2 to_light, bool wall, bool ground, float light_height) {{
+                if (wall) return wall_shadow(index, pixel, world, to_light);
                 float distance = length(to_light);
                 if (distance < 0.5) return 1.0;
-                float angle = atan(-to_light.y, -to_light.x) * {SHADOW_RAYS / (2 * np.pi)};
-                float receiver = distance - 1.0;
-                if (wall) {{
-                    float face = wall_face_distance(pixel, world, to_light, distance);
-                    if (face < 0.0) return 0.0;
-                    receiver -= face;
-                }}
-                float spread = (.60 + min(distance * .013, 1.50)) * {SHADOW_RAYS / (2 * np.pi)} / max(distance, 7.0);
-                float visibility = .58 * shadow_coverage(index, angle, receiver)
-                    + .21 * (shadow_coverage(index, angle - spread, receiver)
-                           + shadow_coverage(index, angle + spread, receiver));
-                if (u_has_props && ground && !wall && visibility > .008)
+                float visibility = sample_ray_visibility(index, to_light);
+                if (u_has_props && ground && visibility > .008)
                     visibility *= prop_visibility(world, to_light, distance, light_height);
                 return visibility;
             }}
