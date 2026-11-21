@@ -256,7 +256,9 @@ class RenderingTests(unittest.TestCase):
                     click(game.renderer.inv_slot_rects[0], 1)
                 elif len(frames) == 3:
                     self.assertIs(game.drag_item, game.pocket_ring)
-                    click(pygame.Rect(20, 20, 10, 10), 1, pygame.MOUSEBUTTONUP)
+                    modal = game.renderer.modal_rect
+                    blank = pygame.Rect(modal.x + 2, modal.y + 2, 4, 4)
+                    click(blank, 1, pygame.MOUSEBUTTONUP)
                 elif len(frames) == 4:
                     self.assertIsNone(game.drag_item)
                     self.assertIs(game.player.inventory[0], game.pocket_ring)
@@ -279,11 +281,35 @@ class RenderingTests(unittest.TestCase):
                     self.assertIs(game.player.equipment["ring_1"], game.first_ring)
                     self.assertIs(game.player.equipment["ring_2"], game.pocket_ring)
                     self.assertIs(game.player.inventory[0], game.second_ring)
-                    game.journal_open = True
+                    click(game.renderer.inv_slot_rects[0], 3)
                 elif len(frames) == 8:
+                    self.assertIs(game.player.equipment["ring_1"], game.second_ring)
+                    self.assertIs(game.player.inventory[0], game.first_ring)
+                    game.scroll = game.make_item("scroll_spark")
+                    game.potion = game.make_item("potion_hp")
+                    game.player.inventory[:2] = [game.scroll, game.potion]
+                    game.player.hp = 1
+                    click(game.renderer.inv_slot_rects[0], 3)
+                    click(game.renderer.inv_slot_rects[1], 3)
+                elif len(frames) == 9:
+                    self.assertIs(game.player.hotbar[0], game.scroll)
+                    self.assertIs(game.player.inventory[0], game.scroll)
+                    self.assertIsNone(game.player.inventory[1])
+                    self.assertGreater(game.player.hp, 1)
+                    click(game.renderer.inv_slot_rects[0], 2)
+                    click(game.renderer.equip_slot_rects["ring_2"], 1)
+                    click(pygame.Rect(20, 20, 10, 10), 1, pygame.MOUSEBUTTONUP)
+                elif len(frames) == 10:
+                    self.assertIsNone(game.player.inventory[0])
+                    self.assertIsNone(game.player.hotbar[0])
+                    self.assertIsNone(game.player.equipment["ring_2"])
+                    self.assertIs(game.objects[-2].item, game.scroll)
+                    self.assertIs(game.objects[-1].item, game.pocket_ring)
+                    game.journal_open = True
+                elif len(frames) == 11:
                     game.inv_open = False
                     game.in_main_menu = True
-                elif len(frames) == 9:
+                elif len(frames) == 12:
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
 
             with (
@@ -291,7 +317,7 @@ class RenderingTests(unittest.TestCase):
                 patch.object(loop, "present_logical_canvas", render_frame),
             ):
                 loop.main()
-            self.assertEqual(len(frames), 9)
+            self.assertEqual(len(frames), 12)
 
     def test_text_cache_is_bounded_and_keys_include_font_and_width(self):
         from elenor.ui.text import wrap_lines

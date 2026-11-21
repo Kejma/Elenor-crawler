@@ -180,7 +180,7 @@ class InventoryMixin:
                     break
 
 
-    def inventory_slot_at(self, pos):
+    def inventory_slot_at(self, pos, *, pick=False):
         renderer = self.renderer
         for kind, rects in (
             ("ability", enumerate(renderer.ability_rects)),
@@ -191,6 +191,10 @@ class InventoryMixin:
         ):
             for key, rect in rects:
                 if rect.collidepoint(pos):
+                    if pick and kind == "equip" and key == "left_hand":
+                        weapon = self.player.equipment["right_hand"]
+                        if weapon is not None and weapon.two_handed:
+                            return "equip", "right_hand"
                     return kind, key
         return None
 
@@ -205,7 +209,7 @@ class InventoryMixin:
         }[kind]
 
     def pick_inventory_cursor(self, pos, aim):
-        slot = self.inventory_slot_at(pos)
+        slot = self.inventory_slot_at(pos, pick=True)
         if slot is None:
             return
         kind, key = slot
@@ -213,11 +217,6 @@ class InventoryMixin:
         if kind == "hotbar":
             self.use_or_equip_item(player.hotbar[key], *aim, from_hotbar=True)
             return
-        if kind == "equip" and key == "left_hand":
-            weapon = player.equipment["right_hand"]
-            if weapon is not None and weapon.two_handed:
-                key = "right_hand"
-
         item = self._cursor_container(kind)[key]
         if getattr(item, "locked_bag", False):
             self.sfx.play("hurt")
@@ -234,13 +233,34 @@ class InventoryMixin:
         if self._cursor_container(source_kind)[source_key] is not item:
             return
         target = self.inventory_slot_at(pos)
-        if target is not None and target != source and self._move_inventory_cursor(item, source, target):
+        if target is None:
+            if source_kind != "ability" and not self.renderer.modal_rect.collidepoint(pos):
+                self.drop_item_on_floor(item)
+        elif target != source and self._move_inventory_cursor(item, source, target):
+            self.sfx.play("ui")
+
+    def quick_use_inventory_item(self, pos):
+        slot = self.inventory_slot_at(pos)
+        if slot is None or slot[0] != "pocket":
+            return
+        item = self.player.inventory[slot[1]]
+        if item is None:
+            return
+        if item.type in ("equipment", "bag", "consumable"):
+            self.use_or_equip_item(item)
+        elif item.type in ("consumable_spell", "consumable_eraser"):
+            hotbar = self.player.hotbar
+            if item not in hotbar:
+                index = hotbar.index(None) if None in hotbar else len(hotbar) - 1
+                hotbar[index] = item
             self.sfx.play("ui")
 
     def discard_inventory_item(self, pos):
-        slot = self.inventory_slot_at(pos)
-        if slot is not None and slot[0] == "pocket":
-            self.drop_item_on_floor(self.player.inventory[slot[1]])
+        slot = self.inventory_slot_at(pos, pick=True)
+        if slot is None or slot[0] not in ("pocket", "equip", "bag"):
+            return
+        kind, key = slot
+        self.drop_item_on_floor(self._cursor_container(kind)[key])
 
     def _move_inventory_cursor(self, item, source, target):
         source_kind, source_key = source
@@ -286,8 +306,26 @@ class InventoryMixin:
         self._flush_overflow_drops(int(player.x), int(player.y))
         return True
 
+    def _item_drop_tile(self, tx, ty):
+        occupied = {(obj.x, obj.y) for obj in self.objects if obj.kind == "loot" and not obj.used}
+        if (tx, ty) not in occupied:
+            return tx, ty
+
+        blocked = self.dungeon.is_blocking_move
+        candidates = [
+            (tx + dx, ty + dy)
+            for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+            if (dx or dy) and (tx + dx, ty + dy) not in occupied
+            and not blocked(tx + dx, ty + dy)
+            and not (dx and dy and blocked(tx + dx, ty) and blocked(tx, ty + dy))
+        ]
+        return random.choice(candidates) if candidates else (tx, ty)
+
     def drop_item_on_floor(self, item):
         if not item:
+            return False
+        if getattr(item, "locked_bag", False):
+            self.sfx.play("hurt")
             return False
         player = self.player
         equipped = item in player.equipment.values()
@@ -296,10 +334,11 @@ class InventoryMixin:
             self.report_bag_space()
             return False
         tx, ty = int(player.x), int(player.y)
+        x, y = self._item_drop_tile(tx, ty)
+        self.objects.append(Interactable(x, y, "loot", item))
         if equipped:
             player.refresh_equipment_limits(old_capacity)
             self._flush_overflow_drops(tx, ty)
-        self.objects.append(Interactable(tx, ty, "loot", item))
         self.sfx.play("step")
         self.trigger_event_thought("drop_item", item=item.name)
         self.add_popup(self.player.x, self.player.y, f"Выброшено: {item.name}", (185, 175, 165))
@@ -448,7 +487,7 @@ class InventoryMixin:
             wait = max(cd_rem, pending["timer"] if pending is not None else 0.0)
             if self.buffer_combat_input(wait, target_wx, target_wy, item):
                 return
-        if pending is not None:
+        if pending is not None and (from_hotbar or not self.inv_open or is_ability):
             return
         mana_cost = self.player.ability_mana_cost(item) if item.type in ("spell", "permanent_spell") else 0.0
 
@@ -553,6 +592,7 @@ class InventoryMixin:
     def _flush_overflow_drops(self, drop_tx, drop_ty):
         while getattr(self.player, "overflow_drops", None):
             dropped_itm = self.player.overflow_drops.pop(0)
-            self.objects.append(Interactable(int(drop_tx), int(drop_ty), "loot", dropped_itm))
-            self.add_popup(drop_tx + 0.5, drop_ty + 0.5, f"На пол: {dropped_itm.name}", (200, 190, 175))
+            x, y = self._item_drop_tile(int(drop_tx), int(drop_ty))
+            self.objects.append(Interactable(x, y, "loot", dropped_itm))
+            self.add_popup(x + 0.5, y + 0.5, f"На пол: {dropped_itm.name}", (200, 190, 175))
 

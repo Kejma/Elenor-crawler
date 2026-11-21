@@ -491,7 +491,7 @@ class UIRendererMixin:
         if (key_item := self._render_keyring(screen, player, ui_texts, storage.x + 80, key_y + 11, hover_pos)) is not None:
             hovered_item, compares = key_item, False
 
-        hint = "Зажми ЛКМ и отпусти над нужным слотом · ПКМ по ячейке поклажи — выбросить предмет"
+        hint = "ПКМ — надеть, выпить или на пояс · Нажатие колеса или перенос за окно — выбросить"
         self._draw_inventory_label(screen, hint, self.modal_rect.centerx, wy + 544, UI_TEXT_DIM, align="midtop")
         if drag_item:
             self.draw_item_icon(screen, drag_item.icon, hover_pos[0] - 16, hover_pos[1] - 16, 32)

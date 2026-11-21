@@ -333,7 +333,11 @@ def main():
                         game.sfx.play("ui")
                     elif (game.inv_open and not game.journal_open and not game.levelup_choices
                           and game.drag_item is None):
-                        game.discard_inventory_item(event.pos)
+                        game.quick_use_inventory_item(event.pos)
+
+                elif (event.button == 2 and game.inv_open and not game.journal_open
+                      and not game.levelup_choices and game.drag_item is None):
+                    game.discard_inventory_item(event.pos)
 
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 if game.inv_open and not game.journal_open and not game.levelup_choices:

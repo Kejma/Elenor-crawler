@@ -80,6 +80,45 @@ class InventoryFeedbackTests(unittest.TestCase):
         self.assertIs(self.player.hotbar[0], potion)
         self.assertTrue(all(item is None for item in self.player.inventory[self.player.unlocked_slots:]))
 
+    def test_quick_assignment_replaces_last_shortcut_when_belt_is_full(self):
+        scroll = self.game.make_item("scroll_spark")
+        potions = [self.game.make_item("potion_hp") for _ in self.player.hotbar]
+        self.assertTrue(self.player.change_bag(0, self.game.make_item("void_chest_bag")))
+        self.player.inventory[:5] = [scroll, *potions]
+        self.player.hotbar[:] = potions
+        with patch.object(self.game, "inventory_slot_at", return_value=("pocket", 0)):
+            self.game.quick_use_inventory_item((0, 0))
+            self.game.quick_use_inventory_item((0, 0))
+        self.assertEqual(self.player.hotbar, [*potions[:3], scroll])
+        self.assertEqual(self.player.inventory[:5], [scroll, *potions])
+
+    def test_drop_prefers_the_hero_then_a_random_free_reachable_neighbor(self):
+        dungeon = self.game.dungeon
+        tx, ty = int(self.player.x), int(self.player.y)
+        dungeon.grid[ty - 1][tx] = 1
+        dungeon.grid[ty][tx - 1] = 1
+        self.game.objects.append(Interactable(tx + 1, ty, "loot", self.game.make_item("coin_copper")))
+        used = Interactable(tx, ty + 1, "loot", self.game.make_item("coin_copper"))
+        used.used = True
+        self.game.objects.append(used)
+
+        first = self.game.make_item("potion_hp")
+        second = self.game.make_item("potion_mp")
+        for item in (first, second):
+            self.assertTrue(self.player.add_item_to_inventory(item))
+        self.assertTrue(self.game.drop_item_on_floor(first))
+        self.assertEqual((self.game.objects[-1].x, self.game.objects[-1].y), (tx, ty))
+
+        with patch("elenor.game.inventory.random.choice", return_value=(tx, ty + 1)) as choose:
+            self.assertTrue(self.game.drop_item_on_floor(second))
+        candidates = set(choose.call_args.args[0])
+        self.assertIn((tx, ty + 1), candidates)
+        self.assertNotIn((tx + 1, ty), candidates)
+        self.assertNotIn((tx, ty - 1), candidates)
+        self.assertNotIn((tx - 1, ty - 1), candidates)
+        self.assertEqual((self.game.objects[-1].x, self.game.objects[-1].y), (tx, ty + 1))
+        self.assertNotIn(second, self.player.hotbar)
+
     def test_quest_items_fit_when_pockets_are_full(self):
         for _ in range(self.player.unlocked_slots):
             self.player.add_item_to_inventory(self.game.make_item("potion_mp"))
