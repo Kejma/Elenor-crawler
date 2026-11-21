@@ -7,29 +7,64 @@ BAG_CAPACITIES = {
     "frame_pack": 7,
     "travel_backpack": 8,
     "void_chest_bag": 9,
+    # Ювелирные сумки (в ~2.5 раза больше, только драгоценности и коллекционки)
+    "velvet_gem_pouch": 5,
+    "jeweler_satchel": 10,
+    "antiquary_case": 15,
+    "collector_trunk": 18,
+    "treasury_vault_bag": 20,
+    # Пояса и перевязи (только зелья, свитки и расходники)
+    "herb_belt": 5,
+    "alchemist_bandolier": 8,
+    "apothecary_rig": 12,
+    "master_bandolier": 16,
 }
 
 BASE_ITEMS_DB = {
     # Ключи головоломок не участвуют в случайном луте. Тексты — в locales.
     "focusing_lens": {"type": "quest_key", "rarity": "rare", "icon": "trinket"},
 
-    # ИСТОЧНИКИ СВЕТА И ЩИТЫ 
+    # ИСТОЧНИКИ СВЕТА, ЩИТЫ И ФОКУСЫ (ЛЕВАЯ РУКА)
     "pitch_torch": {
         "type": "equipment", "slot": "left_hand", "is_torch": True,
         "max_fuel": 120.0, "icon": "torch"
     },
     "dwarven_lantern": {
         "type": "equipment", "slot": "left_hand", "is_torch": True,
-        "max_fuel": 260.0, "vision_bonus": 32, "icon": "torch"
+        "max_fuel": 260.0, "vision_bonus": 32, "icon": "offhand_lantern"
     },
     "buckler_shield": {
-        "type": "equipment", "slot": "left_hand", "phys_def": 2, "icon": "shield"
+        "type": "equipment", "slot": "left_hand", "phys_def": 2, "dodge_bonus": 0.04,
+        "crit_bonus": 0.03, "icon": "shield_buckler"
+    },
+    "heater_shield": {
+        "type": "equipment", "slot": "left_hand", "phys_def": 3, "hp_bonus": 6,
+        "noise_mod": 0.12, "icon": "shield_heater"
+    },
+    "spiked_targe": {
+        "type": "equipment", "slot": "left_hand", "phys_def": 2, "phys_bonus": 2,
+        "noise_mod": 0.08, "icon": "shield_spiked"
+    },
+    "pavise_wall": {
+        "type": "equipment", "slot": "left_hand", "phys_def": 4, "mag_def": 1,
+        "speed_bonus": -0.06, "noise_mod": 0.22, "icon": "shield_pavise"
     },
     "glowing_orb": {
-        "type": "equipment", "slot": "left_hand", "mag_bonus": 3,
-        "vision_bonus": 36, "icon": "trinket"
+        "type": "equipment", "slot": "left_hand", "mag_bonus": 2, "vision_bonus": 28,
+        "glow_radius": 56, "glow_color": [0.55, 0.95, 0.78], "icon": "offhand_orb"
     },
-
+    "iron_censer": {
+        "type": "equipment", "slot": "left_hand", "mag_def": 2, "heal_received_bonus": 0.16,
+        "glow_radius": 44, "glow_color": [1.05, 0.65, 0.30], "icon": "offhand_censer"
+    },
+    "parrying_gauntlet": {
+        "type": "equipment", "slot": "left_hand", "phys_def": 1, "crit_bonus": 0.06,
+        "dodge_bonus": 0.05, "noise_mod": -0.05, "icon": "offhand_gauntlet"
+    },
+    "runic_tablet": {
+        "type": "equipment", "slot": "left_hand", "mag_bonus": 2, "mp_bonus": 4,
+        "mana_received_bonus": 0.16, "icon": "offhand_tablet"
+    },
     # КОРОТКОЕ ОДНОРУЧНОЕ ОРУЖИЕ
     "rusty_dagger": {
         "type": "equipment", "slot": "right_hand", "two_handed": False, "weap_style": "dagger",
@@ -209,19 +244,174 @@ BASE_ITEMS_DB = {
         "proj_speed": 10.4, "color": [255, 165, 75], "armor_pierce": 1, "crit_bonus": 0.10, "bounces": 1, "life_steal": 1, "status": "poison", "status_dur": 2.4, "status_chance": 0.50, "knockback": 0.35, "icon": "weapon_thrown_axe"
     },
 
-    # ДОСПЕХИ, ШЛЕМЫ, САПОГИ, БИЖУТЕРИЯ И СУМКИ 
-    "tattered_hood": {"type": "equipment", "slot": "helmet", "mag_def": 1, "vision_bonus": 16, "noise_mod": -0.15, "icon": "helmet"},
-    "iron_sallet": {"type": "equipment", "slot": "helmet", "phys_def": 2, "vision_bonus": -4, "noise_mod": 0.10, "icon": "helmet"},
-    "crown_of_ashes": {"type": "equipment", "slot": "helmet", "phys_def": 3, "mag_def": 3, "mag_bonus": 5, "vision_bonus": 30, "icon": "helmet"},
-    "cloth_tunic": {"type": "equipment", "slot": "torso", "armor_class": "cloth", "phys_def": 1, "mag_def": 2, "noise_mod": -0.30, "icon": "armor_cloth"},
-    "leather_brigandine": {"type": "equipment", "slot": "torso", "armor_class": "leather", "phys_def": 2, "mag_def": 1, "noise_mod": 0.0, "icon": "armor_leather"},
-    "knight_cuirass": {"type": "equipment", "slot": "torso", "armor_class": "plate", "phys_def": 4, "mag_def": 1, "noise_mod": 0.55, "icon": "armor_plate"},
-    "shadowweave_cloak": {"type": "equipment", "slot": "torso", "armor_class": "cloth", "phys_def": 1, "mag_def": 4, "vision_bonus": 18, "noise_mod": -0.45, "icon": "armor_cloth"},
-    "plated_greaves": {"type": "equipment", "slot": "boots", "phys_def": 1, "noise_mod": 0.15, "icon": "boots"},
-    "silent_moccasins": {"type": "equipment", "slot": "boots", "phys_def": 2, "noise_mod": -0.35, "icon": "boots"},
-    "ring_cat_eye": {"type": "equipment", "slot": "ring", "vision_bonus": 32, "icon": "ring"},
-    "ring_blood_pact": {"type": "equipment", "slot": "ring", "phys_bonus": 2, "mag_bonus": 4, "life_steal": 2, "icon": "ring"},
-    "trinket_ancient_eye": {"type": "equipment", "slot": "trinket", "phys_bonus": 3, "mag_bonus": 6, "vision_bonus": 42, "icon": "trinket"},
+    # ШЛЕМЫ, КАПЮШОНЫ И ВЕНЦЫ
+    "tattered_hood": {
+        "type": "equipment", "slot": "helmet", "mag_def": 1, "vision_bonus": 16,
+        "dodge_bonus": 0.03, "noise_mod": -0.15, "icon": "helm_hood"
+    },
+    "iron_sallet": {
+        "type": "equipment", "slot": "helmet", "phys_def": 2, "hp_bonus": 5,
+        "vision_bonus": -4, "noise_mod": 0.10, "icon": "helm_sallet"
+    },
+    "crown_of_ashes": {
+        "type": "equipment", "slot": "helmet", "mag_bonus": 2, "mag_def": 2,
+        "vision_bonus": 18, "glow_radius": 48, "glow_color": [1.10, 0.52, 0.28], "icon": "helm_crown"
+    },
+    "kettle_hat": {
+        "type": "equipment", "slot": "helmet", "phys_def": 2, "mag_def": 1,
+        "vision_bonus": 6, "noise_mod": 0.05, "icon": "helm_kettle"
+    },
+    "padded_coif": {
+        "type": "equipment", "slot": "helmet", "phys_def": 1, "hp_bonus": 8,
+        "noise_mod": -0.05, "icon": "helm_coif"
+    },
+    "bone_mask": {
+        "type": "equipment", "slot": "helmet", "crit_bonus": 0.05, "mag_bonus": 1,
+        "noise_mod": -0.10, "icon": "helm_mask"
+    },
+    "scholar_circlet": {
+        "type": "equipment", "slot": "helmet", "mp_bonus": 4, "mana_received_bonus": 0.16,
+        "vision_bonus": 12, "icon": "helm_circlet"
+    },
+    "horned_bascinet": {
+        "type": "equipment", "slot": "helmet", "phys_def": 2, "phys_bonus": 2,
+        "noise_mod": 0.16, "icon": "helm_bascinet"
+    },
+    "lantern_cap": {
+        "type": "equipment", "slot": "helmet", "phys_def": 1, "vision_bonus": 24,
+        "glow_radius": 52, "glow_color": [1.05, 0.82, 0.45], "icon": "helm_miner"
+    },
+
+    # НАГРУДНИКИ, КУРТКИ И МАНТИИ
+    "cloth_tunic": {
+        "type": "equipment", "slot": "torso", "armor_class": "cloth", "phys_def": 1,
+        "mag_def": 2, "mp_bonus": 3, "noise_mod": -0.20, "icon": "armor_robe"
+    },
+    "leather_brigandine": {
+        "type": "equipment", "slot": "torso", "armor_class": "leather", "phys_def": 2,
+        "mag_def": 1, "dodge_bonus": 0.04, "noise_mod": -0.05, "icon": "armor_brigandine"
+    },
+    "knight_cuirass": {
+        "type": "equipment", "slot": "torso", "armor_class": "plate", "phys_def": 4,
+        "hp_bonus": 8, "speed_bonus": -0.04, "noise_mod": 0.35, "icon": "armor_cuirass"
+    },
+    "shadowweave_cloak": {
+        "type": "equipment", "slot": "torso", "armor_class": "cloth", "phys_def": 1,
+        "mag_def": 2, "dodge_bonus": 0.05, "vision_bonus": 14, "noise_mod": -0.35, "icon": "armor_cloak"
+    },
+    "padded_gambeson": {
+        "type": "equipment", "slot": "torso", "armor_class": "leather", "phys_def": 2,
+        "hp_bonus": 10, "heal_received_bonus": 0.14, "noise_mod": -0.05, "icon": "armor_gambeson"
+    },
+    "pack_jerkin": {
+        "type": "equipment", "slot": "torso", "armor_class": "leather", "phys_def": 1,
+        "extra_slots_per_tier": 1, "speed_bonus": 0.03, "noise_mod": 0.05, "icon": "armor_jerkin"
+    },
+    "scale_hauberk": {
+        "type": "equipment", "slot": "torso", "armor_class": "plate", "phys_def": 3,
+        "mag_def": 2, "noise_mod": 0.20, "icon": "armor_scale"
+    },
+    "alchemist_coat": {
+        "type": "equipment", "slot": "torso", "armor_class": "cloth", "phys_def": 1,
+        "mag_def": 2, "mana_received_bonus": 0.16, "extra_slots_per_tier": 1, "icon": "armor_coat"
+    },
+    "duelist_doublet": {
+        "type": "equipment", "slot": "torso", "armor_class": "leather", "phys_def": 2,
+        "crit_bonus": 0.05, "speed_bonus": 0.05, "noise_mod": -0.15, "icon": "armor_doublet"
+    },
+
+    # САПОГИ И ПОНОЖИ
+    "plated_greaves": {
+        "type": "equipment", "slot": "boots", "phys_def": 2, "hp_bonus": 5,
+        "noise_mod": 0.15, "icon": "boots_greaves"
+    },
+    "silent_moccasins": {
+        "type": "equipment", "slot": "boots", "phys_def": 1, "dodge_bonus": 0.04,
+        "noise_mod": -0.30, "icon": "boots_soft"
+    },
+    "courier_boots": {
+        "type": "equipment", "slot": "boots", "phys_def": 1, "speed_bonus": 0.08,
+        "noise_mod": -0.05, "icon": "boots_courier"
+    },
+    "iron_sabatons": {
+        "type": "equipment", "slot": "boots", "phys_def": 2, "phys_bonus": 1,
+        "mag_def": 1, "noise_mod": 0.20, "icon": "boots_sabatons"
+    },
+    "swamp_waders": {
+        "type": "equipment", "slot": "boots", "phys_def": 1, "mag_def": 1,
+        "heal_received_bonus": 0.14, "speed_bonus": 0.04, "icon": "boots_waders"
+    },
+    "ritual_sandals": {
+        "type": "equipment", "slot": "boots", "mag_def": 2, "mana_received_bonus": 0.16,
+        "noise_mod": -0.10, "icon": "boots_sandals"
+    },
+    "spurred_boots": {
+        "type": "equipment", "slot": "boots", "phys_def": 1, "crit_bonus": 0.04,
+        "speed_bonus": 0.05, "noise_mod": 0.10, "icon": "boots_spurred"
+    },
+
+    # КОЛЬЦА И ПЕЧАТКИ
+    "ring_cat_eye": {
+        "type": "equipment", "slot": "ring", "vision_bonus": 24, "crit_bonus": 0.04, "icon": "ring_amber"
+    },
+    "ring_blood_pact": {
+        "type": "equipment", "slot": "ring", "phys_bonus": 1, "mag_bonus": 1, "life_steal": 1, "icon": "ring_blood"
+    },
+    "ring_iron_band": {
+        "type": "equipment", "slot": "ring", "phys_def": 1, "hp_bonus": 8, "icon": "ring_iron"
+    },
+    "ring_ether_loop": {
+        "type": "equipment", "slot": "ring", "mp_bonus": 4, "mana_received_bonus": 0.18, "icon": "ring_sapphire"
+    },
+    "ring_quicksilver": {
+        "type": "equipment", "slot": "ring", "speed_bonus": 0.06, "dodge_bonus": 0.04, "icon": "ring_silver"
+    },
+    "ring_ember_signet": {
+        "type": "equipment", "slot": "ring", "mag_bonus": 2, "glow_radius": 42,
+        "glow_color": [1.10, 0.58, 0.24], "icon": "ring_ember"
+    },
+    "ring_bone_knuckle": {
+        "type": "equipment", "slot": "ring", "phys_bonus": 2, "crit_bonus": 0.03, "icon": "ring_bone"
+    },
+    "ring_moss_stone": {
+        "type": "equipment", "slot": "ring", "heal_received_bonus": 0.18, "mag_def": 1, "icon": "ring_emerald"
+    },
+    "ring_shadow_glass": {
+        "type": "equipment", "slot": "ring", "noise_mod": -0.22, "dodge_bonus": 0.05, "icon": "ring_onyx"
+    },
+
+    # АМУЛЕТЫ И ТАЛИСМАНЫ
+    "trinket_ancient_eye": {
+        "type": "equipment", "slot": "trinket", "mag_bonus": 2, "vision_bonus": 26,
+        "glow_radius": 46, "glow_color": [0.55, 0.85, 1.10], "icon": "trinket_eye"
+    },
+    "trinket_iron_heart": {
+        "type": "equipment", "slot": "trinket", "hp_bonus": 12, "phys_def": 1,
+        "heal_received_bonus": 0.16, "icon": "trinket_heart"
+    },
+    "trinket_lucky_tooth": {
+        "type": "equipment", "slot": "trinket", "crit_bonus": 0.06, "dodge_bonus": 0.04,
+        "speed_bonus": 0.04, "icon": "trinket_fang"
+    },
+    "trinket_mana_prism": {
+        "type": "equipment", "slot": "trinket", "mag_bonus": 2, "mp_bonus": 5,
+        "mana_received_bonus": 0.16, "icon": "trinket_prism"
+    },
+    "trinket_ward_bell": {
+        "type": "equipment", "slot": "trinket", "mag_def": 2, "phys_def": 1,
+        "noise_mod": 0.12, "icon": "trinket_bell"
+    },
+    "trinket_smuggler_buckle": {
+        "type": "equipment", "slot": "trinket", "extra_slots_per_tier": 1,
+        "noise_mod": -0.15, "icon": "trinket_buckle"
+    },
+    "trinket_war_trophy": {
+        "type": "equipment", "slot": "trinket", "phys_bonus": 2, "hp_bonus": 6, "icon": "trinket_medal"
+    },
+    "trinket_glow_jar": {
+        "type": "equipment", "slot": "trinket", "vision_bonus": 22, "mana_received_bonus": 0.14,
+        "glow_radius": 62, "glow_color": [0.75, 1.05, 0.45], "icon": "trinket_jar"
+    },
 
     # РАСХОДНИКИ, СВИТКИ И СУМКИ
     "potion_hp": {"type": "consumable", "power": 15, "cooldown": 1.0, "icon": "potion_red"},
@@ -229,17 +419,33 @@ BASE_ITEMS_DB = {
     "scroll_spark": {"type": "consumable_spell", "cast_type": "beam", "status": "stun", "status_dur": 1.5, "cooldown": 1.2, "power": 10, "color": [90, 235, 255], "icon": "skill_zap"},
     "scroll_fireball": {"type": "consumable_spell", "cast_type": "aoe_cursor", "aoe_radius": 2.1, "status": "poison", "status_dur": 5.0, "cooldown": 1.5, "power": 12, "color": [110, 245, 95], "icon": "bomb"},
     "oblivion_seal": {"type": "consumable_eraser", "icon": "trinket"},
+    "family_strongbox": {"type": "bag", "slots": 1, "rarity": "legendary", "icon": "bag_strongbox", "bag_filter": "any", "locked_bag": True},
     **{
-        item_id: {"type": "bag", "slots": BAG_CAPACITIES[item_id], "rarity": rarity, "icon": icon}
-        for item_id, rarity, icon in (
-            ("small_pouch", "common", "bag_small"),
-            ("waxed_pouch", "common", "bag_waxed"),
-            ("pouch_bag", "uncommon", "bag_leather"),
-            ("reed_satchel", "uncommon", "bag_reed"),
-            ("scout_satchel", "rare", "bag_scout"),
-            ("frame_pack", "rare", "bag_frame"),
-            ("travel_backpack", "epic", "bag_big"),
-            ("void_chest_bag", "legendary", "bag_void"),
+        item_id: {
+            "type": "bag",
+            "slots": BAG_CAPACITIES[item_id],
+            "rarity": rarity,
+            "icon": icon,
+            "bag_filter": bag_filter,
+        }
+        for item_id, rarity, icon, bag_filter in (
+            ("small_pouch", "common", "bag_small", "any"),
+            ("waxed_pouch", "common", "bag_waxed", "any"),
+            ("pouch_bag", "uncommon", "bag_leather", "any"),
+            ("reed_satchel", "uncommon", "bag_reed", "any"),
+            ("scout_satchel", "rare", "bag_scout", "any"),
+            ("frame_pack", "rare", "bag_frame", "any"),
+            ("travel_backpack", "epic", "bag_big", "any"),
+            ("void_chest_bag", "legendary", "bag_void", "any"),
+            ("velvet_gem_pouch", "common", "bag_gem_velvet", "treasure"),
+            ("jeweler_satchel", "uncommon", "bag_gem_satchel", "treasure"),
+            ("antiquary_case", "rare", "bag_gem_case", "treasure"),
+            ("collector_trunk", "epic", "bag_gem_trunk", "treasure"),
+            ("treasury_vault_bag", "legendary", "bag_gem_vault", "treasure"),
+            ("herb_belt", "common", "bag_belt_herb", "consumable"),
+            ("alchemist_bandolier", "uncommon", "bag_belt_alch", "consumable"),
+            ("apothecary_rig", "rare", "bag_belt_apoth", "consumable"),
+            ("master_bandolier", "epic", "bag_belt_master", "consumable"),
         )
     },
 }

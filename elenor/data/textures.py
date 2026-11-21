@@ -323,6 +323,19 @@ ASSET_CATALOG["fishing"] = {
     },
 }
 
+from elenor.rendering.paintings import PAINTINGS_DB
+
+ASSET_CATALOG["paintings"] = {
+    "title": f"Картины и карточки ({len(PAINTINGS_DB)} шт.)",
+    "items": {
+        pid: (
+            data["name"],
+            (42, 62) if data.get("orientation", "v") == "v" else (62, 42),
+        )
+        for pid, data in PAINTINGS_DB.items()
+    },
+}
+
 DEFAULT_RANDOM_ROT_ROLES = {
     "floor_3", "floor_5",
     "floor_jungle_grass", "floor_jungle_mud", "floor_jungle_soil",

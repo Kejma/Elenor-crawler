@@ -1,12 +1,57 @@
 from elenor.paths import PROJECT_ROOT
 import json
 import os
+import sys
 import pygame
 from elenor.config import SCREEN_W, SCREEN_H
 
+_DPI_ENABLED = False
+_DESKTOP_SIZE = None
+
+
+def enable_dpi_awareness():
+    global _DPI_ENABLED
+    if _DPI_ENABLED or sys.platform != "win32":
+        return
+    _DPI_ENABLED = True
+    try:
+        import ctypes
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except Exception:
+        pass
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        return
+    except Exception:
+        pass
+    try:
+        import ctypes
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+def get_desktop_size():
+    global _DESKTOP_SIZE
+    if _DESKTOP_SIZE is not None:
+        return _DESKTOP_SIZE
+    try:
+        sizes = pygame.display.get_desktop_sizes()
+        if sizes and sizes[0][0] > 0 and sizes[0][1] > 0:
+            _DESKTOP_SIZE = tuple(sizes[0])
+            return _DESKTOP_SIZE
+    except Exception:
+        pass
+    info = pygame.display.Info()
+    max_w = getattr(info, "current_w", 0) or 1920
+    max_h = getattr(info, "current_h", 0) or 1080
+    _DESKTOP_SIZE = (max_w, max_h)
+    return _DESKTOP_SIZE
+
 
 def get_profile_dir():
-    # Храним сейвы в системной папке пользователя (%APPDATA%/RatCellar), отдельно от кода игры!
     appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
     save_dir = os.path.join(appdata, "RatCellar")
     os.makedirs(save_dir, exist_ok=True)
@@ -19,7 +64,7 @@ def get_profile_path():
 
 WINDOW_MODES_LIST = [
     ("windowed",   "В окне"),
-    ("borderless", "Без рамки (Оконный)"),
+    ("borderless", "Без рамки (На весь экран)"),
     ("fullscreen", "Полный экран"),
 ]
 
@@ -32,23 +77,22 @@ ALL_SUPPORTED_RESOLUTIONS = [
     (1280, 720,  "1280 x 720 (HD 16:9)"),
 ]
 
-def get_available_resolutions():
-    try:
-        sizes = pygame.display.get_desktop_sizes()
-        max_w, max_h = sizes[0]
-    except Exception:
-        info = pygame.display.Info()
-        max_w = getattr(info, "current_w", 1920) or 1920
-        max_h = getattr(info, "current_h", 1080) or 1080
 
+def get_available_resolutions():
+    max_w, max_h = get_desktop_size()
     filtered = [r for r in ALL_SUPPORTED_RESOLUTIONS if r[0] <= max_w and r[1] <= max_h]
     return filtered if filtered else [(1280, 720, "1280 x 720 (HD 16:9)")]
+
 
 RESOLUTIONS_LIST = ALL_SUPPORTED_RESOLUTIONS
 
 DEFAULT_PROFILE = {
     "bank_copper": 0,
     "rat_king_defeated": False,
+    "strongbox_level": 0,
+    "strongbox_enabled": True,
+    "collected_fish": [],
+    "collected_paintings": [],
     "hero_type": "male",
     "skin_idx": 0,
     "head_idx": 0,
@@ -64,10 +108,14 @@ DEFAULT_PROFILE = {
 }
 
 
+def _fresh_default_profile():
+    return {k: (list(v) if isinstance(v, list) else v) for k, v in DEFAULT_PROFILE.items()}
+
+
 def load_profile():
     path = get_profile_path()
     legacy_path = os.path.join(str(PROJECT_ROOT), "save_profile.json")
-    prof = dict(DEFAULT_PROFILE)
+    prof = _fresh_default_profile()
 
     if not os.path.isfile(path) and os.path.isfile(legacy_path):
         try:
@@ -106,7 +154,7 @@ def reset_profile_progress(prof):
     )
     saved_settings = {k: prof.get(k, DEFAULT_PROFILE[k]) for k in keep_keys}
     prof.clear()
-    prof.update(DEFAULT_PROFILE)
+    prof.update(_fresh_default_profile())
     prof.update(saved_settings)
     save_profile(prof)
 
@@ -119,27 +167,25 @@ def resolution_index(profile, available):
 
 
 def _display_window_spec(mode, target, desktop):
-    """Choose the client area and decorations without changing the monitor mode."""
-    size = desktop if mode == "fullscreen" else target
-    flags = pygame.NOFRAME if mode in ("borderless", "fullscreen") else 0
-    return size, flags
+    if mode == "fullscreen":
+        return target, pygame.FULLSCREEN
+    if mode == "borderless":
+        return desktop, pygame.NOFRAME
+    return target, 0
 
 
 def apply_display_mode(prof, game=None):
-    """Apply window settings, recreating SDL and OpenGL only for a changed window."""
+    enable_dpi_awareness()
     os.environ["SDL_RENDER_SCALE_QUALITY"] = "0"
     os.environ["SDL_VIDEO_CENTERED"] = "1"
 
     w_mode = prof.get("window_mode", "windowed")
+    desktop = get_desktop_size()
     avail = get_available_resolutions()
     r_idx = resolution_index(prof, avail)
     prof["resolution_idx"] = r_idx
+    prof["fullscreen"] = (w_mode == "fullscreen")
     target = avail[r_idx][:2]
-    try:
-        desktops = pygame.display.get_desktop_sizes()
-    except pygame.error:
-        desktops = ()
-    desktop = desktops[0] if desktops else target
     size, flags = _display_window_spec(w_mode, target, desktop)
     spec = size, flags
     if game is not None and getattr(game, "display_spec", None) == spec:
@@ -175,6 +221,7 @@ def apply_display_mode(prof, game=None):
             disp_surf = pygame.display.set_mode(size, flags)
             spec = size, flags
             prof["window_mode"] = "windowed"
+            prof["fullscreen"] = False
         if game is not None:
             game.renderer.init_standalone_shader()
     pygame.display.set_caption("Elenor-crawler")
@@ -182,7 +229,6 @@ def apply_display_mode(prof, game=None):
     real_w, real_h = disp_surf.get_size()
     if gl_window is not None:
         gl_window.window_size = (real_w, real_h)
-    # Считаем вписывание 1920x1080 в реальное окно с сохранением пропорций (чёткие пиксели без мыла!)
     scale_factor = min(real_w / float(SCREEN_W), real_h / float(SCREEN_H))
     scaled_w = max(1, int(round(SCREEN_W * scale_factor)))
     scaled_h = max(1, int(round(SCREEN_H * scale_factor)))

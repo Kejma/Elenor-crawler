@@ -99,6 +99,127 @@ CURRENCY_AND_GEMS_DB = {
         "copper_value": 2500,
         "desc": "\"Смотришь в грани — а оттуда на тебя смотрит пенсия.\""
     },
+    # ДОБЫЧА И ДРАГОЦЕННОСТИ ДЛЯ СКУПЩИКА (фиксированная редкость)
+    "loot_pewter_plate": {
+        "name": "Оловянное блюдо",
+        "type": "gem",
+        "rarity": "common",
+        "icon": "loot_plate",
+        "copper_value": 38,
+        "desc": "\"Помято с одного края, зато отполировано до блеска.\""
+    },
+    "loot_brass_candlestick": {
+        "name": "Медный подсвечник",
+        "type": "gem",
+        "rarity": "common",
+        "icon": "loot_candlestick",
+        "copper_value": 48,
+        "desc": "\"Тяжёлый. Можно продать, а можно и в темноте кого-нибудь огреть.\""
+    },
+    "loot_tin_goblet": {
+        "name": "Чеканная чарка",
+        "type": "gem",
+        "rarity": "common",
+        "icon": "loot_goblet",
+        "copper_value": 55,
+        "desc": "\"На дне ещё пахнет дешёвым кислым вином.\""
+    },
+    "loot_silver_ingot": {
+        "name": "Серебряный слиток",
+        "type": "gem",
+        "rarity": "uncommon",
+        "icon": "loot_silver_ingot",
+        "copper_value": 125,
+        "desc": "\"Приятная тяжесть в кармане. Никакой магии, чистая проба.\""
+    },
+    "loot_carved_box": {
+        "name": "Резная шкатулка",
+        "type": "gem",
+        "rarity": "uncommon",
+        "icon": "loot_box",
+        "copper_value": 140,
+        "desc": "\"Внутри пусто, но сама шкатулка стоит дороже, чем содержимое.\""
+    },
+    "loot_amber_brooch": {
+        "name": "Янтарная фибула",
+        "type": "gem",
+        "rarity": "uncommon",
+        "icon": "loot_brooch",
+        "copper_value": 165,
+        "desc": "\"Внутри смолы застыл древний комар. Скупщик любит такую жуть.\""
+    },
+    "loot_gilded_chalice": {
+        "name": "Позолоченный кубок",
+        "type": "gem",
+        "rarity": "rare",
+        "icon": "loot_chalice",
+        "copper_value": 330,
+        "desc": "\"С таким кубком в таверне наливают без очереди.\""
+    },
+    "loot_landscape_painting": {
+        "name": "Мрачный пейзаж в раме",
+        "type": "gem",
+        "rarity": "rare",
+        "icon": "loot_painting",
+        "copper_value": 370,
+        "desc": "\"Болото, туман и покосившийся сарай. Ценители искусства рыдают от восторга.\""
+    },
+    "loot_pocket_watch": {
+        "name": "Карманные часы",
+        "type": "gem",
+        "rarity": "rare",
+        "icon": "loot_watch",
+        "copper_value": 420,
+        "desc": "\"Тикают ровно, хоть и показывают вчерашний день.\""
+    },
+    "loot_gold_ingot": {
+        "name": "Клеймёный золотой слиток",
+        "type": "gem",
+        "rarity": "epic",
+        "icon": "loot_gold_ingot",
+        "copper_value": 880,
+        "desc": "\"Тянет сумку к земле, но бросать такую прелесть — преступление.\""
+    },
+    "loot_noble_portrait": {
+        "name": "Портрет безымянного вельможи",
+        "type": "gem",
+        "rarity": "epic",
+        "icon": "loot_portrait",
+        "copper_value": 980,
+        "desc": "\"Надменный тип в бархате. Кажется, его глаза следят за моими карманами.\""
+    },
+    "loot_jade_idol": {
+        "name": "Нефритовый идолок",
+        "type": "gem",
+        "rarity": "epic",
+        "icon": "loot_idol",
+        "copper_value": 1100,
+        "desc": "\"Холодный зелёный камень. По ночам шепчет глупости, но стоит целое состояние.\""
+    },
+    "loot_royal_scepter": {
+        "name": "Сломанный скипетр",
+        "type": "gem",
+        "rarity": "legendary",
+        "icon": "loot_scepter",
+        "copper_value": 2200,
+        "desc": "\"Обломок былого величия. Золота и каменьев хватит на покупку собственной таверны.\""
+    },
+    "loot_ancient_crown": {
+        "name": "Погребальная диадема",
+        "type": "gem",
+        "rarity": "legendary",
+        "icon": "loot_crown_loot",
+        "copper_value": 2450,
+        "desc": "\"Прежнему владельцу она уже точно не понадобится.\""
+    },
+    "loot_masterpiece_canvas": {
+        "name": "Полотно старого мастера",
+        "type": "gem",
+        "rarity": "legendary",
+        "icon": "loot_masterpiece",
+        "copper_value": 2750,
+        "desc": "\"Понятия не имею, что тут изображено, но рама из чистого золота говорит сама за себя.\""
+    },
     # Разные виды лечебных средств (для универсального хила и Ипохондрика)
     "potion_hp_weak": {
         "name": "Разбавленный отвар",
@@ -132,4 +253,6 @@ CURRENCY_AND_GEMS_DB = {
     }
 }
 
+from elenor.rendering.paintings import PAINTINGS_DB
+CURRENCY_AND_GEMS_DB.update(PAINTINGS_DB)
 

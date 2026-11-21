@@ -100,6 +100,251 @@
         "\"Королевский самоцвет. Если меня прибьют с ним в кармане — я себе этого не прощу!\""
       ]
     },
+    "loot_pewter_plate": {
+      "name": "Оловянное блюдо",
+      "type": "gem",
+      "rarity": "common",
+      "icon": "loot_plate",
+      "copper_value": 38,
+      "desc": [
+        "\"Помято с одного края, зато отполировано до блеска.\"",
+        "\"Добротная посуда. Для трактирного стола — самое то.\""
+      ]
+    },
+    "loot_brass_candlestick": {
+      "name": "Медный подсвечник",
+      "type": "gem",
+      "rarity": "common",
+      "icon": "loot_candlestick",
+      "copper_value": 48,
+      "desc": [
+        "\"Тяжёлый. Можно продать, а можно и в темноте кого-нибудь огреть.\"",
+        "\"Весь в потёках воска, но медь под ним самая настоящая.\""
+      ]
+    },
+    "loot_tin_goblet": {
+      "name": "Чеканная чарка",
+      "type": "gem",
+      "rarity": "common",
+      "icon": "loot_goblet",
+      "copper_value": 55,
+      "desc": [
+        "\"На дне ещё пахнет дешёвым кислым вином.\"",
+        "\"Узор на боку слегка затёрт, но за пару серебряков уйдёт.\""
+      ]
+    },
+    "loot_silver_ingot": {
+      "name": "Серебряный слиток",
+      "type": "gem",
+      "rarity": "uncommon",
+      "icon": "loot_silver_ingot",
+      "copper_value": 125,
+      "desc": [
+        "\"Приятная тяжесть в кармане. Никакой магии, чистая проба.\"",
+        "\"Холодный брусок серебра. Даже нечисть рядом с ним ёжится.\""
+      ]
+    },
+    "loot_carved_box": {
+      "name": "Резная шкатулка",
+      "type": "gem",
+      "rarity": "uncommon",
+      "icon": "loot_box",
+      "copper_value": 140,
+      "desc": [
+        "\"Внутри пусто, но сама шкатулка стоит дороже, чем содержимое.\"",
+        "\"Тонкая резьба и бронзовые петли. Скупщик оторвёт с руками.\""
+      ]
+    },
+    "loot_amber_brooch": {
+      "name": "Янтарная фибула",
+      "type": "gem",
+      "rarity": "uncommon",
+      "icon": "loot_brooch",
+      "copper_value": 165,
+      "desc": [
+        "\"Внутри смолы застыл древний комар. Скупщик любит такую жуть.\"",
+        "\"Тёплый медовый камень в крепкой бронзовой застёжке.\""
+      ]
+    },
+    "loot_gilded_chalice": {
+      "name": "Позолоченный кубок",
+      "type": "gem",
+      "rarity": "rare",
+      "icon": "loot_chalice",
+      "copper_value": 330,
+      "desc": [
+        "\"С таким кубком в таверне наливают без очереди.\"",
+        "\"Из такого пить воду — грех, а продать за золото — святое дело.\""
+      ]
+    },
+    "loot_landscape_painting": {
+      "name": "Мрачный пейзаж в раме",
+      "type": "gem",
+      "rarity": "rare",
+      "icon": "loot_painting",
+      "copper_value": 370,
+      "desc": [
+        "\"Болото, туман и покосившийся сарай. Ценители искусства рыдают от восторга.\"",
+        "\"Свернул бы в трубочку, но золочёная рама слишком хороша.\""
+      ]
+    },
+    "loot_pocket_watch": {
+      "name": "Карманные часы",
+      "type": "gem",
+      "rarity": "rare",
+      "icon": "loot_watch",
+      "copper_value": 420,
+      "desc": [
+        "\"Тикают ровно, хоть и показывают вчерашний день.\"",
+        "\"Хитрый механизм с десятком шестерёнок. Богачи за такое платят щедро.\""
+      ]
+    },
+    "loot_gold_ingot": {
+      "name": "Клеймёный золотой слиток",
+      "type": "gem",
+      "rarity": "epic",
+      "icon": "loot_gold_ingot",
+      "copper_value": 880,
+      "desc": [
+        "\"Тянет сумку к земле, но бросать такую прелесть — преступление.\"",
+        "\"Казённое клеймо забытого казначейства. Вес чувствуется сразу!\""
+      ]
+    },
+    "loot_noble_portrait": {
+      "name": "Портрет безымянного вельможи",
+      "type": "gem",
+      "rarity": "epic",
+      "icon": "loot_portrait",
+      "copper_value": 980,
+      "desc": [
+        "\"Надменный тип в бархате. Кажется, его глаза следят за моими карманами.\"",
+        "\"Кто это — никто не помнит, но коллекционеры дерутся за такие портреты.\""
+      ]
+    },
+    "loot_jade_idol": {
+      "name": "Нефритовый идолок",
+      "type": "gem",
+      "rarity": "epic",
+      "icon": "loot_idol",
+      "copper_value": 1100,
+      "desc": [
+        "\"Холодный зелёный камень. По ночам шепчет глупости, но стоит целое состояние.\"",
+        "\"Тяжёлая статуэтка с пустыми глазницами. Лучше сбыть её побыстрее.\""
+      ]
+    },
+    "loot_royal_scepter": {
+      "name": "Сломанный скипетр",
+      "type": "gem",
+      "rarity": "legendary",
+      "icon": "loot_scepter",
+      "copper_value": 2200,
+      "desc": [
+        "\"Обломок былого величия. Золота и каменьев хватит на покупку собственной таверны.\"",
+        "\"Даже сломанный пополам, он выглядит дороже всего моего снаряжения.\""
+      ]
+    },
+    "loot_ancient_crown": {
+      "name": "Погребальная диадема",
+      "type": "gem",
+      "rarity": "legendary",
+      "icon": "loot_crown_loot",
+      "copper_value": 2450,
+      "desc": [
+        "\"Прежнему владельцу она уже точно не понадобится.\"",
+        "\"Тонкая золотая вязь и чёрные камни. Пахнет вековой пылью и властью.\""
+      ]
+    },
+    "loot_masterpiece_canvas": {
+      "name": "Полотно старого мастера",
+      "type": "gem",
+      "rarity": "legendary",
+      "icon": "loot_masterpiece",
+      "copper_value": 2750,
+      "desc": [
+        "\"Понятия не имею, что тут изображено, но рама из чистого золота говорит сама за себя.\"",
+        "\"Вынести такую картину из подземелья без единой царапины — настоящее искусство!\""
+      ]
+    },
+    "tr_c01": {"name": "Оловянная ложка", "type": "gem", "rarity": "common", "icon": "tr:spoon:pewter", "copper_value": 22, "desc": ["\"Слегка погнута, но щи хлебать ещё можно.\""]},
+    "tr_c02": {"name": "Медная кружка", "type": "gem", "rarity": "common", "icon": "tr:cup:copper", "copper_value": 26, "desc": ["\"Пахнет кислым элем и позеленела по ободку.\""]},
+    "tr_c03": {"name": "Глиняный кувшин с росписью", "type": "gem", "rarity": "common", "icon": "tr:vase:clay", "copper_value": 28, "desc": ["\"На боку нарисован не то бык, не то перекормленный пёс.\""]},
+    "tr_c04": {"name": "Костяной гребень", "type": "gem", "rarity": "common", "icon": "tr:mirror:bone", "copper_value": 30, "desc": ["\"Пара зубьев выломана, но работа аккуратная.\""]},
+    "tr_c05": {"name": "Латунная пряжка", "type": "gem", "rarity": "common", "icon": "tr:brooch:brass", "copper_value": 32, "desc": ["\"Блестит почти как золото, если смотреть в темноте.\""]},
+    "tr_c06": {"name": "Оловянная тарелка", "type": "gem", "rarity": "common", "icon": "tr:plate:tin", "copper_value": 34, "desc": ["\"Добротная посуда. Такую в трактире на гвоздь не вешают.\""]},
+    "tr_c07": {"name": "Медная табакерка", "type": "gem", "rarity": "common", "icon": "tr:box:copper", "copper_value": 35, "desc": ["\"Внутри лишь щепоть сухой пыли, но крышка закрывается со щелчком.\""]},
+    "tr_c08": {"name": "Бронзовый колокольчик", "type": "gem", "rarity": "common", "icon": "tr:chess:bronze", "copper_value": 36, "desc": ["\"Звенит тонко и противно. Лучше обернуть тряпкой.\""]},
+    "tr_c09": {"name": "Деревянная шкатулка", "type": "gem", "rarity": "common", "icon": "tr:box:wood", "copper_value": 37, "desc": ["\"Пахнет можжевельником и старым лаком.\""]},
+    "tr_c10": {"name": "Медный черпак", "type": "gem", "rarity": "common", "icon": "tr:spoon:copper", "copper_value": 38, "desc": ["\"Половник знатного повара. Медь толстая, на вес хорош.\""]},
+    "tr_c11": {"name": "Бутыль старого сидра", "type": "gem", "rarity": "common", "icon": "tr:bottle:forest", "copper_value": 39, "desc": ["\"Либо это благородный напиток, либо отличный уксус.\""]},
+    "tr_c12": {"name": "Расписная миска", "type": "gem", "rarity": "common", "icon": "tr:plate:clay", "copper_value": 40, "desc": ["\"Узор из дубовых листьев чудом уцелел без трещин.\""]},
+    "tr_c13": {"name": "Оловянный подсвечник", "type": "gem", "rarity": "common", "icon": "tr:candle:pewter", "copper_value": 41, "desc": ["\"Наплывы воска скрывают мелкую гравировку.\""]},
+    "tr_c14": {"name": "Узорный напёрсток", "type": "gem", "rarity": "common", "icon": "tr:cup:iron", "copper_value": 42, "desc": ["\"Крошечная вещица, а скупщик всё равно возьмёт.\""]},
+    "tr_c15": {"name": "Железная печать", "type": "gem", "rarity": "common", "icon": "tr:chess:iron", "copper_value": 43, "desc": ["\"Чей-то родовой знак. Теперь принадлежит тому, кто нашёл.\""]},
+    "tr_c16": {"name": "Костяная фигурка ворона", "type": "gem", "rarity": "common", "icon": "tr:idol:bone", "copper_value": 44, "desc": ["\"Вырезана грубовато, но взгляд у птицы живой.\""]},
+    "tr_c17": {"name": "Набросок углём в рамке", "type": "gem", "rarity": "common", "icon": "tr:painting:ochre", "copper_value": 45, "desc": ["\"Кривая мельница и три вороны. Художник явно торопился.\""]},
+    "tr_c18": {"name": "Медная брошь", "type": "gem", "rarity": "common", "icon": "tr:brooch:copper", "copper_value": 46, "desc": ["\"Простая застёжка для плаща с чеканным листом.\""]},
+    "tr_c19": {"name": "Латунная лампада", "type": "gem", "rarity": "common", "icon": "tr:candle:brass", "copper_value": 48, "desc": ["\"Масла в ней нет, зато металл блестит как новый.\""]},
+    "tr_c20": {"name": "Глиняная амфора", "type": "gem", "rarity": "common", "icon": "tr:vase:ochre", "copper_value": 49, "desc": ["\"Пузатый сосуд из старых погребов.\""]},
+    "tr_c21": {"name": "Резной деревянный кубок", "type": "gem", "rarity": "common", "icon": "tr:cup:wood", "copper_value": 50, "desc": ["\"Выточен из твёрдого капа и обвит медным ободком.\""]},
+    "tr_c22": {"name": "Костяная ладья", "type": "gem", "rarity": "common", "icon": "tr:chess:bone", "copper_value": 52, "desc": ["\"Фигура из старых шахмат. Остальных, видно, утащили крысы.\""]},
+    "tr_c23": {"name": "Медный слиток", "type": "gem", "rarity": "common", "icon": "tr:ingot:copper", "copper_value": 54, "desc": ["\"Увесистый кирпичик. Кузнецы платят за такие без торгов.\""]},
+    "tr_c24": {"name": "Тусклое ручное зеркало", "type": "gem", "rarity": "common", "icon": "tr:mirror:pewter", "copper_value": 55, "desc": ["\"Стекло мутное, но оправа тяжёлая и целая.\""]},
+    "tr_c25": {"name": "Дорожный дневник", "type": "gem", "rarity": "common", "icon": "tr:tome:wood", "copper_value": 56, "desc": ["\"Сплошь жалобы на сырость и цены на овёс. Антиквариат!\""]},
+    "tr_c26": {"name": "Бронзовая цепочка", "type": "gem", "rarity": "common", "icon": "tr:necklace:bronze", "copper_value": 58, "desc": ["\"Звенья крепкие, не порвалась даже в земле.\""]},
+    "tr_c27": {"name": "Флакон травяных духов", "type": "gem", "rarity": "common", "icon": "tr:bottle:azure", "copper_value": 60, "desc": ["\"Пахнет лавандой так резко, что слезятся глаза.\""]},
+    "tr_c28": {"name": "Натюрморт с репой", "type": "gem", "rarity": "common", "icon": "tr:painting:forest", "copper_value": 62, "desc": ["\"Величественный корнеплод на фоне ржавого ведра.\""]},
+    "tr_c29": {"name": "Оловянный кувшин", "type": "gem", "rarity": "common", "icon": "tr:vase:pewter", "copper_value": 64, "desc": ["\"Отлитый в форме кувшин с массивной ручкой.\""]},
+    "tr_c30": {"name": "Латунный поднос", "type": "gem", "rarity": "common", "icon": "tr:plate:brass", "copper_value": 65, "desc": ["\"На таком подавали жаркое, пока хозяева не сбежали.\""]},
+    "tr_u01": {"name": "Серебряная ложка", "type": "gem", "rarity": "uncommon", "icon": "tr:spoon:silver", "copper_value": 95, "desc": ["\"С монограммой какого-то забытого барона.\""]},
+    "tr_u02": {"name": "Медный канделябр", "type": "gem", "rarity": "uncommon", "icon": "tr:candle:copper", "copper_value": 105, "desc": ["\"Трёхрожковый, тяжёлый и вполне себе целый.\""]},
+    "tr_u03": {"name": "Фарфоровая ваза", "type": "gem", "rarity": "uncommon", "icon": "tr:vase:ivory", "copper_value": 110, "desc": ["\"Хрупкая зараза. Главное — не уронить сумку.\""]},
+    "tr_u04": {"name": "Бутыль выдержанного вина", "type": "gem", "rarity": "uncommon", "icon": "tr:bottle:crimson", "copper_value": 115, "desc": ["\"Сургуч не тронут. За такую коллекционеры платят щедро.\""]},
+    "tr_u05": {"name": "Бронзовый слиток", "type": "gem", "rarity": "uncommon", "icon": "tr:ingot:bronze", "copper_value": 120, "desc": ["\"Литая заготовка с чётким клеймом литейной гильдии.\""]},
+    "tr_u06": {"name": "Серебряное блюдо", "type": "gem", "rarity": "uncommon", "icon": "tr:plate:silver", "copper_value": 125, "desc": ["\"Если протереть рукавом — можно бриться глядя в дно.\""]},
+    "tr_u07": {"name": "Зеркало в серебряной оправе", "type": "gem", "rarity": "uncommon", "icon": "tr:mirror:silver", "copper_value": 130, "desc": ["\"Отражает уставшую рожу, но сама оправа стоит немало.\""]},
+    "tr_u08": {"name": "Печать торгового дома", "type": "gem", "rarity": "uncommon", "icon": "tr:chess:brass", "copper_value": 135, "desc": ["\"Тяжёлая латунная печатка. В нужных руках — почти деньги.\""]},
+    "tr_u09": {"name": "Шкатулка из чёрного дерева", "type": "gem", "rarity": "uncommon", "icon": "tr:box:obsidian", "copper_value": 140, "desc": ["\"Гладкая как камень, с потайным замочком.\""]},
+    "tr_u10": {"name": "Медальон с синей эмалью", "type": "gem", "rarity": "uncommon", "icon": "tr:brooch:azure", "copper_value": 145, "desc": ["\"Тонкая работа. Внутри пусто, портрет кто-то вынул.\""]},
+    "tr_u11": {"name": "Карманный компас", "type": "gem", "rarity": "uncommon", "icon": "tr:watch:brass", "copper_value": 150, "desc": ["\"Стрелка упорно показывает на север — или на ближайший кабак.\""]},
+    "tr_u12": {"name": "Серебряная чарка", "type": "gem", "rarity": "uncommon", "icon": "tr:cup:silver", "copper_value": 155, "desc": ["\"Холодит пальцы. Приятно держать, ещё приятнее продать.\""]},
+    "tr_u13": {"name": "Статуэтка из бивня", "type": "gem", "rarity": "uncommon", "icon": "tr:idol:ivory", "copper_value": 160, "desc": ["\"Изящная фигурка охотника с копьём.\""]},
+    "tr_u14": {"name": "Пейзаж с ветряной мельницей", "type": "gem", "rarity": "uncommon", "icon": "tr:painting:azure", "copper_value": 165, "desc": ["\"Светлое небо и холмы. В этих сырых подвалах аж глаз радуется.\""]},
+    "tr_u15": {"name": "Хроника забытого рода", "type": "gem", "rarity": "uncommon", "icon": "tr:tome:crimson", "copper_value": 170, "desc": ["\"Толстый том в кожаном переплёте. Книжники дадут хорошую цену.\""]},
+    "tr_u16": {"name": "Янтарное ожерелье", "type": "gem", "rarity": "uncommon", "icon": "tr:necklace:amber", "copper_value": 172, "desc": ["\"Крупные медовые бусины, тёплые на ощупь.\""]},
+    "tr_u17": {"name": "Театральная маска шута", "type": "gem", "rarity": "uncommon", "icon": "tr:mask:crimson", "copper_value": 175, "desc": ["\"Ухмыляется так, будто знает, что ждёт за следующей дверью.\""]},
+    "tr_u18": {"name": "Графин с ягодной наливкой", "type": "gem", "rarity": "uncommon", "icon": "tr:bottle:amethyst", "copper_value": 178, "desc": ["\"Тяжёлое гранёное стекло и густой рубиновый отблеск.\""]},
+    "tr_u19": {"name": "Костяной гребень с серебром", "type": "gem", "rarity": "uncommon", "icon": "tr:mirror:ivory", "copper_value": 182, "desc": ["\"Принадлежал знатной даме, если судить по серебряной инкрустации.\""]},
+    "tr_u20": {"name": "Бронзовый бюст полководца", "type": "gem", "rarity": "uncommon", "icon": "tr:idol:bronze", "copper_value": 185, "desc": ["\"Суровый нос, пышные усы и полпуда чистой бронзы.\""]},
+    "tr_r01": {"name": "Серебряный канделябр", "type": "gem", "rarity": "rare", "icon": "tr:candle:silver", "copper_value": 285, "desc": ["\"Роскошная штука. Такую не стыдно и во дворец поставить.\""]},
+    "tr_r02": {"name": "Нефритовая чаша", "type": "gem", "rarity": "rare", "icon": "tr:cup:jade", "copper_value": 300, "desc": ["\"Выточена из цельного куска камня, стенки просвечивают на свету.\""]},
+    "tr_r03": {"name": "Золотая ложка трапезника", "type": "gem", "rarity": "rare", "icon": "tr:spoon:gold", "copper_value": 315, "desc": ["\"Кто-то всерьёз ел кашу чистым золотом. Красиво жить не запретишь.\""]},
+    "tr_r04": {"name": "Позолоченное блюдо", "type": "gem", "rarity": "rare", "icon": "tr:plate:gold", "copper_value": 330, "desc": ["\"Чеканка с охотничьей сценой и толстый слой позолоты.\""]},
+    "tr_r05": {"name": "Флакон редких благовоний", "type": "gem", "rarity": "rare", "icon": "tr:bottle:emerald", "copper_value": 345, "desc": ["\"Запечатанный изумрудный сосуд с драгоценным маслом.\""]},
+    "tr_r06": {"name": "Серебряная шкатулка", "type": "gem", "rarity": "rare", "icon": "tr:box:silver", "copper_value": 360, "desc": ["\"Тонкая филигрань по крышке и бархатная обивка внутри.\""]},
+    "tr_r07": {"name": "Нефритовый кувшин", "type": "gem", "rarity": "rare", "icon": "tr:vase:jade", "copper_value": 375, "desc": ["\"Тяжёлый, гладкий и невероятно дорогой.\""]},
+    "tr_r08": {"name": "Портрет дамы в вуали", "type": "gem", "rarity": "rare", "icon": "tr:portrait:azure", "copper_value": 390, "desc": ["\"Краски ничуть не поблекли. Скупщик наверняка знает, кто её писал.\""]},
+    "tr_r09": {"name": "Золочёная астролябия", "type": "gem", "rarity": "rare", "icon": "tr:watch:gold", "copper_value": 405, "desc": ["\"Хитроумные кольца и шкалы. Я в них не смыслю, но цена — космическая.\""]},
+    "tr_r10": {"name": "Рубиновая брошь", "type": "gem", "rarity": "rare", "icon": "tr:brooch:ruby", "copper_value": 420, "desc": ["\"Крупный алый камень в золотых лапках.\""]},
+    "tr_r11": {"name": "Витая серебряная гривна", "type": "gem", "rarity": "rare", "icon": "tr:necklace:silver", "copper_value": 435, "desc": ["\"Тяжёлое шейное украшение древних вождей.\""]},
+    "tr_r12": {"name": "Трактат о звёздах", "type": "gem", "rarity": "rare", "icon": "tr:tome:azure", "copper_value": 450, "desc": ["\"Страницы исписаны золотыми чернилами и картами созвездий.\""]},
+    "tr_r13": {"name": "Серебряная маска бала", "type": "gem", "rarity": "rare", "icon": "tr:mask:silver", "copper_value": 460, "desc": ["\"Отполирована до зеркального блеска. Пугающе красивая.\""]},
+    "tr_r14": {"name": "Обсидиановый конь", "type": "gem", "rarity": "rare", "icon": "tr:chess:obsidian", "copper_value": 470, "desc": ["\"Шахматная фигура из вулканического стекла с золотой уздечкой.\""]},
+    "tr_r15": {"name": "Парадный бронзовый жезл", "type": "gem", "rarity": "rare", "icon": "tr:scepter:bronze", "copper_value": 480, "desc": ["\"Знак власти городского наместника. Теперь мой.\""]},
+    "tr_e01": {"name": "Золотой канделябр", "type": "gem", "rarity": "epic", "icon": "tr:candle:gold", "copper_value": 780, "desc": ["\"Литое золото. Тяжёлый так, что им можно пробить щит.\""]},
+    "tr_e02": {"name": "Сапфировое ожерелье", "type": "gem", "rarity": "epic", "icon": "tr:necklace:sapphire", "copper_value": 840, "desc": ["\"Переливается синим огнём даже при тусклом свете факела.\""]},
+    "tr_e03": {"name": "Золотая погребальная маска", "type": "gem", "rarity": "epic", "icon": "tr:mask:gold", "copper_value": 900, "desc": ["\"Холодные черты древнего владыки. Надеюсь, он не придёт за ней ночью.\""]},
+    "tr_e04": {"name": "Золотой ларец с эмалью", "type": "gem", "rarity": "epic", "icon": "tr:box:gold", "copper_value": 940, "desc": ["\"Ювелирная работа высшей пробы.\""]},
+    "tr_e05": {"name": "Батальное полотно", "type": "gem", "rarity": "epic", "icon": "tr:painting:crimson", "copper_value": 990, "desc": ["\"Дым, знамёна и схватка на мосту. Шедевр в массивной раме.\""]},
+    "tr_e06": {"name": "Хрустальный графин вековой выдержки", "type": "gem", "rarity": "epic", "icon": "tr:bottle:sapphire", "copper_value": 1040, "desc": ["\"Гранёный хрусталь с золотой пробкой. Внутри — напиток королей.\""]},
+    "tr_e07": {"name": "Золотой потир с рубинами", "type": "gem", "rarity": "epic", "icon": "tr:cup:ruby", "copper_value": 1090, "desc": ["\"Церемониальная чаша, усыпанная алыми камнями.\""]},
+    "tr_e08": {"name": "Фолиант в золотом окладе", "type": "gem", "rarity": "epic", "icon": "tr:tome:gold", "copper_value": 1140, "desc": ["\"Обложка тяжелее самих страниц и блестит как солнце.\""]},
+    "tr_e09": {"name": "Серебряный венец советника", "type": "gem", "rarity": "epic", "icon": "tr:crown:silver", "copper_value": 1190, "desc": ["\"Тонкая чеканка и безупречная проба. Знатная добыча!\""]},
+    "tr_e10": {"name": "Аметистовая ваза", "type": "gem", "rarity": "epic", "icon": "tr:vase:amethyst", "copper_value": 1250, "desc": ["\"Вырезана из гигантского кристалла и оправлена в золото.\""]},
+    "tr_l01": {"name": "Платиновый слиток Первой Казны", "type": "gem", "rarity": "legendary", "icon": "tr:ingot:platinum", "copper_value": 2150, "desc": ["\"Чистая платина с печатью сгинувшей династии. Настоящий джекпот!\""]},
+    "tr_l02": {"name": "Звёздный хронометр Стратоса", "type": "gem", "rarity": "legendary", "icon": "tr:watch:sapphire", "copper_value": 2400, "desc": ["\"Механизм с сапфировыми шестернями, отмеряющий ход светил.\""]},
+    "tr_l03": {"name": "Изумрудный идол Забытых Топей", "type": "gem", "rarity": "legendary", "icon": "tr:idol:emerald", "copper_value": 2650, "desc": ["\"Цельный изумруд размером с кулак. Глядишь на него — и забываешь дышать.\""]},
+    "tr_l04": {"name": "Обсидиановый жезл судьи", "type": "gem", "rarity": "legendary", "icon": "tr:scepter:obsidian", "copper_value": 2900, "desc": ["\"Чёрное стекло, золото и аура абсолютной власти.\""]},
+    "tr_l05": {"name": "Королевский венец Эленора", "type": "gem", "rarity": "legendary", "icon": "tr:crown:ruby", "copper_value": 3200, "desc": ["\"Реликвия, за которую развязывали войны. А я вынесу её в заплечном мешке!\""]},
     "potion_hp_weak": {
       "name": "Разбавленный отвар",
       "type": "consumable",

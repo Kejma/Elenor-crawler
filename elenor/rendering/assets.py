@@ -1253,6 +1253,15 @@ def create_placeholder_assets():
     from elenor.rendering.jungle_fixtures import register_jungle_fixtures
     register_jungle_fixtures(assets, make_pair)
 
+    from elenor.rendering.paintings import PAINTINGS_DB, get_painting_surface
+    for pid in PAINTINGS_DB:
+        p_diff = get_painting_surface(pid, scale=1)
+        if p_diff is not None:
+            pw, ph = p_diff.get_size()
+            p_norm = pygame.Surface((pw, ph), pygame.SRCALPHA)
+            p_norm.fill((128, 128, 255, 255))
+            assets[pid] = (p_diff, p_norm)
+
     from elenor.data.textures import bootstrap_assets_if_needed, load_custom_dtex_animations
 
     bootstrap_assets_if_needed(assets, build_hero_sprite)

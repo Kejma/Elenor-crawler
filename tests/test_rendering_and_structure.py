@@ -76,8 +76,8 @@ class RenderingTests(unittest.TestCase):
         ):
             with self.subTest(target=target, desktop=desktop):
                 self.assertEqual(_display_window_spec("windowed", target, desktop), (target, 0))
-                self.assertEqual(_display_window_spec("borderless", target, desktop), (target, pygame.NOFRAME))
-                self.assertEqual(_display_window_spec("fullscreen", target, desktop), (desktop, pygame.NOFRAME))
+                self.assertEqual(_display_window_spec("borderless", target, desktop), (desktop, pygame.NOFRAME))
+                self.assertEqual(_display_window_spec("fullscreen", target, desktop), (target, pygame.FULLSCREEN))
 
     def test_unavailable_direct_gl_recovers_software_window(self):
         profile = {}

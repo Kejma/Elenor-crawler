@@ -5,9 +5,10 @@ import math
 import struct
 from time import perf_counter
 
+import numpy as np
 import pygame
 
-from elenor.config import CANVAS_H, TILE_H, TILE_W, VIEW_H, VIEW_W
+from elenor.config import CANVAS_H, DEEP_WATER, FALLEN_LOG, SHALLOW_WATER, TILE_H, TILE_W, VIEW_H, VIEW_W
 from elenor.entities.objects import JUNGLE_KEY_COLORS
 from elenor.rendering.terrain import DIFFUSE_CLEAR, NORMAL_CLEAR
 from elenor.rendering.visibility import canopy_opacity, misted_actor
@@ -173,6 +174,11 @@ class GPUSceneRenderer:
                 uniform sampler2D u_tex0;
                 uniform sampler2D u_tex1;
                 uniform sampler2D u_tex2;
+                uniform sampler2D u_water_depth;
+                uniform vec2 u_chunk_origin;
+                uniform vec2 u_map_px;
+                uniform bool u_has_lake;
+                uniform float u_time;
                 in vec2 v_uv;
                 layout(location = 0) out vec4 out_diff;
                 layout(location = 1) out vec4 out_norm;
@@ -181,16 +187,40 @@ class GPUSceneRenderer:
                     ivec2 uv = ivec2(floor(v_uv));
                     ivec2 sz = textureSize(u_tex0, 0);
                     if (uv.x < 0 || uv.y < 0 || uv.x >= sz.x || uv.y >= sz.y) discard;
-                    out_diff = texelFetch(u_tex0, uv, 0);
-                    out_norm = texelFetch(u_tex1, uv, 0);
-                    out_em = vec4(texelFetch(u_tex2, uv, 0).rgb, 1.0);
+                    vec4 diff = texelFetch(u_tex0, uv, 0);
+                    vec4 norm = texelFetch(u_tex1, uv, 0);
+                    vec4 mat = vec4(texelFetch(u_tex2, uv, 0).rgb, 1.0);
+                    if (u_has_lake && mat.b > 0.70) {
+                        vec2 wpx = u_chunk_origin + vec2(uv) + 0.5;
+                        vec2 wob = vec2(
+                            sin(wpx.y * 0.14) * 1.5 + cos(wpx.x * 0.10 + u_time * 0.55) * 0.7,
+                            cos(wpx.x * 0.14) * 1.5 + sin(wpx.y * 0.10 - u_time * 0.50) * 0.7
+                        );
+                        vec2 d_uv = clamp((wpx + wob) / u_map_px, vec2(0.0), vec2(1.0));
+                        float raw_d = texture(u_water_depth, d_uv).r;
+                        float shelf = smoothstep(0.22, 0.72, raw_d);
+                        float abyss = smoothstep(0.72, 1.0, raw_d);
+                        vec3 absorb = mix(vec3(1.06, 1.05, 0.98), vec3(0.34, 0.52, 0.68), shelf);
+                        absorb *= mix(1.0, 0.65, abyss);
+                        diff.rgb *= absorb;
+                        mat.g = mix(0.86, 0.98, shelf);
+                        mat.b = mix(0.76, 1.00, shelf);
+                    }
+                    out_diff = diff;
+                    out_norm = norm;
+                    out_em = mat;
                 }
             """,
         )
         self.quad_dnm_prog["u_tex0"].value = 0
         self.quad_dnm_prog["u_tex1"].value = 1
         self.quad_dnm_prog["u_tex2"].value = 2
+        self.quad_dnm_prog["u_water_depth"].value = 3
         self.quad_dnm_prog["u_canvas"].value = (float(VIEW_W), float(CANVAS_H))
+        self.quad_dnm_prog["u_chunk_origin"].value = (0.0, 0.0)
+        self.quad_dnm_prog["u_map_px"].value = (1.0, 1.0)
+        self.quad_dnm_prog["u_has_lake"].value = False
+        self.quad_dnm_prog["u_time"].value = 0.0
         self.quad_dnm_vao = ctx.simple_vertex_array(self.quad_dnm_prog, self.unit_vbo, "in_corner")
 
         self.quad_d_prog = ctx.program(
@@ -408,6 +438,10 @@ class GPUSceneRenderer:
         self._dyn_norm_surf = None
         self._dyn_diff_tex = None
         self._dyn_norm_tex = None
+        self._water_depth_key = None
+        self._water_depth_tex = None
+        self._water_has_lake = False
+        self._water_map_px = (1.0, 1.0)
 
     def _bind_inst_vaos(self):
         layout = [
@@ -530,6 +564,41 @@ class GPUSceneRenderer:
             self._tz_key = key
         return self._tz_tex
 
+    def _update_water_depth(self, dungeon):
+        key = (id(dungeon), getattr(dungeon, "terrain_revision", 0))
+        if self._water_depth_key == key and self._water_depth_tex is not None:
+            return
+        self._water_depth_key = key
+        grid = np.asarray(dungeon.grid, dtype=np.int16)
+        is_log = (grid == FALLEN_LOG)
+        mid_log = np.zeros_like(is_log)
+        if is_log.any():
+            mid_log[:, 1:-1] = is_log[:, 1:-1] & is_log[:, :-2] & is_log[:, 2:]
+        is_deep = (grid == DEEP_WATER) | mid_log
+        is_lake = (grid == SHALLOW_WATER) | is_deep
+
+        if not is_lake.any():
+            self._water_has_lake = False
+            self._water_map_px = (1.0, 1.0)
+            if self._water_depth_tex is None:
+                self._water_depth_tex = self.ctx.texture((1, 1), 1, dtype="f1")
+                self._water_depth_tex.filter = (self.gl.LINEAR, self.gl.LINEAR)
+                self._water_depth_tex.write(b"\x00")
+            return
+
+        depth_u8 = np.where(is_deep, 255, 0).astype(np.uint8)
+        h, w = depth_u8.shape
+        if self._water_depth_tex is None or self._water_depth_tex.size != (w, h):
+            if self._water_depth_tex is not None:
+                self._water_depth_tex.release()
+            self._water_depth_tex = self.ctx.texture((w, h), 1, dtype="f1")
+            self._water_depth_tex.filter = (self.gl.LINEAR, self.gl.LINEAR)
+            self._water_depth_tex.repeat_x = False
+            self._water_depth_tex.repeat_y = False
+        self._water_depth_tex.write(np.ascontiguousarray(depth_u8))
+        self._water_has_lake = True
+        self._water_map_px = (float(w * TILE_W), float(h * TILE_H))
+        
     def render_world(
         self, renderer, dungeon, player, mobs, objects, cam_x, cam_y, fov_mask,
         visible_tiles, fx_mgr, physical_states, cast, reveal_map, now_sec,
@@ -793,12 +862,18 @@ class GPUSceneRenderer:
             ctx.scissor = (0, 0, VIEW_W, VIEW_H)
 
             # 2. Чанки пола (непрозрачные, 2-6 квадов + карта материалов)
+            self._update_water_depth(dungeon)
             self.fbo_color.use()
+            self._water_depth_tex.use(3)
+            self.quad_dnm_prog["u_has_lake"].value = self._water_has_lake
+            self.quad_dnm_prog["u_map_px"].value = self._water_map_px
+            self.quad_dnm_prog["u_time"].value = float(now_sec)
             for chunk, visible in chunks:
                 td, tn, tm = self._chunk_textures(chunk)
                 td.use(0)
                 tn.use(1)
                 tm.use(2)
+                self.quad_dnm_prog["u_chunk_origin"].value = (float(chunk.pixels.x), float(chunk.pixels.y))
                 self.quad_dnm_prog["u_dest"].value = (
                     float(visible.x - cam_ix), float(visible.y - cam_iy),
                     float(visible.width), float(visible.height),

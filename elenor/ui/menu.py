@@ -4,16 +4,22 @@ from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER
 from elenor.rendering.normals import LiveLightPreview
 
 
-from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, get_available_resolutions, resolution_index, WINDOW_MODES_LIST
+from elenor.profile import DEFAULT_PROFILE, get_profile_dir, save_profile, reset_profile_progress, get_available_resolutions, get_desktop_size, resolution_index, WINDOW_MODES_LIST
 from elenor.data.economy import format_copper_Trigger
 from elenor.rendering.appearance import HERO_TYPES_ORDER, HERO_CUSTOMIZATION_DB, build_custom_hero_sprite
 from elenor.ui.clipboard import paste_text
 from elenor.world.run_seed import parse_run_seed
 
+STRONGBOX_COSTS = (20000, 30000, 45000, 67500, 101250)
+
 class MainMenuController:
     def __init__(self, game):
         self.game = game
         self.active_tab = 0
+        self.upgrade_subtab = 0
+        self.inspect_painting_id = None
+        self.viewer_btn_rects = {}
+        self.viewer_modal_rect = None
         self.scroll_x = 0.0
         self.preview_3d = LiveLightPreview(280, 320)
         self.preview_walk = False
@@ -71,6 +77,37 @@ class MainMenuController:
                         self.seed_text = self.seed_text[:-1]
                     self.seed_selected = self.seed_error = False
                 return True
+            
+        if self.inspect_painting_id is not None:
+            if event.type == pygame.MOUSEWHEEL:
+                self._step_painting_viewer(-1 if event.y > 0 else 1, prof)
+                return True
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.inspect_painting_id = None
+                    self.game.sfx.play("ui")
+                elif event.key in (pygame.K_LEFT, pygame.K_a):
+                    self._step_painting_viewer(-1, prof)
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    self._step_painting_viewer(1, prof)
+                return True
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                pos = getattr(event, "pos", mouse_pos)
+                for v_key, v_rect in self.viewer_btn_rects.items():
+                    if v_rect.collidepoint(pos):
+                        if v_key == "prev":
+                            self._step_painting_viewer(-1, prof)
+                        elif v_key == "next":
+                            self._step_painting_viewer(1, prof)
+                        elif v_key == "close":
+                            self.inspect_painting_id = None
+                            self.game.sfx.play("ui")
+                        return True
+                if self.viewer_modal_rect is None or not self.viewer_modal_rect.collidepoint(pos):
+                    self.inspect_painting_id = None
+                    self.game.sfx.play("ui")
+                return True
+            return True
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
@@ -262,6 +299,41 @@ class MainMenuController:
             self.meltdown_active = False
             self.active_tab = 0
 
+        elif b_key in ("upg_tab_0", "upg_tab_1", "upg_tab_2"):
+            self.upgrade_subtab = int(b_key[-1])
+
+        elif b_key == "strongbox_upgrade":
+            lvl = int(prof.get("strongbox_level", 0))
+            if lvl < len(STRONGBOX_COSTS):
+                cost = STRONGBOX_COSTS[lvl]
+                if prof.get("bank_copper", 0) >= cost:
+                    prof["bank_copper"] = prof.get("bank_copper", 0) - cost
+                    prof["strongbox_level"] = lvl + 1
+                    prof["strongbox_enabled"] = True
+                    save_profile(prof)
+                    self.game.sfx.play("levelup")
+                else:
+                    self.game.sfx.play("hurt")
+
+        elif b_key == "strongbox_toggle":
+            if int(prof.get("strongbox_level", 0)) > 0:
+                prof["strongbox_enabled"] = not prof.get("strongbox_enabled", True)
+                save_profile(prof)
+
+        elif b_key == "dev_add_gold":
+            prof["bank_copper"] = prof.get("bank_copper", 0) + 25000
+            save_profile(prof)
+            self.game.sfx.play("coin_pickup")
+
+        elif b_key == "dev_unlock_paintings":
+            from elenor.rendering.paintings import PAINTINGS_DB
+            prof["collected_paintings"] = list(PAINTINGS_DB.keys())
+            save_profile(prof)
+            self.game.sfx.play("levelup")
+
+        elif b_key.startswith("inspect_paint:"):
+            self.inspect_painting_id = b_key.split(":", 1)[1]
+
         elif b_key == "quit_now":
             pygame.quit()
             raise SystemExit
@@ -339,7 +411,7 @@ class MainMenuController:
             if tab_i == 0:
                 self._render_play_tab(screen, p_rect, dt, mouse_pos, prof)
             elif tab_i == 1:
-                self._render_upgrade_tab(screen, p_rect, prof)
+                self._render_upgrade_tab(screen, p_rect, mouse_pos, prof)
             elif tab_i == 2:
                 self._render_settings_tab(screen, p_rect, mouse_pos, prof)
             elif tab_i == 3:
@@ -354,6 +426,9 @@ class MainMenuController:
             r.draw_pixel_frame(screen, rect, (46, 92, 52) if hover else (32, 68, 38), UI_BORDER_GOLD, hover, 1.0)
             label = r.font_ui.render(self.game.loc["exploration_map"]["resume"], True, UI_TEXT_MAIN)
             screen.blit(label, label.get_rect(center=rect.center))
+
+        if self.inspect_painting_id is not None:
+            self._render_painting_viewer(screen, mouse_pos, prof)
 
     def _draw_selector_row(self, screen, x, y, w, label, val_text, prev_key, next_key, mouse_pos, locked=False):
         r = self.game.renderer
@@ -537,32 +612,288 @@ class MainMenuController:
         st_lbl = r.font_popup_big.render("В КРЫСИНЫЙ ПОГРЕБ", True, (255, 245, 200))
         screen.blit(st_lbl, (start_btn.centerx - st_lbl.get_width() // 2, start_btn.centery - st_lbl.get_height() // 2))
 
-    def _render_upgrade_tab(self, screen, p_rect, prof):
+    def _render_upgrade_tab(self, screen, p_rect, mouse_pos, prof):
+        from elenor.rendering.fishing import FISH_CATALOG_SPECS
+        from elenor.rendering.paintings import PAINTINGS_DB
+
         r = self.game.renderer
-        hdr = r.font_title.render("ДОЛГАЯ ПРОКАЧКА НАЁМНИКА", True, UI_BORDER_HIGHLIGHT)
-        screen.blit(hdr, (p_rect.centerx - hdr.get_width() // 2, p_rect.y + 48))
+        col_fish = set(prof.get("collected_fish", ()))
+        col_paint = set(prof.get("collected_paintings", ()))
 
-        box = pygame.Rect(p_rect.x + 80, p_rect.y + 110, p_rect.width - 160, 380)
-        r.draw_pixel_frame(screen, box, UI_SLOT_BG, UI_BORDER_WOOD, False, 1.0)
+        # Три подвкладки сверху: Улучшения / Рыбы / Картины
+        sub_labels = [
+            "УЛУЧШЕНИЯ",
+            f"РЫБЫ ({len(col_fish)}/{len(FISH_CATALOG_SPECS)})",
+            f"КАРТИНЫ ({len(col_paint)}/{len(PAINTINGS_DB)})",
+        ]
+        tab_w = 260
+        gap = 16
+        start_x = p_rect.centerx - (tab_w * 3 + gap * 2) // 2
+        for idx, lbl in enumerate(sub_labels):
+            tr = pygame.Rect(start_x + idx * (tab_w + gap), p_rect.y + 24, tab_w, 42)
+            self.btn_rects[f"upg_tab_{idx}"] = tr
+            is_sel = (self.upgrade_subtab == idx)
+            hov = tr.collidepoint(mouse_pos)
+            bg = (52, 42, 38) if (is_sel or hov) else UI_SLOT_BG
+            bd = UI_BORDER_GOLD if is_sel else UI_BORDER_WOOD
+            r.draw_pixel_frame(screen, tr, bg, bd, is_sel or hov, 1.0)
+            ts = r.font_ui.render(lbl, True, UI_BORDER_HIGHLIGHT if is_sel else UI_TEXT_MAIN)
+            screen.blit(ts, ts.get_rect(center=tr.center))
 
-        msg1 = r.font_title.render("Раздел мета-прокачки пока пустует (Заглушка)", True, (255, 215, 95))
-        screen.blit(msg1, (box.centerx - msg1.get_width() // 2, box.y + 60))
+        if self.upgrade_subtab == 1:
+            self._render_fish_collection(screen, p_rect, col_fish, FISH_CATALOG_SPECS)
+            return
+        if self.upgrade_subtab == 2:
+            self._render_paintings_collection(screen, p_rect, col_paint, PAINTINGS_DB)
+            return
 
-        info = (
-            "Здесь за накопленные Медные Монеты (ММ) вы сможете навсегда усиливать выносливость, "
-            "расширять стартовый пояс, прокачивать Удачу и открывать рероллы судеб. "
-            "Собирайте монеты в данже и сдавайте драгоценные камни скупщику на этажах!"
+        lvl = int(prof.get("strongbox_level", 0))
+        enabled = bool(prof.get("strongbox_enabled", True))
+        bank = int(prof.get("bank_copper", 0))
+
+        card_w = min(920, p_rect.width - 120)
+        card = pygame.Rect(p_rect.centerx - card_w // 2, p_rect.y + 92, card_w, 300)
+        r.draw_pixel_frame(screen, card, UI_SLOT_BG, UI_BORDER_GOLD if lvl > 0 else UI_BORDER_WOOD, False, 1.0)
+
+        ic_box = pygame.Rect(card.x + 28, card.y + 28, 76, 76)
+        r.draw_pixel_frame(screen, ic_box, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
+        r.draw_item_icon(screen, "bag_strongbox", ic_box.x + 14, ic_box.y + 14, 48)
+
+        title_s = r.font_title.render("СЕМЕЙНАЯ ШКАТУЛКА", True, UI_BORDER_HIGHLIGHT)
+        screen.blit(title_s, (ic_box.right + 22, card.y + 30))
+
+        st_txt = f"Уровень {lvl} / 5  ·  Мест: {lvl}" if lvl > 0 else "Не куплена  ·  Даёт 1 несгораемый слот"
+        st_col = (125, 240, 155) if lvl > 0 else UI_TEXT_DIM
+        screen.blit(r.font_ui.render(st_txt, True, st_col), (ic_box.right + 22, card.y + 60))
+
+        for i in range(5):
+            pip = pygame.Rect(ic_box.right + 22 + i * 32, card.y + 88, 24, 14)
+            pygame.draw.rect(screen, UI_BORDER_GOLD if i < lvl else (36, 30, 44), pip, border_radius=2)
+            pygame.draw.rect(screen, UI_BORDER_HIGHLIGHT if i < lvl else UI_BORDER_WOOD, pip, 1, border_radius=2)
+
+        desc = (
+            "Занимает один слот сумки и не снимается в походе. Любой предмет внутри шкатулки "
+            "гарантированно выносится на экран итогов — даже если герой погибнет."
         )
-        for i, ln in enumerate(r.wrap_text(info, r.font_thought, box.width - 100)):
-            s = r.font_thought.render(ln, True, UI_TEXT_MAIN)
-            screen.blit(s, (box.centerx - s.get_width() // 2, box.y + 130 + i * 30))
+        for i, ln in enumerate(r.wrap_text(desc, r.font_ui, card.width - 56)):
+            screen.blit(r.font_ui.render(ln, True, UI_TEXT_MAIN), (card.x + 28, card.y + 124 + i * 24))
 
-    def _draw_dropdown_box(self, screen, x, y, w, label, current_text, btn_key, is_open, mouse_pos):
+        btn_y = card.bottom - 74
+        if lvl > 0:
+            tog_r = pygame.Rect(card.x + 28, btn_y, 260, 50)
+            self.btn_rects["strongbox_toggle"] = tog_r
+            hov_t = tog_r.collidepoint(mouse_pos)
+            bg_t = ((46, 92, 52) if hov_t else (32, 68, 38)) if enabled else ((56, 44, 48) if hov_t else (36, 28, 34))
+            r.draw_pixel_frame(screen, tog_r, bg_t, UI_BORDER_GOLD if enabled else UI_BORDER_WOOD, hov_t, 1.0)
+            t_lbl = r.font_ui.render("В походе: ВКЛ" if enabled else "В походе: ВЫКЛ", True, UI_TEXT_MAIN if enabled else UI_TEXT_DIM)
+            screen.blit(t_lbl, t_lbl.get_rect(center=tog_r.center))
+
+        upg_x = card.x + 308 if lvl > 0 else card.x + 28
+        upg_w = card.right - 28 - upg_x
+        upg_r = pygame.Rect(upg_x, btn_y, upg_w, 50)
+        if lvl < len(STRONGBOX_COSTS):
+            cost = STRONGBOX_COSTS[lvl]
+            can_buy = bank >= cost
+            self.btn_rects["strongbox_upgrade"] = upg_r
+            hov_u = upg_r.collidepoint(mouse_pos)
+            bg_u = ((58, 86, 46) if hov_u else (40, 64, 34)) if can_buy else ((52, 28, 32) if hov_u else (34, 22, 28))
+            bd_u = UI_BORDER_GOLD if can_buy else (130, 62, 68)
+            r.draw_pixel_frame(screen, upg_r, bg_u, bd_u, hov_u and can_buy, 1.0)
+            action_txt = "КУПИТЬ (1 слот)" if lvl == 0 else f"УЛУЧШИТЬ ({lvl} → {lvl + 1} слот.)"
+            price_str = format_copper_Trigger(cost, compact=True)
+            lbl_u = r.font_ui.render(f"{action_txt}  ·  {price_str}", True, COIN_TEXT_COLOR if can_buy else (215, 120, 120))
+            screen.blit(lbl_u, lbl_u.get_rect(center=upg_r.center))
+        else:
+            r.draw_pixel_frame(screen, upg_r, (28, 34, 32), UI_BORDER_GOLD, False, 1.0)
+            lbl_u = r.font_ui.render("МАКСИМАЛЬНЫЙ УРОВЕНЬ (5 / 5)", True, (135, 240, 165))
+            screen.blit(lbl_u, lbl_u.get_rect(center=upg_r.center))
+        dev_gold_r = pygame.Rect(p_rect.centerx - 150, card.bottom + 24, 300, 34)
+        self.btn_rects["dev_add_gold"] = dev_gold_r
+        hov_g = dev_gold_r.collidepoint(mouse_pos)
+        pygame.draw.rect(screen, (55, 38, 48) if hov_g else (32, 24, 34), dev_gold_r, border_radius=4)
+        pygame.draw.rect(screen, UI_BORDER_GOLD, dev_gold_r, 1, border_radius=4)
+        gt = r.font_small.render("[+25 пм в казну (Тест)]", True, (255, 220, 95))
+        screen.blit(gt, gt.get_rect(center=dev_gold_r.center))
+
+    def _render_fish_collection(self, screen, p_rect, collected, specs):
+        r = self.game.renderer
+        items = list(specs.items())
+        cols = 8
+        margin = 32
+        gap = 10
+        cell_w = (p_rect.width - margin * 2 - gap * (cols - 1)) // cols
+        cell_h = 112
+        top_y = p_rect.y + 88
+
+        for idx, (fish_id, spec) in enumerate(items):
+            row, col = divmod(idx, cols)
+            cx = p_rect.x + margin + col * (cell_w + gap)
+            cy = top_y + row * (cell_h + gap)
+            if cy + cell_h > p_rect.bottom - 16:
+                break
+            rect = pygame.Rect(cx, cy, cell_w, cell_h)
+            owned = fish_id in collected
+            r.draw_pixel_frame(screen, rect, UI_SLOT_BG if owned else (18, 16, 22), UI_BORDER_GOLD if owned else (52, 46, 60), False, 1.0)
+            if owned:
+                r.draw_item_icon(screen, fish_id, rect.centerx - 24, rect.y + 12, 48)
+                name = spec[0].removeprefix("Улов: ")
+                for li, ln in enumerate(r.wrap_text(name, r.font_small, cell_w - 12)[:2]):
+                    ls = r.font_small.render(ln, True, UI_TEXT_MAIN)
+                    screen.blit(ls, ls.get_rect(midtop=(rect.centerx, rect.y + 66 + li * 16)))
+            else:
+                q_s = r.font_title.render("?", True, (70, 64, 82))
+                screen.blit(q_s, q_s.get_rect(center=(rect.centerx, rect.y + 42)))
+                u_s = r.font_small.render("Не поймано", True, (75, 68, 86))
+                screen.blit(u_s, u_s.get_rect(midtop=(rect.centerx, rect.y + 72)))
+
+    def _step_painting_viewer(self, delta, prof):
+        from elenor.rendering.paintings import PAINTINGS_DB
+        owned = [pid for pid in PAINTINGS_DB if pid in set(prof.get("collected_paintings", ()))]
+        if not owned:
+            self.inspect_painting_id = None
+            return
+        if self.inspect_painting_id not in owned:
+            self.inspect_painting_id = owned[0]
+        else:
+            idx = (owned.index(self.inspect_painting_id) + delta) % len(owned)
+            self.inspect_painting_id = owned[idx]
+        self.game.sfx.play("ui")
+
+    def _render_paintings_collection(self, screen, p_rect, collected, db):
+        from elenor.config import RARITY_COLORS
+        r = self.game.renderer
+        items = list(db.items())
+        cols = 6
+        margin = 32
+        gap = 12
+        cell_w = (p_rect.width - margin * 2 - gap * (cols - 1)) // cols
+        cell_h = 186
+        top_y = p_rect.y + 84
+
+        for idx, (pid, data) in enumerate(items):
+            row, col = divmod(idx, cols)
+            cx = p_rect.x + margin + col * (cell_w + gap)
+            cy = top_y + row * (cell_h + gap)
+            if cy + cell_h > p_rect.bottom - 52:
+                break
+            rect = pygame.Rect(cx, cy, cell_w, cell_h)
+            owned = pid in collected
+            r_col = RARITY_COLORS.get(data["rarity"], UI_BORDER_WOOD)
+            r.draw_pixel_frame(screen, rect, UI_SLOT_BG if owned else (18, 16, 22), r_col if owned else (52, 46, 60), False, 1.0)
+            if owned:
+                self.btn_rects[f"inspect_paint:{pid}"] = rect
+                r.draw_item_icon(screen, pid, rect.centerx - 56, rect.y + 10, 112)
+                for li, ln in enumerate(r.wrap_text(data["name"], r.font_small, cell_w - 14)[:2]):
+                    ls = r.font_small.render(ln, True, r_col)
+                    screen.blit(ls, ls.get_rect(midtop=(rect.centerx, rect.y + 130 + li * 17)))
+                hint = r.font_small.render("Нажми, чтобы открыть", True, UI_TEXT_DIM)
+                screen.blit(hint, hint.get_rect(midbottom=(rect.centerx, rect.bottom - 6)))
+            else:
+                orient = data.get("orientation", "v")
+                fw, fh = (68, 98) if orient == "v" else (98, 68)
+                frame_r = pygame.Rect(rect.centerx - fw // 2, rect.y + 64 - fh // 2, fw, fh)
+                pygame.draw.rect(screen, (26, 22, 32), frame_r)
+                pygame.draw.rect(screen, (62, 54, 74), frame_r, 2)
+                q_s = r.font_title.render("?", True, (78, 70, 92))
+                screen.blit(q_s, q_s.get_rect(center=frame_r.center))
+                u_s = r.font_small.render("Не найдено", True, (75, 68, 86))
+                screen.blit(u_s, u_s.get_rect(midtop=(rect.centerx, rect.y + 136)))
+
+        # Тестовая кнопка открытия всей галереи в самом низу вкладки
+        dev_r = pygame.Rect(p_rect.centerx - 160, p_rect.bottom - 44, 320, 32)
+        self.btn_rects["dev_unlock_paintings"] = dev_r
+        pygame.draw.rect(screen, (36, 26, 38), dev_r, border_radius=4)
+        pygame.draw.rect(screen, UI_BORDER_GOLD, dev_r, 1, border_radius=4)
+        dt_s = r.font_small.render("[Открыть все картины (Тест)]", True, (255, 220, 95))
+        screen.blit(dt_s, dt_s.get_rect(center=dev_r.center))
+
+    def _render_painting_viewer(self, screen, mouse_pos, prof):
+        from elenor.config import RARITY_COLORS
+        from elenor.rendering.paintings import PAINTINGS_DB, get_painting_surface
+
+        pid = self.inspect_painting_id
+        data = PAINTINGS_DB.get(pid)
+        if data is None:
+            self.inspect_painting_id = None
+            return
+
+        r = self.game.renderer
+        self.viewer_btn_rects = {}
+
+        dim = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        dim.fill((6, 5, 12, 224))
+        screen.blit(dim, (0, 0))
+
+        orient = data.get("orientation", "v")
+        scale = 10 if orient == "v" else 11
+        card_surf = get_painting_surface(pid, scale=scale)
+        cw, ch = card_surf.get_size()
+
+        modal_w = max(680, cw + 190)
+        modal_h = ch + 210
+        mx = (SCREEN_W - modal_w) // 2
+        my = (SCREEN_H - modal_h) // 2
+        modal_r = pygame.Rect(mx, my, modal_w, modal_h)
+        self.viewer_modal_rect = modal_r
+
+        r_col = RARITY_COLORS.get(data["rarity"], UI_BORDER_GOLD)
+        r.draw_pixel_frame(screen, modal_r, UI_PANEL_BG, r_col, False, 1.0)
+
+        title_s = r.font_popup_big.render(data["name"], True, r_col)
+        screen.blit(title_s, title_s.get_rect(midtop=(modal_r.centerx, my + 18)))
+
+        owned = [k for k in PAINTINGS_DB if k in set(prof.get("collected_paintings", ()))]
+        pos_tag = f"{owned.index(pid) + 1}/{len(owned)}" if pid in owned else ""
+        rar_name = self.game.loc["ui"]["rarities"].get(data["rarity"], data["rarity"])
+        dim_tag = "42×62 · Вертикальная" if orient == "v" else "62×42 · Горизонтальная"
+        price_str = format_copper_Trigger(data["copper_value"], compact=True)
+        meta_s = r.font_small.render(f"{rar_name}  ·  {dim_tag}  ·  Оценка: {price_str}  ·  {pos_tag}", True, UI_TEXT_DIM)
+        screen.blit(meta_s, meta_s.get_rect(midtop=(modal_r.centerx, my + 52)))
+
+        img_x = modal_r.centerx - cw // 2
+        img_y = my + 80
+        pygame.draw.rect(screen, (10, 8, 16), (img_x - 6, img_y - 6, cw + 12, ch + 12))
+        pygame.draw.rect(screen, r_col, (img_x - 4, img_y - 4, cw + 8, ch + 8), 2)
+        screen.blit(card_surf, (img_x, img_y))
+
+        if len(owned) > 1:
+            b_prev = pygame.Rect(mx + 22, img_y + ch // 2 - 30, 56, 60)
+            b_next = pygame.Rect(modal_r.right - 78, img_y + ch // 2 - 30, 56, 60)
+            self.viewer_btn_rects["prev"] = b_prev
+            self.viewer_btn_rects["next"] = b_next
+            for br, sym in ((b_prev, "<"), (b_next, ">")):
+                hov = br.collidepoint(mouse_pos)
+                r.draw_pixel_frame(screen, br, (58, 48, 44) if hov else UI_SLOT_BG, UI_BORDER_GOLD if hov else UI_BORDER_WOOD, hov, 1.0)
+                ss = r.font_popup_big.render(sym, True, UI_TEXT_MAIN)
+                screen.blit(ss, ss.get_rect(center=br.center))
+
+        desc_y = img_y + ch + 16
+        for li, ln in enumerate(r.wrap_text(data["desc"], r.font_ui, modal_w - 64)[:3]):
+            ds = r.font_ui.render(ln, True, UI_TEXT_MAIN)
+            screen.blit(ds, ds.get_rect(midtop=(modal_r.centerx, desc_y + li * 22)))
+
+        hint_s = r.font_small.render("← / → или колесо мыши — листать  ·  ESC или клик вне окна — закрыть", True, UI_TEXT_DIM)
+        screen.blit(hint_s, hint_s.get_rect(midbottom=(modal_r.centerx, modal_r.bottom - 12)))
+
+        b_close = pygame.Rect(modal_r.right - 48, my + 14, 34, 34)
+        self.viewer_btn_rects["close"] = b_close
+        hov_c = b_close.collidepoint(mouse_pos)
+        r.draw_pixel_frame(screen, b_close, (108, 34, 40) if hov_c else (56, 24, 30), UI_BORDER_HIGHLIGHT if hov_c else UI_BORDER_WOOD, hov_c, 1.0)
+        xs = r.font_ui.render("X", True, UI_TEXT_MAIN)
+        screen.blit(xs, xs.get_rect(center=b_close.center))
+
+    def _draw_dropdown_box(self, screen, x, y, w, label, current_text, btn_key, is_open, mouse_pos, disabled=False):
         r = self.game.renderer
         lbl_s = r.font_small.render(label, True, UI_TEXT_DIM)
         screen.blit(lbl_s, (x + (w - lbl_s.get_width()) // 2, y))
 
         box_r = pygame.Rect(x, y + 22, w, 42)
+        if disabled:
+            r.draw_pixel_frame(screen, box_r, (20, 18, 24), (58, 52, 62), False, 0.7)
+            val_s = r.font_ui.render(current_text, True, UI_TEXT_DIM)
+            screen.blit(val_s, (box_r.centerx - val_s.get_width() // 2, box_r.centery - val_s.get_height() // 2))
+            return box_r
+
         self.btn_rects[btn_key] = box_r
         hov = box_r.collidepoint(mouse_pos)
         bg = (52, 42, 38) if (hov or is_open) else UI_SLOT_BG
@@ -597,13 +928,20 @@ class MainMenuController:
 
         avail = get_available_resolutions()
         cur_r_idx = resolution_index(prof, avail)
-        res_title = avail[cur_r_idx][2]
+        is_borderless = (cur_wmode == "borderless")
+        if is_borderless:
+            dw, dh = get_desktop_size()
+            res_title = f"Родное ({dw} x {dh})"
+            if self.open_dropdown == "resolution":
+                self.open_dropdown = None
+        else:
+            res_title = avail[cur_r_idx][2]
         dd_res_rect = self._draw_dropdown_box(
             screen, row_x, box.y + 32 + step_y, row_w,
             "РАЗРЕШЕНИЕ ЭКРАНА (16:9 FULL HD БАЗА):", res_title,
-            "dd_resolution", self.open_dropdown == "resolution", mouse_pos
+            "dd_resolution", self.open_dropdown == "resolution", mouse_pos,
+            disabled=is_borderless
         )
-
         vol_pct = int(round(prof.get("volume", 0.85) * 100))
         self._draw_selector_row(screen, row_x, box.y + 32 + step_y * 2, row_w, "ГРОМКОСТЬ ЗВУКОВ:", f"{vol_pct}%", "vol_down", "vol_up", mouse_pos)
 
@@ -647,7 +985,7 @@ class MainMenuController:
             r_txt = r.font_ui.render("ТОЧНО СБРОСИТЬ ПРОГРЕСС? (КЛИКНИ ЕЩЁ РАЗ)", True, (255, 235, 210))
         else:
             r.draw_pixel_frame(screen, rst_btn, (68, 26, 32) if hov_r else (46, 20, 26), (175, 75, 75), hov_r, 1.0)
-            r_txt = r.font_ui.render("СБРОСИТЬ ВЕСЬ ПРОГРЕСС (ЗОЛОТО И ОТКРЫТИЯ)", True, (240, 165, 165))
+            r_txt = r.font_ui.render("СБРОСИТЬ ВЕСЬ ПРОГРЕСС (ЗОЛОТО, ШКАТУЛКА, КОЛЛЕКЦИИ)", True, (240, 165, 165))
         screen.blit(r_txt, (rst_btn.centerx - r_txt.get_width() // 2, rst_btn.centery - r_txt.get_height() // 2))
 
         save_hint = r.font_small.render(f"Папка сохранений: {get_profile_dir()}", True, UI_TEXT_DIM)

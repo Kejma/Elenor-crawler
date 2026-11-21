@@ -106,8 +106,11 @@ class Renderer(UIRendererMixin):
         from elenor.rendering.appearance import build_custom_hero_sprite
         from elenor.rendering.normals import flip_normal_pair_x
         torso = player.equipment["torso"]
+        helm = player.equipment["helmet"]
         armor_cls = torso.armor_class if torso else "none"
-        has_helm = player.equipment["helmet"] is not None
+        torso_id = torso.id if torso else None
+        helmet_id = helm.id if helm else None
+        has_helm = helm is not None
         has_torch = player.has_lit_torch
         has_weap = player.equipment["right_hand"] is not None
         app = getattr(player, "appearance", {})
@@ -119,7 +122,10 @@ class Renderer(UIRendererMixin):
         moving = getattr(player, "is_moving", False)
         facing = getattr(player, "facing", -1)
 
-        key = (player.cloak_color, armor_cls, has_helm, has_torch, has_weap, h_type, s_idx, hd_idx, o_idx, a_frame, moving, facing)
+        key = (
+            player.cloak_color, armor_cls, torso_id, helmet_id, has_helm,
+            has_torch, has_weap, h_type, s_idx, hd_idx, o_idx, a_frame, moving, facing,
+        )
         if key not in self.hero_cache:
             d_s, n_s = build_custom_hero_sprite(
                 cloak_color=player.cloak_color,
@@ -133,6 +139,8 @@ class Renderer(UIRendererMixin):
                 outfit_idx=o_idx,
                 anim_frame=a_frame,
                 is_moving=moving,
+                helmet_id=helmet_id,
+                torso_id=torso_id,
             )
             if facing > 0:
                 d_s, n_s = flip_normal_pair_x(d_s, n_s)
@@ -223,7 +231,7 @@ class Renderer(UIRendererMixin):
 
     def get_world_loot_pair(self, item):
         """Builds crisp 16x20 pixel-art sprites for coins, gems, and equipment on the dungeon floor!"""
-        if item is None or item.type not in ("equipment", "currency_coin", "gem", "bag"):
+        if item is None or item.type not in ("equipment", "currency_coin", "gem", "bag", "fish", "painting"):
             return self.assets["loot"]
         if not hasattr(self, "world_item_cache"):
             self.world_item_cache = {}
@@ -256,7 +264,7 @@ class Renderer(UIRendererMixin):
                         d_surf.set_at((cx0 + dx, cy0), col_top)
                         n_surf.set_at((cx0 + dx, cy0), (128, 218, 200, 255))
 
-            elif item.type == "gem":
+            elif item.type == "gem" and key.startswith("gem_"):
                 # Рисуем чёткий гранёный самоцвет на полу (y=11..18)
                 g_pal = {
                     "gem_green":  ((42, 185, 88),  (165, 255, 190), (22, 95, 45)),
@@ -378,6 +386,18 @@ class Renderer(UIRendererMixin):
     def draw_item_icon(self, surface, icon_name, x, y, size=32):
         from elenor.rendering.ability_icons import draw_ability_icon
         if draw_ability_icon(surface, icon_name, x, y, size):
+            return
+        from elenor.rendering.equip_icons import draw_equip_icon
+        if draw_equip_icon(surface, icon_name, x, y, size):
+            return
+        from elenor.rendering.treasure_icons import draw_treasure_icon
+        if draw_treasure_icon(surface, icon_name, x, y, size):
+            return
+        from elenor.rendering.paintings import draw_painting_icon
+        if draw_painting_icon(surface, icon_name, x, y, size):
+            return
+        if icon_name.startswith("fish_") and icon_name in self.assets:
+            surface.blit(pygame.transform.scale(self.assets[icon_name][0], (size, size)), (x, y))
             return
         cx, cy = x + size // 2, y + size // 2
         if icon_name == "torch":

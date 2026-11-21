@@ -225,7 +225,9 @@ class TerrainCache:
         if log:
             left = x > 0 and row[x - 1] == FALLEN_LOG
             right = x + 1 < width and row[x + 1] == FALLEN_LOG
-            role = "floor_pebble_shore" if left != right else "floor_lake_deep"
+            role = "floor_pebble_shore" if left != right else "floor_lake_shallow"
+        elif tile == DEEP_WATER:
+            role = "floor_lake_shallow"
         elif tile in TALL_TREE_MAP:
             role, crown, alternate = TALL_TREE_MAP[tile]
             tree = x, y, alternate if (x * 17 + y * 23) % 9 == 0 else crown

@@ -48,6 +48,7 @@ class CombatMixin:
         self.add_popup(self.player.x, self.player.y, f"-{dmg}", col)
 
         if self.player.hp <= 0:
+            self.open_run_results(victory=False)
             self.trigger_event_thought("death", force_important=True)
         else:
             self.check_hypochondriac_panic()
@@ -717,8 +718,9 @@ class CombatMixin:
                     m.apply_status(weap.status, weap.status_dur, self.add_popup, dmg_val=max(2, final_dmg // 3))
 
                 if life_steal > 0:
-                    self.player.hp = min(float(self.player.max_hp), self.player.hp + life_steal)
-                    self.add_popup(self.player.x, self.player.y, f"+{life_steal}", (120, 245, 140))
+                    ls_heal = self.player.scale_heal(life_steal)
+                    self.player.hp = min(float(self.player.max_hp), self.player.hp + ls_heal)
+                    self.add_popup(self.player.x, self.player.y, f"+{ls_heal}", (120, 245, 140))
 
                 if self.player.mp < self.player.max_mp:
                     mp_gain = self.player.mp_on_hit * (1.5 if is_crit else 1.0)
@@ -952,7 +954,7 @@ class CombatMixin:
         # 4. БОГ ПЕРСЕФОНА: Омоложение (мгновенный хил + ускоряющаяся регенерация со светлячками)
         if c_type == "self_rejuvenation":
             dur = max(1.0, float(getattr(item, "duration", 5.0)))
-            instant_heal = max(2, int(math.floor(total_pwr * 0.38)))
+            instant_heal = self.player.scale_heal(max(2, int(math.floor(total_pwr * 0.38))))
             rem_heal = max(2.0, float(total_pwr - instant_heal))
             if self.player.hp < self.player.max_hp:
                 self.player.record_build_action(*growth)

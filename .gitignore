@@ -9,3 +9,4 @@ build/
 dist/
 dist_pack/
 *.spec
+assets/png/

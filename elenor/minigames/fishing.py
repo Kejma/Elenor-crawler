@@ -253,6 +253,57 @@ def update_fishing(game, dt):
         finish_cast(game, cast)
 
 
+_LEGENDARY_FISH = frozenset((
+    "fish_alpha_roach", "fish_giant_fierce_catfish", "fish_albino_paddlefish",
+    "fish_angel_snapper", "fish_aradon_paddlefish",
+))
+
+
+def _fish_behavior_map():
+    mapping = {}
+    for entries in POOLS.values():
+        for behavior, names in entries:
+            for name in names.split():
+                mapping[f"fish_{name}"] = behavior
+    return mapping
+
+
+_FISH_BEHAVIOR = _fish_behavior_map()
+
+
+def make_fish_item(fish_id):
+    from elenor.entities.items import Item
+    from elenor.rendering.fishing import FISH_CATALOG_SPECS
+
+    raw_name = FISH_CATALOG_SPECS.get(fish_id, (fish_id,))[0]
+    name = raw_name.removeprefix("Улов: ")
+    behavior = _FISH_BEHAVIOR.get(fish_id, "shoal")
+    salt = sum(ord(ch) for ch in fish_id) % 10
+    if behavior == "shell":
+        rarity, value = "common", 36 + salt * 2
+    elif behavior == "shoal":
+        rarity, value = "common", 45 + salt * 3
+    elif behavior == "dart":
+        rarity, value = "uncommon", 125 + salt * 5
+    elif behavior == "deep":
+        rarity, value = "rare", 320 + salt * 10
+    elif fish_id in _LEGENDARY_FISH:
+        rarity, value = "legendary", 2150 + salt * 60
+    else:
+        rarity, value = "epic", 880 + salt * 25
+
+    return Item(fish_id, {
+        "name": name,
+        "type": "fish",
+        "rarity": rarity,
+        "icon": fish_id,
+        "copper_value": value,
+        "is_collectible": True,
+        "collection_kind": "fish",
+        "desc": "Свежий трофей из глубин. Можно сдать скупщику или оставить в коллекции по итогам похода.",
+    })
+
+
 def finish_cast(game, cast):
     game.fishing_cast = None
     thought = game.loc["fishing"][cast.phase]
@@ -261,11 +312,16 @@ def finish_cast(game, cast):
         game.fishing_catches[cast.fish_id] = (
             game.fishing_catches.get(cast.fish_id, 0) + 1
         )
-        from elenor.rendering.fishing import FISH_CATALOG_SPECS
-
-        name = FISH_CATALOG_SPECS[cast.fish_id][0].removeprefix("Улов: ")
-        thought = thought.format(fish=name)
+        fish_item = make_fish_item(cast.fish_id)
+        thought = thought.format(fish=fish_item.name)
         game.sfx.play("fishing_catch")
+        if hasattr(game, "player") and game.player is not None:
+            if not game.player.add_item_to_inventory(fish_item):
+                from elenor.entities import Interactable
+                game.objects.append(Interactable(int(game.player.x), int(game.player.y), "loot", fish_item))
+                game.add_popup(game.player.x, game.player.y, f"Нет места: {fish_item.name} на берегу", (255, 195, 110))
+            else:
+                game.add_popup(game.player.x, game.player.y, f"+{fish_item.name}", fish_item.rarity_color)
     elif cast.phase == "snapped":
         game.sfx.play("fishing_snap")
     else:

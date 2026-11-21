@@ -107,7 +107,7 @@ class Player:
 
         self.pocket_slots = 4 if self.quirk == "hoarder" else 2
         self.bag_slots = [None, None]
-        self.max_possible_slots = self.pocket_slots + len(self.bag_slots) * max(BAG_CAPACITIES.values())
+        self.max_possible_slots = 50
         self.inventory = [None] * self.max_possible_slots
         self.quest_items = []
 
@@ -128,32 +128,153 @@ class Player:
         self.hotbar = [None] * 4
 
     @property
+    def pocket_capacity(self):
+        return min(10, self.pocket_slots + self._sum_equip("extra_slots"))
+
+    @property
     def unlocked_slots(self):
-        return self.pocket_slots + sum(bag.slots for bag in self.bag_slots if bag)
+        total = self.pocket_capacity + sum(bag.slots for bag in self.bag_slots if bag)
+        return min(self.max_possible_slots, total)
+
+    def inventory_sections(self):
+        sections = [{
+            "kind": "pockets",
+            "title": "Карманы",
+            "filter": "any",
+            "start": 0,
+            "count": self.pocket_capacity,
+            "bag_index": None,
+            "bag": None,
+        }]
+        cursor = self.pocket_capacity
+        for idx, bag in enumerate(self.bag_slots):
+            if bag is not None:
+                count = min(bag.slots, self.max_possible_slots - cursor)
+                if count > 0:
+                    sections.append({
+                        "kind": "bag",
+                        "title": bag.name,
+                        "filter": getattr(bag, "bag_filter", "any"),
+                        "start": cursor,
+                        "count": count,
+                        "bag_index": idx,
+                        "bag": bag,
+                    })
+                    cursor += count
+        return sections
+
+    def slot_filter(self, index):
+        for sec in self.inventory_sections():
+            if sec["start"] <= index < sec["start"] + sec["count"]:
+                return sec["filter"]
+        return None
+
+    @staticmethod
+    def item_fits_filter(item, filt):
+        if item is None or filt == "any":
+            return True
+        if filt == "treasure":
+            return item.type in ("gem", "fish", "painting") or getattr(item, "is_collectible", False)
+        if filt == "consumable":
+            return item.type in ("consumable", "consumable_spell", "consumable_eraser")
+        return False
+
+    def item_fits_slot(self, item, index):
+        filt = self.slot_filter(index)
+        if filt is None:
+            return False
+        return self.item_fits_filter(item, filt)
+
+    def _reconcile_inventory_capacity(self):
+        old_cap = self.unlocked_slots
+        # Собираем все предметы и раскладываем их по актуальным отсекам
+        kept = [itm for itm in self.inventory if itm is not None]
+        self.inventory[:] = [None] * self.max_possible_slots
+        for itm in kept:
+            if not self.add_item_to_inventory(itm):
+                self.overflow_drops.append(itm)
 
     def change_bag(self, index, bag=None, *, pocket_index=None, keep_old=True):
-        """Equip or take off one bag, leaving everything in place if it will not fit."""
+        """Equip or take off one bag, preserving compartments and checking filter compatibility."""
         old = self.bag_slots[index]
         if old is bag or (bag is not None and (bag.type != "bag" or bag in self.bag_slots)):
             return False
-
-        capacity = self.unlocked_slots + (bag.slots if bag else 0) - (old.slots if old else 0)
-        updated = [None if item is bag else item for item in self.inventory]
-        items_to_move = [item for item in updated[capacity:] if item is not None]
-        if old and keep_old:
-            # Prefer the freed slot from which the new bag came, or the chosen drop slot.
-            if pocket_index is None and bag is not None:
-                pocket_index = next((i for i, item in enumerate(self.inventory) if item is bag), None)
-            if pocket_index is not None and pocket_index < capacity and updated[pocket_index] is None:
-                updated[pocket_index] = old
-            else:
-                items_to_move.append(old)
-        free = [i for i in range(capacity) if updated[i] is None]
-        if len(items_to_move) > len(free):
+        if old is not None and getattr(old, "locked_bag", False):
             return False
-        updated[capacity:] = [None] * (len(updated) - capacity)
-        for index_in_pockets, item in zip(free, items_to_move):
-            updated[index_in_pockets] = item
+
+        old_sections = self.inventory_sections()
+        sec_items = {}
+        bag_old_rel = None
+        for sec in old_sections:
+            key = "pockets" if sec["kind"] == "pockets" else sec["bag_index"]
+            slice_items = list(self.inventory[sec["start"]:sec["start"] + sec["count"]])
+            for i, itm in enumerate(slice_items):
+                if itm is bag:
+                    slice_items[i] = None
+                    if key == "pockets":
+                        bag_old_rel = i
+            sec_items[key] = slice_items
+
+        new_bags = list(self.bag_slots)
+        new_bags[index] = bag
+        p_cap = self.pocket_capacity
+        new_specs = [("pockets", p_cap, "any")]
+        for bi, b in enumerate(new_bags):
+            if b is not None:
+                new_specs.append((bi, b.slots, getattr(b, "bag_filter", "any")))
+
+        new_buckets = {}
+        to_place = []
+        for key, cnt, flt in new_specs:
+            if key != index and key in sec_items:
+                prev = sec_items[key]
+                kept = prev[:cnt] + [None] * max(0, cnt - len(prev))
+                new_buckets[key] = kept
+                to_place.extend(itm for itm in prev[cnt:] if itm is not None)
+            else:
+                new_buckets[key] = [None] * cnt
+
+        if index in sec_items:
+            to_place.extend(itm for itm in sec_items[index] if itm is not None)
+
+        if old and keep_old:
+            placed_old = False
+            pref = pocket_index if pocket_index is not None else bag_old_rel
+            if pref is not None and 0 <= pref < p_cap and new_buckets["pockets"][pref] is None:
+                new_buckets["pockets"][pref] = old
+                placed_old = True
+            if not placed_old:
+                to_place.append(old)
+
+        for itm in to_place:
+            placed = False
+            # Сначала пробуем спец-отсек (если подходит), затем общий
+            for prefer_spec in (True, False):
+                for key, cnt, flt in new_specs:
+                    if prefer_spec and flt == "any":
+                        continue
+                    if not prefer_spec and flt != "any":
+                        continue
+                    if not self.item_fits_filter(itm, flt):
+                        continue
+                    bucket = new_buckets[key]
+                    for si in range(len(bucket)):
+                        if bucket[si] is None:
+                            bucket[si] = itm
+                            placed = True
+                            break
+                    if placed:
+                        break
+                if placed:
+                    break
+            if not placed:
+                return False
+
+        updated = []
+        for key, _, _ in new_specs:
+            updated.extend(new_buckets[key])
+        updated = updated[:self.max_possible_slots]
+        updated.extend([None] * (self.max_possible_slots - len(updated)))
         self.bag_slots[index] = bag
         self.inventory[:] = updated
         return True
@@ -165,11 +286,11 @@ class Player:
 
     @property
     def max_hp(self):
-        return 18 + self.body * 6 + (self.level - 1) * 4 + self.hp_bonus
+        return 18 + self.body * 6 + (self.level - 1) * 4 + self.hp_bonus + self._sum_equip("hp_bonus")
 
     @property
     def max_mp(self):
-        return max(4, 4 + self.mind * 2 + (self.level - 1) * 1 + self.mp_bonus)
+        return max(4, 4 + self.mind * 2 + (self.level - 1) * 1 + self.mp_bonus + self._sum_equip("mp_bonus"))
 
     def get_active_torch(self):
         for hand in ("left_hand", "right_hand"):
@@ -183,8 +304,11 @@ class Player:
         return self.torch_on and (self.get_active_torch() is not None)
 
     def _sum_equip(self, attr):
+        equip = getattr(self, "equipment", None)
+        if not equip:
+            return 0
         total = 0
-        for itm in self.equipment.values():
+        for itm in equip.values():
             if itm:
                 total += getattr(itm, attr, 0)
         return total
@@ -201,13 +325,30 @@ class Player:
             return base_r + self._sum_equip("vision_bonus")
         return self.dark_vision_radius
 
+    @property
+    def heal_received_mult(self):
+        return 1.0 + self._sum_equip("heal_received_bonus")
+
+    @property
+    def mana_received_mult(self):
+        return 1.0 + self._sum_equip("mana_received_bonus")
+
+    def scale_heal(self, amount):
+        if amount <= 0:
+            return 0
+        return max(1, int(round(amount * self.heal_received_mult)))
+
+    def scale_mana(self, amount):
+        if amount <= 0:
+            return 0.0
+        return amount * self.mana_received_mult
+
     def get_heal_amount(self, item):
         base_h = getattr(item, "heal_hp", 0)
         if base_h <= 0:
             return 0
-        if self.quirk == "hypochondriac":
-            return int(math.ceil(base_h * 1.25))
-        return int(base_h)
+        mult = (1.25 if self.quirk == "hypochondriac" else 1.0) * self.heal_received_mult
+        return int(math.ceil(base_h * mult))
 
     @property
     def phys_attack(self):
@@ -235,7 +376,7 @@ class Player:
 
     @property
     def dodge_chance(self):
-        return min(0.55, self.cunning * 0.04 + self.perk_dodge)
+        return min(0.60, self.cunning * 0.04 + self.perk_dodge + self._sum_equip("dodge_bonus"))
 
     @property
     def crit_chance(self):
@@ -268,7 +409,7 @@ class Player:
                 gain += 1.0
             elif itm and getattr(itm, "mag_bonus", 0) >= 2:
                 gain += 0.5
-        return gain
+        return round(gain * self.mana_received_mult, 2)
 
     @property
     def mp_shard_bonus(self):
@@ -338,10 +479,16 @@ class Player:
         return scores
 
     def swap_inventory_slots(self, idx_a, idx_b):
-        if 0 <= idx_a < self.unlocked_slots and 0 <= idx_b < self.unlocked_slots:
-            self.inventory[idx_a], self.inventory[idx_b] = self.inventory[idx_b], self.inventory[idx_a]
-            return True
-        return False
+        if not (0 <= idx_a < self.unlocked_slots and 0 <= idx_b < self.unlocked_slots):
+            return False
+        itm_a = self.inventory[idx_a]
+        itm_b = self.inventory[idx_b]
+        if itm_a is not None and not self.item_fits_slot(itm_a, idx_b):
+            return False
+        if itm_b is not None and not self.item_fits_slot(itm_b, idx_a):
+            return False
+        self.inventory[idx_a], self.inventory[idx_b] = itm_b, itm_a
+        return True
 
     def try_auto_equip_if_slot_empty(self, item):
         """Equips ground equipment directly ONLY if its target equipment slot is currently empty!"""
@@ -356,6 +503,9 @@ class Player:
                 self.equipment["ring_2"] = item
                 return True
             return False
+        self._reconcile_inventory_capacity()
+        self.hp = min(self.hp, float(self.max_hp))
+        self.mp = min(self.mp, float(self.max_mp))
 
         if slot == "right_hand":
             if self.equipment["right_hand"] is None:
@@ -541,6 +691,9 @@ class Player:
             target_slot = "ring_1" if self.equipment["ring_1"] is None else ("ring_2" if self.equipment["ring_2"] is None else "ring_1")
         else:
             target_slot = slot
+        self._reconcile_inventory_capacity()
+        self.hp = min(self.hp, float(self.max_hp))
+        self.mp = min(self.mp, float(self.max_mp))
 
         src_pocket_idx = None
         for i in range(self.max_possible_slots):
@@ -579,6 +732,9 @@ class Player:
         itm = self.equipment.get(slot_key)
         if itm and self.add_item_to_inventory(itm):
             self.equipment[slot_key] = None
+            self._reconcile_inventory_capacity()
+            self.hp = min(self.hp, float(self.max_hp))
+            self.mp = min(self.mp, float(self.max_mp))
             return True
         return False
 
@@ -604,6 +760,15 @@ class Player:
                     light_val += max(0.0, (6.5 - d) / 6.5) * 0.90
         self.illumination = min(1.0, light_val)
 
+    @staticmethod
+    def _can_stand(x, y, dungeon, rad=0.28):
+        return not (
+            dungeon.is_blocking_move(int(x - rad), int(y - rad))
+            or dungeon.is_blocking_move(int(x + rad), int(y - rad))
+            or dungeon.is_blocking_move(int(x - rad), int(y + rad))
+            or dungeon.is_blocking_move(int(x + rad), int(y + rad))
+        )
+
     def move_realtime(self, dx, dy, dt, dungeon):
         if dx == 0 and dy == 0:
             self.is_moving = False
@@ -616,6 +781,7 @@ class Player:
 
         cur_tile = dungeon.grid[int(self.y)][int(self.x)]
         spd_mult = 0.75 if cur_tile in (2, SHALLOW_WATER) else 1.0
+        spd_mult *= max(0.65, 1.0 + self._sum_equip("speed_bonus"))
         if self.quirk == "nyctophobe" and not self.has_lit_torch:
             spd_mult *= 1.15
         if self.throw_slowdown_timer > 0.0:
@@ -627,23 +793,33 @@ class Player:
         step = PLAYER_BASE_SPEED * spd_mult * dt
 
         rad = 0.28
-        target_x = self.x + nx * step
-        if not (
-            dungeon.is_blocking_move(int(target_x - rad), int(self.y - rad))
-            or dungeon.is_blocking_move(int(target_x + rad), int(self.y - rad))
-            or dungeon.is_blocking_move(int(target_x - rad), int(self.y + rad))
-            or dungeon.is_blocking_move(int(target_x + rad), int(self.y + rad))
-        ):
-            self.x = target_x
+        nudge = step * 0.85
 
-        target_y = self.y + ny * step
-        if not (
-            dungeon.is_blocking_move(int(self.x - rad), int(target_y - rad))
-            or dungeon.is_blocking_move(int(self.x + rad), int(target_y - rad))
-            or dungeon.is_blocking_move(int(self.x - rad), int(target_y + rad))
-            or dungeon.is_blocking_move(int(self.x + rad), int(target_y + rad))
-        ):
-            self.y = target_y
+        if nx != 0.0:
+            target_x = self.x + nx * step
+            if self._can_stand(target_x, self.y, dungeon, rad):
+                self.x = target_x
+            elif ny == 0.0:
+                lead_tx = int(target_x + rad) if nx > 0.0 else int(target_x - rad)
+                top_blk = dungeon.is_blocking_move(lead_tx, int(self.y - rad))
+                bot_blk = dungeon.is_blocking_move(lead_tx, int(self.y + rad))
+                if top_blk != bot_blk:
+                    nudge_y = self.y + (nudge if top_blk else -nudge)
+                    if self._can_stand(self.x, nudge_y, dungeon, rad):
+                        self.y = nudge_y
+
+        if ny != 0.0:
+            target_y = self.y + ny * step
+            if self._can_stand(self.x, target_y, dungeon, rad):
+                self.y = target_y
+            elif nx == 0.0:
+                lead_ty = int(target_y + rad) if ny > 0.0 else int(target_y - rad)
+                left_blk = dungeon.is_blocking_move(int(self.x - rad), lead_ty)
+                right_blk = dungeon.is_blocking_move(int(self.x + rad), lead_ty)
+                if left_blk != right_blk:
+                    nudge_x = self.x + (nudge if left_blk else -nudge)
+                    if self._can_stand(nudge_x, self.y, dungeon, rad):
+                        self.x = nudge_x
 
         self.is_moving = (self.x, self.y) != (start_x, start_y)
         return self.is_moving
@@ -653,15 +829,28 @@ class Player:
             self.quest_items.append(item)
             return True
         placed = False
-        for i in range(self.unlocked_slots):
-            if self.inventory[i] is None:
-                self.inventory[i] = item
-                placed = True
+        sections = self.inventory_sections()
+        for prefer_spec in (True, False):
+            for sec in sections:
+                flt = sec["filter"]
+                if prefer_spec and flt == "any":
+                    continue
+                if not prefer_spec and flt != "any":
+                    continue
+                if not self.item_fits_filter(item, flt):
+                    continue
+                for i in range(sec["start"], sec["start"] + sec["count"]):
+                    if self.inventory[i] is None:
+                        self.inventory[i] = item
+                        placed = True
+                        break
+                if placed:
+                    break
+            if placed:
                 break
         if not placed:
             return False
 
-        # Only consumable items jump into the 4 quickbar slots [1..4]!
         if item.type in ("consumable", "consumable_spell", "consumable_eraser"):
             if item not in self.hotbar:
                 for h in range(4):
@@ -792,7 +981,7 @@ class Player:
         if self.rejuv_timer > 0.0 and self.hp > 0:
             step_t = min(dt, self.rejuv_timer)
             self.rejuv_timer = max(0.0, self.rejuv_timer - dt)
-            self.hp = min(float(self.max_hp), self.hp + self.rejuv_rate * step_t)
+            self.hp = min(float(self.max_hp), self.hp + self.rejuv_rate * self.heal_received_mult * step_t)
         if self.hp_regen > 0.0 and self.hp > 0:
             self.hp = min(float(self.max_hp), self.hp + self.hp_regen * dt)
         self.bump_x *= max(0.0, 1.0 - 14.0 * dt)

@@ -43,10 +43,17 @@ class InventoryMixin:
     def roll_currency_or_gem_drop(self, allow_gem=True, force_gem=False, gem_mult=1.0):
         fl = getattr(self.dungeon, "floor_num", 2)
         luck = getattr(getattr(self, "player", None), "luck", 1)
-        if force_gem or (allow_gem and random.random() < (0.12 + luck * 0.015) * gem_mult):
-            gem_ids = ["gem_malachite", "gem_garnet", "gem_sapphire", "gem_ruby", "gem_diamond"]
+        if force_gem or (allow_gem and random.random() < (0.14 + luck * 0.015) * gem_mult):
+            pools = {}
+            for item_id, data in self.loc["items"].items():
+                if data.get("type") in ("gem", "painting"):
+                    pools.setdefault(data.get("rarity", "common"), []).append(item_id)
             weights = get_rarity_weights(luck + max(0, fl - 2))
-            return self.make_item(random.choices(gem_ids, weights=weights, k=1)[0])
+            rarities = [r for r in Item.RARITY_ORDER if r in pools]
+            if rarities:
+                r_weights = [weights[Item.RARITY_ORDER.index(r)] for r in rarities]
+                chosen_rarity = random.choices(rarities, weights=r_weights, k=1)[0]
+                return self.make_item(random.choice(pools[chosen_rarity]))
         coin_ids = ["coin_copper", "coin_silver", "coin_gold", "coin_platinum"]
         c_weights = [max(25.0, 75.0 - fl * 12.0), 20.0 + fl * 6.0, 4.0 + fl * 3.0, 0.4 + (fl - 2) * 0.4]
         return self.make_item(random.choices(coin_ids, weights=c_weights, k=1)[0])
@@ -58,7 +65,7 @@ class InventoryMixin:
         weights = [58, 26, 11 + luck, 4 + depth * .6, 1 + min(7, (depth - 1) * .8) + luck * .25]
         pools = {}
         for item_id, data in self.loc["items"].items():
-            if data.get("type") == "bag":
+            if data.get("type") == "bag" and not data.get("locked_bag", False):
                 pools.setdefault(data["rarity"], []).append(item_id)
         if not pools:
             return None
@@ -67,44 +74,55 @@ class InventoryMixin:
         return self.make_item(random.choice(pools[rarity]))
 
 
+    def roll_gear_drop(self, force_rarity=None):
+        """Выбирает любой предмет снаряжения (кроме оружия и стартового факела) в заданной редкости."""
+        tiers = ["common", "uncommon", "rare", "epic", "legendary"]
+        if force_rarity in tiers:
+            chosen_rarity = force_rarity
+        else:
+            luck_val = getattr(getattr(self, "player", None), "luck", 1)
+            chosen_rarity = random.choices(tiers, weights=get_rarity_weights(luck_val), k=1)[0]
+
+        gear_pool = [
+            iid for iid, data in self.loc["items"].items()
+            if data.get("type") == "equipment"
+            and data.get("slot") != "right_hand"
+            and iid != "pitch_torch"
+        ]
+        if not gear_pool:
+            return self.make_item("buckler_shield", rarity=chosen_rarity)
+        return self.make_item(random.choice(gear_pool), rarity=chosen_rarity)
+
     def roll_item_by_rarity(self, allowed_types=None, *, luck=None):
-        """Rolls an item using Luck-scaled weights; any weapon can roll at any rarity!"""
+        """Rolls an item using Luck-scaled weights; any weapon or gear can roll at any rarity!"""
         tiers = ["common", "uncommon", "rare", "epic", "legendary"]
         if luck is None:
             luck = getattr(getattr(self, "player", None), "luck", 1)
         if allowed_types and set(allowed_types) == {"bag"}:
             return self.roll_bag_drop(luck)
-        if (allowed_types is None or "bag" in allowed_types) and random.random() < 0.18:
+        if (allowed_types is None or "bag" in allowed_types) and random.random() < 0.16:
             bag = self.roll_bag_drop(luck)
             if bag:
                 return bag
         weights = get_rarity_weights(luck)
         chosen_rarity = random.choices(tiers, weights=weights, k=1)[0]
 
-        can_drop_weapon = (allowed_types is None or "equipment" in allowed_types)
-        non_weapon_candidates = [
+        can_drop_equip = (allowed_types is None or "equipment" in allowed_types)
+        if can_drop_equip:
+            equip_chance = 1.0 if allowed_types == ["equipment"] else 0.65
+            if random.random() < equip_chance:
+                if random.random() < 0.45:
+                    return self.roll_weapon_drop(force_rarity=chosen_rarity)
+                return self.roll_gear_drop(force_rarity=chosen_rarity)
+
+        consumable_candidates = [
             item_id for item_id, data in self.loc["items"].items()
-            if not (data.get("type") == "equipment" and data.get("slot") == "right_hand")
-            and data.get("type") not in ("currency_coin", "gem", "quest_key", "bag")
-            and not data.get("is_torch", False)
-            and data.get("rarity", "common") == chosen_rarity
+            if data.get("type") not in ("equipment", "currency_coin", "gem", "quest_key", "bag")
             and (allowed_types is None or data.get("type") in allowed_types)
         ]
-
-        if can_drop_weapon:
-            weap_chance = 0.62 if allowed_types == ["equipment"] else 0.35
-            if not non_weapon_candidates or random.random() < weap_chance:
-                return self.roll_weapon_drop(force_rarity=chosen_rarity)
-
-        if not non_weapon_candidates:
-            non_weapon_candidates = [
-                item_id for item_id, data in self.loc["items"].items()
-                if data.get("type") not in ("currency_coin", "gem", "quest_key", "bag")
-                and not data.get("is_torch", False)
-                and (allowed_types is None or data.get("type") in allowed_types)
-            ]
-        picked_id = random.choice(non_weapon_candidates)
-        return self.make_item(picked_id, rarity=chosen_rarity)
+        if consumable_candidates:
+            return self.make_item(random.choice(consumable_candidates), rarity=chosen_rarity)
+        return self.roll_gear_drop(force_rarity=chosen_rarity)
 
 
     def player_owns_any_torch(self):
@@ -187,10 +205,36 @@ class InventoryMixin:
                 self.player.remove_item_everywhere(itm)
 
         if gems_sold:
-            self.player.gold += total_cp_earned
             self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + total_cp_earned
             save_profile(self.profile)
         return gems_sold, total_cp_earned
+
+    def cash_in_strongbox_on_death(self):
+        """Converts all items inside the Family Strongbox to coins on death."""
+        if getattr(self, "strongbox_settled", False):
+            return 0, 0
+        self.strongbox_settled = True
+        saved_count = 0
+        total_cp = 0
+        for sec in self.player.inventory_sections():
+            bag = sec.get("bag")
+            if bag is not None and getattr(bag, "locked_bag", False):
+                for idx in range(sec["start"], sec["start"] + sec["count"]):
+                    itm = self.player.inventory[idx]
+                    if itm is not None:
+                        val = getattr(itm, "sell_value", 0) or getattr(itm, "copper_value", 0)
+                        if val > 0:
+                            total_cp += val
+                            saved_count += 1
+                        self.player.inventory[idx] = None
+        if total_cp > 0:
+            self.player.gold += total_cp
+            self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + total_cp
+            save_profile(self.profile)
+            val_str = format_copper_Trigger(total_cp)
+            self.add_log("event", f"Семейная шкатулка спасла добычу ({saved_count} шт.): +{val_str} в казну!", COIN_TEXT_COLOR)
+            self.add_popup(self.player.x, self.player.y - 0.5, f"ШКАТУЛКА: +{val_str}", COIN_TEXT_COLOR, big=True)
+        return saved_count, total_cp
 
     def try_sell_gems_to_npc(self, obj, speaker_name="Скупщик Шнырь"):
         gems_sold, total_cp_earned = self.cash_in_gems()
@@ -241,8 +285,6 @@ class InventoryMixin:
             self.add_log("event", f"Подобрано: {obj.item.name}.", COIN_TEXT_COLOR)
             cp_gain = obj.item.copper_value
             self.player.gold += cp_gain
-            self.profile["bank_copper"] = self.profile.get("bank_copper", 0) + cp_gain
-            save_profile(self.profile)
             val_str = format_copper_Trigger(cp_gain)
             self.sfx.play("coin_pickup")
             self.trigger_event_thought("pickup_coin", item=obj.item.name.lower(), val=val_str)
@@ -328,9 +370,10 @@ class InventoryMixin:
                 self.sfx.play("heal")
                 self.player.remove_item_everywhere(item)
             elif item.id == "potion_mp":
-                self.player.mp = min(float(self.player.max_mp), self.player.mp + item.power)
-                self.add_log("event", f"Использовано «{item.name}»: восстановлено +{item.power} МП.", (110, 205, 255))
-                self.add_popup(self.player.x, self.player.y, f"+{item.power}", (95, 195, 255), "mana")
+                mp_val = int(round(self.player.scale_mana(item.power)))
+                self.player.mp = min(float(self.player.max_mp), self.player.mp + mp_val)
+                self.add_log("event", f"Использовано «{item.name}»: восстановлено +{mp_val} МП.", (110, 205, 255))
+                self.add_popup(self.player.x, self.player.y, f"+{mp_val}", (95, 195, 255), "mana")
                 self.sfx.play("magic")
                 self.player.remove_item_everywhere(item)
             return
@@ -389,7 +432,11 @@ class InventoryMixin:
             if None in slots:
                 self.equip_bag(item, slots.index(None))
             else:
-                target = min(range(len(slots)), key=lambda i: slots[i].slots)
+                unlocked = [i for i, b in enumerate(slots) if not getattr(b, "locked_bag", False)]
+                if not unlocked:
+                    self.sfx.play("hurt")
+                    return
+                target = min(unlocked, key=lambda i: slots[i].slots)
                 if item.slots > slots[target].slots:
                     self.equip_bag(item, target)
                 else:

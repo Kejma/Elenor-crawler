@@ -8,7 +8,7 @@ from elenor.config import SCREEN_W, SCREEN_H, TILE_W, TILE_H, VIEW_W, VIEW_H, CA
 from elenor.entities import Enemy, Interactable, Particle
 from elenor.rendering.effects import STEP_LIQUID_TILES
 from elenor.missions.rats import get_mission_texts, update_mission_audio
-from elenor.profile import apply_display_mode, map_window_to_logical, present_logical_canvas, save_profile
+from elenor.profile import apply_display_mode, enable_dpi_awareness, map_window_to_logical, present_logical_canvas, save_profile
 
 
 from elenor.game.controller import GameController
@@ -30,6 +30,7 @@ def _copy_journal_seed(game):
 
 
 def main():
+    enable_dpi_awareness()
     os.environ["SDL_RENDER_SCALE_QUALITY"] = "0"
     os.environ["SDL_VIDEO_CENTERED"] = "1"
     pygame.init()
@@ -148,9 +149,15 @@ def main():
             if event.type == pygame.WINDOWFOCUSLOST:
                 game.player.buffered_combat = None
 
+            if getattr(game, "run_results", None) is not None:
+                if hasattr(event, "pos"):
+                    event.pos = map_window_to_logical(event.pos, game.viewport_rect)
+                from elenor.ui.run_results import handle_run_results_event
+                handle_run_results_event(game, event, getattr(event, "pos", mouse_pos))
+                continue
             key_down = event.type == pygame.KEYDOWN and not getattr(event, "repeat", False)
             if game.rat_campaign_complete and key_down and event.key in (pygame.K_SPACE, pygame.K_ESCAPE):
-                game.finish_rat_campaign()
+                game.open_run_results(victory=True)
                 continue
             if game.map_open:
                 if key_down and event.key in (pygame.K_m, pygame.K_ESCAPE):
@@ -322,8 +329,11 @@ def main():
                             else:
                                 for i, rect in enumerate(game.renderer.bag_slot_rects):
                                     if rect.collidepoint(event.pos) and game.player.bag_slots[i]:
-                                        game.drag_item = game.player.bag_slots[i]
-                                        game.drag_source = ("bag", i)
+                                        if getattr(game.player.bag_slots[i], "locked_bag", False):
+                                            game.sfx.play("hurt")
+                                        else:
+                                            game.drag_item = game.player.bag_slots[i]
+                                            game.drag_source = ("bag", i)
                                         break
                                 for s_key, s_rect in game.renderer.equip_slot_rects.items():
                                     if s_rect.collidepoint(event.pos):
@@ -349,7 +359,9 @@ def main():
                     elif game.inv_open and not game.journal_open:
                         for i, rect in enumerate(game.renderer.bag_slot_rects):
                             if rect.collidepoint(event.pos) and game.player.bag_slots[i]:
-                                if game.player.change_bag(i):
+                                if getattr(game.player.bag_slots[i], "locked_bag", False):
+                                    game.sfx.play("hurt")
+                                elif game.player.change_bag(i):
                                     game.sfx.play("ui")
                                 else:
                                     game.report_bag_space()
@@ -382,9 +394,12 @@ def main():
                             source = game.drag_source[1]
                             if bag_target is not None:
                                 slots = game.player.bag_slots
-                                slots[source], slots[bag_target] = slots[bag_target], slots[source]
-                                if source != bag_target:
-                                    game.sfx.play("ui")
+                                if getattr(slots[bag_target], "locked_bag", False):
+                                    game.sfx.play("hurt")
+                                else:
+                                    slots[source], slots[bag_target] = slots[bag_target], slots[source]
+                                    if source != bag_target:
+                                        game.sfx.play("ui")
                             elif not game.renderer.modal_rect.collidepoint(event.pos):
                                 game.drop_item_on_floor(game.drag_item)
                             else:
@@ -438,11 +453,11 @@ def main():
                                         elif game.drag_source and game.drag_source[0] == "equip":
                                             eq_slot = game.drag_source[1]
                                             target_itm = game.player.inventory[i]
-                                            if target_itm is None:
+                                            if target_itm is None and game.player.item_fits_slot(game.drag_item, i):
                                                 game.player.inventory[i] = game.drag_item
                                                 game.player.equipment[eq_slot] = None
                                                 game.sfx.play("ui")
-                                            elif target_itm.type == "equipment" and (target_itm.slot == eq_slot or (target_itm.slot == "ring" and eq_slot in ("ring_1", "ring_2"))):
+                                            elif target_itm.type == "equipment" and (target_itm.slot == eq_slot or (target_itm.slot == "ring" and eq_slot in ("ring_1", "ring_2"))) and game.player.item_fits_slot(game.drag_item, i):
                                                 game.player.equipment[eq_slot] = target_itm
                                                 game.player.inventory[i] = game.drag_item
                                                 game.sfx.play("ui")
@@ -453,6 +468,9 @@ def main():
             elif event.type == pygame.MOUSEWHEEL:
                 if game.inv_open and game.journal_open:
                     game.journal_scroll = max(0, game.journal_scroll + event.y * 3)
+                elif game.inv_open and not game.journal_open:
+                    max_sc = getattr(game.renderer, "inv_max_scroll", 0)
+                    game.inv_scroll = max(0, min(max_sc, getattr(game, "inv_scroll", 0) - event.y * 42))
 
         if not running:
             break
@@ -497,7 +515,7 @@ def main():
                 if obj.speech_timer <= 0.0:
                     obj.speech_text = None
 
-        dev_open = getattr(getattr(game, "dev_panel", None), "is_open", False)
+        dev_open = getattr(getattr(game, "dev_panel", None), "is_open", False) or (getattr(game, "run_results", None) is not None)
 
         if game.fishing_cast is None and game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open:
             keys = pygame.key.get_pressed()
@@ -839,6 +857,18 @@ def main():
                 "color": (1.15, 0.80, 0.40)
             })
 
+        for eq_itm in game.player.equipment.values():
+            g_rad = getattr(eq_itm, "glow_radius", 0.0) if eq_itm else 0.0
+            if g_rad > 0.0:
+                lights.append({
+                    "pos": (p_sx, p_sy - 2, 22.0),
+                    "foot_y": p_foot_sy + 2.0,
+                    "ignore_depth": True,
+                    "radius": g_rad + flicker * 0.35,
+                    "shadow_radius": g_rad + flicker_extent * 0.35,
+                    "color": getattr(eq_itm, "glow_color", (0.85, 0.90, 1.0)),
+                })
+
         # Свечение игрока во время подготовки каста, Воспламенения Пиро или Омоложения Персефоны!
         if getattr(game.player, "cast_glow_color", None) and game.player.pending_action:
             gc = game.player.cast_glow_color
@@ -1107,6 +1137,13 @@ def main():
             screen.blit(label, rect)
             if window is not None:
                 window.mark_world_rect(*pill)
+
+        if getattr(game, "run_results", None) is not None:
+            if window is not None:
+                window.hud_surface = None
+                window.full_dirty = True
+            from elenor.ui.run_results import render_run_results
+            render_run_results(screen, game, mouse_pos)
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)

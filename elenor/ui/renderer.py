@@ -379,35 +379,111 @@ class UIRendererMixin:
         used = sum(item is not None for item in player.inventory)
         self._draw_inventory_label(screen, f"{used} / {player.unlocked_slots} мест", storage.right - 16,
                                    storage.y + 14, UI_TEXT_DIM, align="topright")
-        self.bag_slot_rects = [pygame.Rect(storage.x + 15 + i * 213, storage.y + 42, 207, 56) for i in range(2)]
+        self.bag_slot_rects = [pygame.Rect(storage.x + 15 + i * 213, storage.y + 42, 207, 54) for i in range(2)]
+        filter_short = {"any": "Общая", "treasure": "Сокровища", "consumable": "Зелья/Свитки"}
+        filter_colors = {
+            "any": UI_BORDER_WOOD,
+            "treasure": (235, 192, 78),
+            "consumable": (88, 188, 238),
+        }
         for index, rect in enumerate(self.bag_slot_rects):
             item = player.bag_slots[index]
             is_hovered = rect.collidepoint(hover_pos)
-            self.draw_pixel_frame(screen, rect, UI_PANEL_BG, item.rarity_color if item else UI_BORDER_WOOD, is_hovered, 1.0)
+            is_locked_box = bool(item and getattr(item, "locked_bag", False))
+            bd_col = UI_BORDER_GOLD if is_locked_box else (item.rarity_color if item else UI_BORDER_WOOD)
+            self.draw_pixel_frame(screen, rect, UI_PANEL_BG, bd_col, is_hovered, 1.0)
             if item:
-                self.draw_item_icon(screen, item.icon, rect.x + 8, rect.y + 12, 32)
-                self._draw_inventory_label(screen, item.name, rect.x + 44, rect.y + 11)
-                self._draw_inventory_label(screen, f"+{item.slots} к вместимости", rect.x + 44, rect.y + 30, UI_TEXT_DIM)
+                self.draw_item_icon(screen, item.icon, rect.x + 8, rect.y + 11, 32)
+                self._draw_inventory_label(screen, item.name, rect.x + 44, rect.y + 10, UI_BORDER_HIGHLIGHT if is_locked_box else UI_TEXT_MAIN)
+                flt = getattr(item, "bag_filter", "any")
+                tag = f"+{item.slots} · Несгораемая" if is_locked_box else f"+{item.slots} · {filter_short.get(flt, 'Общая')}"
+                tag_col = UI_BORDER_GOLD if is_locked_box else filter_colors.get(flt, UI_TEXT_DIM)
+                self._draw_inventory_label(screen, tag, rect.x + 44, rect.y + 29, tag_col)
                 if is_hovered:
                     hovered_item, compares = item, False
             else:
                 self._draw_inventory_label(screen, f"Место для сумки {index + 1}", *rect.center, UI_TEXT_DIM, align="center")
 
+        # Крупные ячейки (6 в ряд, иконки 32x32) с вертикальной прокруткой
+        vp_rect = pygame.Rect(storage.x + 12, storage.y + 102, storage.width - 24, (storage.y + 389) - (storage.y + 102) - 6)
+        self.inv_viewport_rect = vp_rect
+        per_row = 6
+        cell_w, cell_h = 62, 48
+        stride_x, stride_y = 67, 52
+
+        sections = player.inventory_sections()
+        total_content_h = 0
+        for sec in sections:
+            rows_used = (sec["count"] + per_row - 1) // per_row
+            total_content_h += 22 + rows_used * stride_y + 8
+        self.inv_max_scroll = max(0, total_content_h - vp_rect.height)
+
+        game_ref = ui_texts.get("_game_ref")
+        inv_scroll = getattr(game_ref, "inv_scroll", 0) if game_ref is not None else 0
+        inv_scroll = max(0, min(self.inv_max_scroll, int(inv_scroll)))
+        if game_ref is not None:
+            game_ref.inv_scroll = inv_scroll
+
+        old_clip = screen.get_clip()
+        screen.set_clip(old_clip.clip(vp_rect))
+
         self.inv_slot_rects = []
-        for index, item in enumerate(player.inventory):
-            row, col = divmod(index, 6)
-            rect = pygame.Rect(storage.x + 15 + col * 71, storage.y + 111 + row * 55, 65, 49)
-            self.inv_slot_rects.append(rect)
-            unlocked = index < player.unlocked_slots
-            is_hovered = unlocked and rect.collidepoint(hover_pos)
-            border = item.rarity_color if item else (UI_BORDER_WOOD if unlocked else (53, 44, 53))
-            self.draw_pixel_frame(screen, rect, UI_PANEL_BG if unlocked else (18, 16, 22), border, is_hovered, 1.0)
-            if item:
-                self.draw_item_icon(screen, item.icon, rect.centerx - 16, rect.y + 9, 32)
-                if is_hovered:
-                    hovered_item, compares = item, item.type == "equipment"
-            elif not unlocked:
-                self.draw_item_icon(screen, "lock", rect.centerx - 16, rect.y + 9, 32)
+        sec_y = vp_rect.y - inv_scroll
+        for sec in sections:
+            flt = sec["filter"]
+            is_strongbox = bool(sec.get("bag") and getattr(sec["bag"], "locked_bag", False))
+            accent = UI_BORDER_GOLD if is_strongbox else filter_colors.get(flt, UI_BORDER_WOOD)
+            hdr_rect = pygame.Rect(vp_rect.x + 3, sec_y, vp_rect.width - 14, 19)
+            pygame.draw.rect(screen, (42, 34, 26) if is_strongbox else (32, 27, 40), hdr_rect, border_radius=2)
+            pygame.draw.rect(screen, accent, (hdr_rect.x, hdr_rect.y, 3, hdr_rect.height))
+            sec_used = sum(1 for idx in range(sec["start"], sec["start"] + sec["count"]) if player.inventory[idx] is not None)
+            title_txt = sec["title"]
+            if is_strongbox:
+                title_txt += "  [Несгораемая]"
+            elif flt == "treasure":
+                title_txt += "  [Только сокровища]"
+            elif flt == "consumable":
+                title_txt += "  [Только зелья и свитки]"
+            self._draw_inventory_label(screen, title_txt, hdr_rect.x + 8, hdr_rect.y + 2, accent if (is_strongbox or flt != "any") else UI_TEXT_MAIN)
+            self._draw_inventory_label(screen, f"{sec_used}/{sec['count']}", hdr_rect.right - 6, hdr_rect.y + 2, UI_TEXT_DIM, align="topright")
+            sec_y += 22
+
+            compatible_drag = (drag_item is None) or player.item_fits_filter(drag_item, flt)
+            for rel_i in range(sec["count"]):
+                abs_i = sec["start"] + rel_i
+                row, col = divmod(rel_i, per_row)
+                rect = pygame.Rect(vp_rect.x + 4 + col * stride_x, sec_y + row * stride_y, cell_w, cell_h)
+                clipped_r = rect.clip(vp_rect)
+                self.inv_slot_rects.append(clipped_r)
+                if clipped_r.width <= 0 or clipped_r.height <= 0:
+                    continue
+                item = player.inventory[abs_i]
+                is_hovered = clipped_r.collidepoint(hover_pos)
+                if item:
+                    border = item.rarity_color
+                elif drag_item is not None and not compatible_drag:
+                    border = (48, 38, 46)
+                else:
+                    border = accent if (is_strongbox or flt != "any") else UI_BORDER_WOOD
+                bg = (20, 17, 24) if (drag_item is not None and not compatible_drag) else ((30, 25, 20) if is_strongbox else UI_PANEL_BG)
+                self.draw_pixel_frame(screen, rect, bg, border, is_hovered and compatible_drag, 1.0)
+                if item:
+                    self.draw_item_icon(screen, item.icon, rect.centerx - 16, rect.centery - 16, 32)
+                    if is_hovered:
+                        hovered_item, compares = item, item.type == "equipment"
+            rows_used = (sec["count"] + per_row - 1) // per_row
+            sec_y += rows_used * stride_y + 8
+
+        screen.set_clip(old_clip)
+
+        if self.inv_max_scroll > 0:
+            track_x = vp_rect.right - 7
+            track_y = vp_rect.y + 2
+            track_h = vp_rect.height - 4
+            pygame.draw.rect(screen, (14, 12, 18), (track_x, track_y, 5, track_h))
+            thumb_h = max(24, int(track_h * (vp_rect.height / max(1, total_content_h))))
+            thumb_y = track_y + int((track_h - thumb_h) * (inv_scroll / max(1, self.inv_max_scroll)))
+            pygame.draw.rect(screen, UI_BORDER_GOLD, (track_x, thumb_y, 5, thumb_h), border_radius=2)
 
         key_y = storage.y + 389
         pygame.draw.line(screen, UI_BORDER_WOOD, (storage.x + 15, key_y), (storage.right - 15, key_y))
@@ -593,43 +669,29 @@ class UIRendererMixin:
 
         if item.type == "bag":
             add_wrapped(f"Дополнительные места: +{item.slots}", UI_TEXT_MAIN)
+            flt = getattr(item, "bag_filter", "any")
+            if flt == "treasure":
+                add_wrapped("Отсек: только драгоценности и коллекционки", UI_BORDER_HIGHLIGHT)
+            elif flt == "consumable":
+                add_wrapped("Отсек: только зелья, свитки и расходники", (110, 215, 255))
 
-        # Лаконичный формат для Драгоценностей и Монет
-        if item.type in ("gem", "currency_coin"):
+        # Лаконичный формат для Драгоценностей, Монет и Коллекций
+        if item.type in ("gem", "currency_coin", "fish", "painting"):
             add_wrapped(format_copper_Trigger(item.copper_value), UI_BORDER_HIGHLIGHT)
-            add_wrapped("Драгоценность." if item.type == "gem" else "Монеты.", UI_TEXT_MAIN)
+            if item.type in ("fish", "painting"):
+                col_title = "Коллекция: Рыбы" if item.type == "fish" else "Коллекция: Картины"
+                game_ref = ui_texts.get("_game_ref")
+                prof = getattr(game_ref, "profile", {}) if game_ref else {}
+                col_key = "collected_fish" if item.type == "fish" else "collected_paintings"
+                already = item.id in prof.get(col_key, ())
+                status_txt = "Уже в коллекции" if already else "Новая для коллекции!"
+                status_col = UI_TEXT_DIM if already else (125, 245, 155)
+                add_wrapped(f"{col_title} · {status_txt}", status_col)
+            else:
+                add_wrapped("Драгоценность." if item.type == "gem" else "Монеты.", UI_TEXT_MAIN)
             add_wrapped(item.desc, UI_TEXT_DIM)
             return raw_lines
-
-        if getattr(item, "heal_hp", 0) > 0:
-            eff_heal = player.get_heal_amount(item)
-            bonus_tag = " (+25% Ипохондрик)" if eff_heal > item.heal_hp else ""
-            add_wrapped(f"Исцеление: +{eff_heal} ХП{bonus_tag}", UI_TEXT_MAIN)
-
-        if getattr(item, "god", ""):
-            add_wrapped(f"Покровитель: {item.god}", UI_BORDER_HIGHLIGHT)
-
-        if item.type == "consumable_spell":
-            tot_scroll = int(math.floor(item.power * 1.65 + player.mag_attack * 1.5))
-            add_wrapped(f"Одноразовый свиток (КД {item.cooldown:.1f}с) — Урон {tot_scroll}", UI_TEXT_MAIN)
-        elif item.type == "permanent_spell":
-            tot_spell = int(math.floor(item.power + player.mag_attack))
-            pwr_lbl = "Исцеление" if item.id == "persephone_rejuvenation" else ("Урон горения" if item.id == "pyro_ignite" else "Урон")
-            add_wrapped(f"Заклинание ({player.ability_mana_cost(item):g} маны | КД {item.cooldown:.2f}с) — {pwr_lbl} {tot_spell}", UI_TEXT_MAIN)
-        elif item.type == "combat_skill":
-            tot_skill = int(math.floor(item.power + player.phys_attack))
-            add_wrapped(f"Боевой приём (0 Маны | КД {item.cooldown:.2f}с) — Урон {tot_skill}", UI_TEXT_MAIN)
-
-        if item.type in ("consumable_spell", "permanent_spell", "combat_skill"):
-            if getattr(item, "duration", 0.0) > 0.0:
-                add_wrapped(f"Длительность: {item.duration:.2f} сек.", UI_TEXT_MAIN)
-            if getattr(item, "status_dur", 0.0) > 0.0:
-                add_wrapped(f"Время контроля: {item.status_dur:.2f} сек.", UI_TEXT_MAIN)
-            if getattr(item, "aoe_radius", 0.0) > 0.0 and item.cast_type in ("frost_nova", "entangle_cursor", "aoe_cursor"):
-                add_wrapped(f"Радиус области: {item.aoe_radius:.1f} м", UI_TEXT_MAIN)
-            if item.cast_type == "chain_lightning":
-                add_wrapped(f"Макс. отскоков молнии: {int(item.bounces)}", UI_TEXT_MAIN)
-
+        
         # Основные числовые бонусы экипировки (в едином спокойном цвете UI_TEXT_MAIN)
         stat_pairs = [
             ("phys_bonus", ui_texts["phys_atk"]),
@@ -661,10 +723,23 @@ class UIRendererMixin:
 
         if item.armor_pierce > 0:
             add_wrapped(f"Пролом брони: +{item.armor_pierce}", UI_TEXT_MAIN)
-        if getattr(item, "crit_bonus", 0.0) > 0:
-            add_wrapped(f"Шанс крита: +{int(round(item.crit_bonus * 100))}%", UI_TEXT_MAIN)
-        if item.life_steal > 0:
-            add_wrapped(f"Вампиризм: +{item.life_steal} ХП", UI_TEXT_MAIN)
+        if getattr(item, "hp_bonus", 0) > 0:
+            add_wrapped(f"Макс. здоровье: +{item.hp_bonus}", UI_TEXT_MAIN)
+        if getattr(item, "mp_bonus", 0) > 0:
+            add_wrapped(f"Макс. мана: +{item.mp_bonus}", UI_TEXT_MAIN)
+        if getattr(item, "dodge_bonus", 0.0) > 0:
+            add_wrapped(f"Уклонение: +{int(round(item.dodge_bonus * 100))}%", UI_TEXT_MAIN)
+        if getattr(item, "speed_bonus", 0.0) != 0:
+            sp = int(round(item.speed_bonus * 100))
+            add_wrapped(f"Скорость шага: {'+' if sp > 0 else ''}{sp}%", UI_TEXT_MAIN)
+        if getattr(item, "heal_received_bonus", 0.0) > 0:
+            add_wrapped(f"Входящее лечение: +{int(round(item.heal_received_bonus * 100))}%", UI_TEXT_MAIN)
+        if getattr(item, "mana_received_bonus", 0.0) > 0:
+            add_wrapped(f"Получение маны: +{int(round(item.mana_received_bonus * 100))}%", UI_TEXT_MAIN)
+        if getattr(item, "extra_slots", 0) > 0:
+            add_wrapped(f"Доп. места поклажи: +{item.extra_slots}", UI_BORDER_HIGHLIGHT)
+        if getattr(item, "glow_radius", 0.0) > 0:
+            add_wrapped(f"Собственное свечение: {item.glow_radius / TILE_W:.1f} м", UI_BORDER_HIGHLIGHT)
 
         n_val = int(item.noise_mod * 100)
         n_old = int(comp_item.noise_mod * 100) if comp_item else 0
@@ -687,6 +762,10 @@ class UIRendererMixin:
         if getattr(item, "feature_tag", ""):
             clean_feat = item.feature_tag.replace(": ", " — ", 1)
             add_wrapped(clean_feat, UI_BORDER_HIGHLIGHT)
+
+        sell_val = getattr(item, "sell_value", 0)
+        if sell_val > 0 and item.type in ("equipment", "bag", "consumable", "consumable_spell", "consumable_eraser"):
+            add_wrapped(f"Цена продажи: {format_copper_Trigger(sell_val, compact=True)}", COIN_TEXT_COLOR)
 
         clean_desc = self._clean_perk_desc(item.desc)
         if clean_desc:

@@ -40,6 +40,8 @@ class TextureStudio:
         self.tree_items = []
         self.thumbnails = {}
         self.scroll_y = 0
+        self.search_query = ""
+        self.collapsed_cats = set(ASSET_CATALOG.keys())
         self._build_explorer_tree()
 
         # Painting & Layer state
@@ -122,7 +124,15 @@ class TextureStudio:
         if os.path.isfile(entry["path"]):
             try:
                 _, fr_list, _ = load_dtex_frames(entry["path"])
-                self.thumbnails[entry["role_id"]] = pygame.transform.scale(fr_list[0][0], (24, 24))
+                src = fr_list[0][0]
+                sw, sh = src.get_size()
+                thumb = pygame.Surface((24, 24), pygame.SRCALPHA)
+                if sw >= sh:
+                    tw, th = 24, max(1, int(round(24 * sh / max(1, sw))))
+                else:
+                    th, tw = 24, max(1, int(round(24 * sw / max(1, sh))))
+                thumb.blit(pygame.transform.scale(src, (tw, th)), ((24 - tw) // 2, (24 - th) // 2))
+                self.thumbnails[entry["role_id"]] = thumb
             except Exception:
                 pass
 
@@ -194,35 +204,82 @@ class TextureStudio:
         rot_str = " | Случ.поворот ВКЛ" if self.random_rot else ""
         self.set_status(f"СОХРАНЕНО: «{clean_title}» ({clean_file}.dtex, {len(self.frames)} кадр. @ {self.fps} FPS{rot_str})")
 
+    def _pick_file_dialog(self, mode, initial_dir, initial_file=""):
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            root.attributes("-topmost", True)
+        except Exception:
+            pass
+        try:
+            if mode == "save":
+                return filedialog.asksaveasfilename(
+                    title="Куда сохранить PNG",
+                    initialdir=initial_dir,
+                    initialfile=initial_file,
+                    defaultextension=".png",
+                    filetypes=[("PNG картинки", "*.png"), ("Все файлы", "*.*")],
+                )
+            return filedialog.askopenfilename(
+                title="Выбери PNG-картинку для импорта",
+                initialdir=initial_dir,
+                filetypes=[("PNG картинки", "*.png"), ("Все файлы", "*.*")],
+            )
+        finally:
+            root.destroy()
+
     def export_to_png(self):
         e = self.current_entry
         out_dir = os.path.join(get_assets_root(), "png_export")
         os.makedirs(out_dir, exist_ok=True)
-        for idx, (d_s, n_s) in enumerate(self.frames):
-            suffix = f"_f{idx+1}" if len(self.frames) > 1 else ""
-            pygame.image.save(d_s, os.path.join(out_dir, f"{e['file_stem']}{suffix}_diff.png"))
-            pygame.image.save(n_s, os.path.join(out_dir, f"{e['file_stem']}{suffix}_norm.png"))
-        self.set_status(f"Экспортировано ({len(self.frames)} кадр.) в assets/png_export/{e['file_stem']}*.png")
+        suffix = f"_f{self.cur_frame_idx + 1}" if len(self.frames) > 1 else ""
+        default_name = f"{e['file_stem']}{suffix}_diff.png"
+        chosen = self._pick_file_dialog("save", out_dir, default_name)
+        if not chosen:
+            self.set_status("Экспорт отменён.")
+            return
+        pygame.image.save(self.diff_surf, chosen)
+        norm_path = chosen[:-9] + "_norm.png" if chosen.lower().endswith("_diff.png") else os.path.splitext(chosen)[0] + "_norm.png"
+        pygame.image.save(self.norm_surf, norm_path)
+        self.set_status(f"Сохранено в: {chosen}")
 
     def import_from_png(self):
         e = self.current_entry
         in_dir = os.path.join(get_assets_root(), "png_export")
-        suffix = f"_f{self.cur_frame_idx+1}" if len(self.frames) > 1 else ""
-        d_path = os.path.join(in_dir, f"{e['file_stem']}{suffix}_diff.png")
-        n_path = os.path.join(in_dir, f"{e['file_stem']}{suffix}_norm.png")
-        if not os.path.isfile(d_path):
-            d_path = os.path.join(in_dir, f"{e['file_stem']}_diff.png")
-            n_path = os.path.join(in_dir, f"{e['file_stem']}_norm.png")
-        if not os.path.isfile(d_path):
-            self.set_status(f"Не найден PNG в assets/png_export/ для {e['file_stem']}!")
+        os.makedirs(in_dir, exist_ok=True)
+        d_path = self._pick_file_dialog("open", in_dir)
+        if not d_path or not os.path.isfile(d_path):
+            self.set_status("Импорт отменён.")
             return
 
         self.history.push(self.frames)
         w, h = e["size"]
-        new_d = pygame.transform.scale(pygame.image.load(d_path).convert_alpha(), (w, h))
+        raw_d = pygame.image.load(d_path).convert_alpha()
+        resize_fn = pygame.transform.smoothscale if (raw_d.get_width() > w or raw_d.get_height() > h) else pygame.transform.scale
+        new_d = resize_fn(raw_d, (w, h))
+
+        new_n = self.norm_surf.copy()
+        n_path = d_path[:-9] + "_norm.png" if d_path.lower().endswith("_diff.png") else ""
+        if n_path and os.path.isfile(n_path):
+            raw_n = pygame.image.load(n_path).convert_alpha()
+            n_fn = pygame.transform.smoothscale if (raw_n.get_width() > w or raw_n.get_height() > h) else pygame.transform.scale
+            new_n = n_fn(raw_n, (w, h))
+
+        self.frames[self.cur_frame_idx] = (new_d, new_n)
+        self.set_status(f"Импортировано из {os.path.basename(d_path)}! Нажми Ctrl+S, чтобы сохранить.")
+
+        self.history.push(self.frames)
+        w, h = e["size"]
+        raw_d = pygame.image.load(d_path).convert_alpha()
+        resize_fn = pygame.transform.smoothscale if (raw_d.get_width() > w or raw_d.get_height() > h) else pygame.transform.scale
+        new_d = resize_fn(raw_d, (w, h))
         new_n = self.norm_surf.copy()
         if os.path.isfile(n_path):
-            new_n = pygame.transform.scale(pygame.image.load(n_path).convert_alpha(), (w, h))
+            raw_n = pygame.image.load(n_path).convert_alpha()
+            n_fn = pygame.transform.smoothscale if (raw_n.get_width() > w or raw_n.get_height() > h) else pygame.transform.scale
+            new_n = n_fn(raw_n, (w, h))
         self.frames[self.cur_frame_idx] = (new_d, new_n)
         self.set_status(f"Импортирован PNG в Кадр {self.cur_frame_idx + 1}!")
 
@@ -278,7 +335,42 @@ class TextureStudio:
             else:
                 target_surf.set_at((mx, py), draw_col)
 
-    def _update_dragged_slider(self, mx):
+    def _visible_tree_items(self):
+        q = self.search_query.strip().lower()
+        if not q:
+            out = []
+            for item in self.tree_items:
+                if item["type"] == "header" or item["cat"] not in self.collapsed_cats:
+                    out.append(item)
+            return out
+        out = []
+        cur_header = None
+        matched_in_cat = []
+        for item in self.tree_items:
+            if item["type"] == "header":
+                if cur_header is not None and matched_in_cat:
+                    out.append(cur_header)
+                    out.extend(matched_in_cat)
+                cur_header = item
+                matched_in_cat = []
+            else:
+                hay = f"{item['name']} {item['role_id']} {item['file_stem']}".lower()
+                if q in hay:
+                    matched_in_cat.append(item)
+        if cur_header is not None and matched_in_cat:
+            out.append(cur_header)
+            out.extend(matched_in_cat)
+        return out
+
+    def _tree_max_scroll(self):
+        total_h = sum(28 if it["type"] == "header" else 32 for it in self._visible_tree_items()) + 12
+        view_h = WIN_H - 122
+        return max(0, total_h - view_h)
+
+    def _clamp_tree_scroll(self, val):
+        return max(-self._tree_max_scroll(), min(0, int(val)))
+
+    def _update_dragged_slider(self, mx, my=0):
         if not self.dragging_slider:
             return
         kind = self.dragging_slider[0]
@@ -291,6 +383,12 @@ class TextureStudio:
             _, bar_x, bar_w = self.dragging_slider
             val = int(round(1 + max(0.0, min(1.0, (mx - bar_x) / float(bar_w))) * 11))
             self.fps = max(1, min(12, val))
+        elif kind == "tree_scroll":
+            _, track_y, track_h = self.dragging_slider
+            max_sc = self._tree_max_scroll()
+            if max_sc > 0 and track_h > 0:
+                frac = max(0.0, min(1.0, (my - track_y) / float(track_h)))
+                self.scroll_y = -int(round(frac * max_sc))
 
     def draw_button(self, rect, text, active=False, accent_col=None):
         mx, my = pygame.mouse.get_pos()
@@ -320,8 +418,7 @@ class TextureStudio:
 
                 elif event.type == pygame.MOUSEWHEEL:
                     if mx < 290:
-                        max_scroll = max(520, len(self.tree_items) * 32 - (WIN_H - 140))
-                        self.scroll_y = max(-max_scroll, min(0, self.scroll_y + event.y * 28))
+                        self.scroll_y = self._clamp_tree_scroll(self.scroll_y + event.y * 48)
 
                 elif event.type == pygame.KEYDOWN:
                     mods = pygame.key.get_mods()
@@ -341,6 +438,9 @@ class TextureStudio:
                                 self.edit_title_str = self.edit_title_str[:-1]
                             elif self.active_input == "rename_file":
                                 self.edit_file_str = self.edit_file_str[:-1]
+                            elif self.active_input == "search":
+                                self.search_query = self.search_query[:-1]
+                                self.scroll_y = 0
                         elif (mods & pygame.KMOD_CTRL) and event.key == pygame.K_v:
                             # Paste support for HEX or names
                             try:
@@ -363,15 +463,20 @@ class TextureStudio:
                                         rgb = hex_to_rgb(self.hex_text)
                                         if rgb:
                                             self.active_color = rgb
-                                elif self.active_input == "rename_title" and len(self.edit_title_str) < 26:
+                                elif self.active_input == "rename_title" and len(self.edit_title_str) < 34:
                                     self.edit_title_str += ch
-                                elif self.active_input == "rename_file" and re.match(r"[a-zA-Z0-9_\-]", ch) and len(self.edit_file_str) < 20:
+                                elif self.active_input == "rename_file" and re.match(r"[a-zA-Z0-9_\-]", ch) and len(self.edit_file_str) < 32:
                                     self.edit_file_str += ch
+                                elif self.active_input == "search" and len(self.search_query) < 28:
+                                    self.search_query += ch
+                                    self.scroll_y = 0
                         continue
 
                     # Hotkeys when not typing in a text field
                     if (mods & pygame.KMOD_CTRL) and event.key == pygame.K_s:
                         self.apply_rename_and_save()
+                    elif (mods & pygame.KMOD_CTRL) and event.key == pygame.K_f:
+                        self.active_input = "search"   
                     elif (mods & pygame.KMOD_CTRL) and event.key == pygame.K_z:
                         res = self.history.undo(self.frames)
                         if res:
@@ -410,8 +515,9 @@ class TextureStudio:
                             py = (my - canvas_rect.y) // zoom
                             self.apply_paint_at(px, py, self.paint_button)
 
-                        elif mx < 290 and 50 <= my <= WIN_H - 40:
-                            self._handle_tree_click(mx, my)
+                        elif event.button == 1 and mx < 290 and 76 <= my <= WIN_H - 44:
+                            if not self._handle_tree_click(mx, my):
+                                self._handle_ui_clicks(mx, my)
 
                         elif event.button == 1:
                             self._handle_ui_clicks(mx, my)
@@ -423,7 +529,7 @@ class TextureStudio:
 
                 elif event.type == pygame.MOUSEMOTION:
                     if self.dragging_slider is not None:
-                        self._update_dragged_slider(mx)
+                        self._update_dragged_slider(mx, my)
                     elif self.is_painting and canvas_rect.collidepoint((mx, my)):
                         px = (mx - canvas_rect.x) // zoom
                         py = (my - canvas_rect.y) // zoom
@@ -435,22 +541,49 @@ class TextureStudio:
         pygame.quit()
 
     def _handle_tree_click(self, mx, my):
-        y_cursor = 58 + self.scroll_y
-        for item in self.tree_items:
+        track_r = pygame.Rect(276, 76, 12, WIN_H - 122)
+        if self._tree_max_scroll() > 0 and track_r.collidepoint((mx, my)):
+            self.dragging_slider = ("tree_scroll", track_r.y, track_r.height)
+            self._update_dragged_slider(mx, my)
+            return True
+
+        y_cursor = 80 + self.scroll_y
+        for item in self._visible_tree_items():
             if item["type"] == "header":
+                r = pygame.Rect(14, y_cursor, 258, 24)
+                if r.collidepoint((mx, my)):
+                    cat = item["cat"]
+                    if cat in self.collapsed_cats:
+                        self.collapsed_cats.remove(cat)
+                    else:
+                        self.collapsed_cats.add(cat)
+                    self.scroll_y = self._clamp_tree_scroll(self.scroll_y)
+                    return True
                 y_cursor += 28
             else:
-                r = pygame.Rect(14, y_cursor, 262, 30)
+                r = pygame.Rect(14, y_cursor, 258, 30)
                 if r.collidepoint((mx, my)):
                     self.load_asset_entry(item)
-                    return
+                    return True
                 y_cursor += 32
+        return False
 
     def _handle_ui_clicks(self, mx, my):
         for btn_id, rect in getattr(self, "ui_hitboxes", []):
             if rect.collidepoint((mx, my)):
                 if btn_id == "input_title":
                     self.active_input = "rename_title"
+                elif btn_id == "input_search":
+                    self.active_input = "search"
+                elif btn_id == "clear_search":
+                    self.search_query = ""
+                    self.scroll_y = 0
+                elif btn_id == "tree_collapse_all":
+                    self.collapsed_cats = set(ASSET_CATALOG.keys())
+                    self.scroll_y = 0
+                elif btn_id == "tree_expand_all":
+                    self.collapsed_cats.clear()
+                    self.scroll_y = self._clamp_tree_scroll(self.scroll_y)
                 elif btn_id == "input_file":
                     self.active_input = "rename_file"
                 elif btn_id == "input_hex":
@@ -529,11 +662,11 @@ class TextureStudio:
                 elif btn_id.startswith("rgb_"):
                     _, ch_idx, click_x, bar_w = btn_id.split("_")
                     self.dragging_slider = ("rgb", int(ch_idx), int(click_x), int(bar_w))
-                    self._update_dragged_slider(mx)
+                    self._update_dragged_slider(mx, my)
                 elif btn_id.startswith("fps_"):
                     _, click_x, bar_w = btn_id.split("_")
                     self.dragging_slider = ("fps", int(click_x), int(bar_w))
-                    self._update_dragged_slider(mx)
+                    self._update_dragged_slider(mx, my)
                 return
 
     def _render_studio(self, dt, mouse_pos, canvas_rect, zoom):
@@ -542,24 +675,51 @@ class TextureStudio:
         mx, my = mouse_pos
 
         # ======================================================================
-        # 1. LEFT PANEL: ASSET EXPLORER TREE
+        # 1. LEFT PANEL: COLLAPSIBLE & SEARCHABLE ASSET EXPLORER TREE
         # ======================================================================
         pygame.draw.rect(self.screen, PANEL_BG, (10, 10, 280, WIN_H - 52), border_radius=6)
         pygame.draw.rect(self.screen, BORDER_COL, (10, 10, 280, WIN_H - 52), 2, border_radius=6)
-        self.screen.blit(self.font_title.render("ПРОВОДНИК (.DTEX)", True, HIGHLIGHT_COL), (24, 20))
+        self.screen.blit(self.font_title.render("ПРОВОДНИК", True, HIGHLIGHT_COL), (20, 18))
 
-        tree_clip = pygame.Rect(12, 50, 276, WIN_H - 96)
+        self.ui_hitboxes.append(("tree_collapse_all", self.draw_button(pygame.Rect(184, 15, 48, 22), "Сверн.")))
+        self.ui_hitboxes.append(("tree_expand_all", self.draw_button(pygame.Rect(236, 15, 44, 22), "Все")))
+
+        # Строка поиска (Ctrl+F)
+        s_box = pygame.Rect(16, 44, 268, 26)
+        s_act = (self.active_input == "search")
+        pygame.draw.rect(self.screen, (16, 14, 22), s_box, border_radius=4)
+        pygame.draw.rect(self.screen, HIGHLIGHT_COL if s_act else BORDER_COL, s_box, 2 if s_act else 1, border_radius=4)
+        if self.search_query or s_act:
+            s_txt = self.search_query + ("|" if s_act else "")
+            self.screen.blit(self.font_small.render(s_txt, True, TEXT_MAIN), (s_box.x + 8, s_box.y + 6))
+        else:
+            self.screen.blit(self.font_small.render("Поиск [Ctrl+F]...", True, TEXT_DIM), (s_box.x + 8, s_box.y + 6))
+        if self.search_query:
+            clr_r = pygame.Rect(s_box.right - 22, s_box.y + 3, 19, 20)
+            self.ui_hitboxes.append(("clear_search", self.draw_button(clr_r, "x")))
+            self.ui_hitboxes.append(("input_search", pygame.Rect(s_box.x, s_box.y, s_box.width - 24, s_box.height)))
+        else:
+            self.ui_hitboxes.append(("input_search", s_box))
+
+        tree_clip = pygame.Rect(12, 76, 264, WIN_H - 122)
         self.screen.set_clip(tree_clip)
-        y_cur = 58 + self.scroll_y
+        self.scroll_y = self._clamp_tree_scroll(self.scroll_y)
+        y_cur = 80 + self.scroll_y
 
-        for item in self.tree_items:
+        cat_counts = {k: len(v["items"]) for k, v in ASSET_CATALOG.items()}
+        for item in self._visible_tree_items():
             if item["type"] == "header":
-                pygame.draw.rect(self.screen, (38, 32, 48), (16, y_cur, 260, 24), border_radius=3)
-                self.screen.blit(self.font_small.render(item["title"], True, HIGHLIGHT_COL), (22, y_cur + 5))
+                is_col = (item["cat"] in self.collapsed_cats) and not self.search_query.strip()
+                arrow = "▶" if is_col else "▼"
+                hr = pygame.Rect(16, y_cur, 256, 24)
+                hov_h = hr.collidepoint((mx, my)) and tree_clip.collidepoint((mx, my))
+                pygame.draw.rect(self.screen, (52, 44, 66) if hov_h else (38, 32, 48), hr, border_radius=3)
+                hdr_txt = f"{arrow} {item['title']} ({cat_counts.get(item['cat'], 0)})"
+                self.screen.blit(self.font_small.render(hdr_txt[:34], True, HIGHLIGHT_COL), (22, y_cur + 5))
                 y_cur += 28
             else:
                 is_sel = (item["role_id"] == self.current_entry["role_id"])
-                r = pygame.Rect(16, y_cur, 260, 28)
+                r = pygame.Rect(16, y_cur, 256, 28)
                 hov = r.collidepoint((mx, my)) and tree_clip.collidepoint((mx, my))
                 bg = (68, 52, 82) if is_sel else ((40, 35, 52) if hov else SLOT_BG)
                 pygame.draw.rect(self.screen, bg, r, border_radius=4)
@@ -569,11 +729,22 @@ class TextureStudio:
                 thumb = self.thumbnails.get(item["role_id"])
                 if thumb:
                     self.screen.blit(thumb, (r.x + 6, r.y + 2))
-                lbl = self.font_small.render(f"{item['name']} [{item['file_stem']}]", True, TEXT_MAIN if is_sel else TEXT_DIM)
+                lbl = self.font_small.render(item["name"][:28], True, TEXT_MAIN if is_sel else TEXT_DIM)
                 self.screen.blit(lbl, (r.x + 36, r.y + 7))
                 y_cur += 32
 
         self.screen.set_clip(None)
+
+        # Ползунок прокрутки справа от дерева
+        max_sc = self._tree_max_scroll()
+        if max_sc > 0:
+            track_r = pygame.Rect(278, 76, 7, WIN_H - 122)
+            pygame.draw.rect(self.screen, (14, 12, 18), track_r, border_radius=3)
+            total_h = max_sc + track_r.height
+            thumb_h = max(28, int(track_r.height * (track_r.height / float(total_h))))
+            frac = (-self.scroll_y) / float(max_sc)
+            thumb_y = track_r.y + int((track_r.height - thumb_h) * frac)
+            pygame.draw.rect(self.screen, HIGHLIGHT_COL, (track_r.x, thumb_y, track_r.width, thumb_h), border_radius=3)
 
         # ======================================================================
         # 2. CENTER PANEL: RENAME BAR, TOOLS, CANVAS & ANIMATION TIMELINE
@@ -696,12 +867,13 @@ class TextureStudio:
 
         # Bottom Save & Clear Row
         bottom_cy = 708
-        mini_sc = 2 if (w > 16 or h > 20) else 3
+        mini_sc = min(3.0, 96.0 / max(1, w), 64.0 / max(1, h))
+        mw, mh = max(1, int(round(w * mini_sc))), max(1, int(round(h * mini_sc)))
         self.screen.blit(self.font_small.render("Слой Цвета:", True, TEXT_DIM), (320, bottom_cy))
-        self.screen.blit(pygame.transform.scale(self.diff_surf, (w * mini_sc, h * mini_sc)), (320, bottom_cy + 16))
+        self.screen.blit(pygame.transform.scale(self.diff_surf, (mw, mh)), (320, bottom_cy + 16))
 
         self.screen.blit(self.font_small.render("Нормаль:", True, TEXT_DIM), (430, bottom_cy))
-        self.screen.blit(pygame.transform.scale(self.norm_surf, (w * mini_sc, h * mini_sc)), (430, bottom_cy + 16))
+        self.screen.blit(pygame.transform.scale(self.norm_surf, (mw, mh)), (430, bottom_cy + 16))
 
         self.ui_hitboxes.append(("clear_layer", self.draw_button(pygame.Rect(545, bottom_cy + 22, 135, 34), "Очистить слой")))
         self.ui_hitboxes.append(("save_dtex", self.draw_button(pygame.Rect(690, bottom_cy + 22, 194, 34), "💾 Сохранить .DTEX [Ctrl+S]", False, (100, 220, 130))))

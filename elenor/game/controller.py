@@ -68,6 +68,9 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self._dark_walk_timer = 0.0
         self.journal_open = False
         self.journal_scroll = 0
+        self.inv_scroll = 0
+        self.strongbox_settled = False
+        self.run_results = None
         self.journal_logs = []
         self.journal_filters = {"combat": True, "event": True, "speech": True}
         self.reset_run()
@@ -141,6 +144,16 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.player.buffered_combat = None
         self.sfx.play("ui")
 
+    def open_run_results(self, victory=False):
+        if getattr(self, "run_results", None) is not None:
+            return
+        from elenor.ui.run_results import build_run_results
+        self.inv_open = False
+        self.journal_open = False
+        self.levelup_choices = None
+        self.player.buffered_combat = None
+        self.run_results = build_run_results(self, victory)
+
     def reset_run(self, campaign=None, *, seed=None):
         self.campaign = campaign or getattr(self, "campaign", "rats")
         self.run_seed = random.SystemRandom().getrandbits(64) if seed is None else seed
@@ -184,6 +197,11 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.player = Player(start_x, start_y, adj_key, adj_data, noun_key, noun_data, self.loc["items"], appearance=appearance)
         if self.campaign == "jungle":
             self.player.equipment["left_hand"] = None
+        sb_lvl = int(self.profile.get("strongbox_level", 0))
+        if sb_lvl > 0 and self.profile.get("strongbox_enabled", True):
+            strongbox = self.make_item("family_strongbox")
+            strongbox.slots = max(1, min(5, sb_lvl))
+            self.player.bag_slots[0] = strongbox
 
         self._populate_floor(floor_num=1)
         self.target_thought = ""

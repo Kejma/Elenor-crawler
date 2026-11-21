@@ -2,6 +2,14 @@ import random
 from elenor.config import RARITY_COLORS
 
 
+def _scale_int_stat(base, tier_idx):
+    if base <= 0 or tier_idx <= 0:
+        return int(base)
+    mult = (1.0, 1.35, 1.75, 2.20, 2.75)[tier_idx]
+    val = int(round(base * mult))
+    if val <= base:
+        val = base + (1 if tier_idx <= 2 else 2)
+    return val
 
 
 class Item:
@@ -19,8 +27,9 @@ class Item:
         self.two_handed = data.get("two_handed", False)
         self.weap_style = data.get("weap_style", "fist")
 
-        # Определяем редкость экземпляра (для оружия она динамическая!)
         is_weapon = (self.type == "equipment" and self.slot == "right_hand" and not self.is_torch)
+        is_gear = (self.type == "equipment" and self.slot != "right_hand" and not self.is_torch)
+
         if rarity_override in self.RARITY_ORDER:
             self.rarity = rarity_override
         else:
@@ -30,7 +39,10 @@ class Item:
 
         self.tier_idx = self.RARITY_ORDER.index(self.rarity)
         self.rarity_color = RARITY_COLORS.get(self.rarity, (215, 215, 220))
-        self.name = f"{self.base_name}{self.RARITY_ROMAN[self.tier_idx]}" if is_weapon else self.base_name
+        self.name = (
+            f"{self.base_name}{self.RARITY_ROMAN[self.tier_idx]}"
+            if (is_weapon or is_gear) else self.base_name
+        )
 
         base_cd = float(data.get("atk_cd", 0.36))
         self.atk_cd = round(max(0.16, base_cd * (1.0 - 0.04 * self.tier_idx)), 2) if is_weapon else base_cd
@@ -44,11 +56,18 @@ class Item:
         self.cleave = data.get("cleave", False) or (self.max_targets > 1)
 
         base_ls = int(data.get("life_steal", 0))
-        self.life_steal = (base_ls + (2 if self.tier_idx == 4 else (1 if self.tier_idx >= 2 else 0))) if (is_weapon and base_ls > 0) else base_ls
+        self.life_steal = (
+            base_ls + (2 if self.tier_idx == 4 else (1 if self.tier_idx >= 2 else 0))
+            if ((is_weapon or is_gear) and base_ls > 0) else base_ls
+        )
 
-        # Исторические фишечки оружия с масштабированием от редкости экземпляра
         base_crit = float(data.get("crit_bonus", 0.0))
-        self.crit_bonus = round(base_crit + (0.02 * self.tier_idx if is_weapon else 0.0), 2)
+        if is_weapon:
+            self.crit_bonus = round(base_crit + 0.02 * self.tier_idx, 3)
+        elif is_gear and base_crit > 0:
+            self.crit_bonus = round(base_crit * (1.0 + 0.35 * self.tier_idx), 3)
+        else:
+            self.crit_bonus = base_crit
 
         base_bs = float(data.get("backstab_bonus", 0.0))
         self.backstab_bonus = round(base_bs + (0.25 * self.tier_idx if (is_weapon and base_bs > 0) else 0.0), 2)
@@ -124,18 +143,109 @@ class Item:
             self.dmg_min = base_dmin
             self.dmg_max = base_dmax
 
-        self.phys_bonus = int(data.get("phys_bonus", 0))
+        base_phys = int(data.get("phys_bonus", 0))
+        self.phys_bonus = _scale_int_stat(base_phys, self.tier_idx) if is_gear else base_phys
 
         base_mag = int(data.get("mag_bonus", 0))
-        self.mag_bonus = (base_mag + self.tier_idx) if (is_weapon and base_mag > 0) else base_mag
+        if is_weapon and base_mag > 0:
+            self.mag_bonus = base_mag + self.tier_idx
+        elif is_gear:
+            self.mag_bonus = _scale_int_stat(base_mag, self.tier_idx)
+        else:
+            self.mag_bonus = base_mag
 
-        self.phys_def = data.get("phys_def", 0)
-        self.mag_def = data.get("mag_def", 0)
-        self.noise_mod = data.get("noise_mod", 0.0)
-        self.vision_bonus = data.get("vision_bonus", 0)
-        self.mp_regen = float(data.get("mp_regen", 0.0))
+        base_pdef = int(data.get("phys_def", 0))
+        base_mdef = int(data.get("mag_def", 0))
+        self.phys_def = _scale_int_stat(base_pdef, self.tier_idx) if is_gear else base_pdef
+        self.mag_def = _scale_int_stat(base_mdef, self.tier_idx) if is_gear else base_mdef
+
+        base_hp = int(data.get("hp_bonus", 0))
+        base_mp = int(data.get("mp_bonus", 0))
+        self.hp_bonus = int(round(base_hp * (1.0 + 0.45 * self.tier_idx))) if (is_gear and base_hp > 0) else base_hp
+        self.mp_bonus = int(round(base_mp * (1.0 + 0.45 * self.tier_idx))) if (is_gear and base_mp > 0) else base_mp
+
+        base_dodge = float(data.get("dodge_bonus", 0.0))
+        self.dodge_bonus = round(base_dodge * (1.0 + 0.35 * self.tier_idx), 3) if (is_gear and base_dodge > 0) else base_dodge
+
+        base_spd = float(data.get("speed_bonus", 0.0))
+        self.speed_bonus = round(base_spd * (1.0 + 0.35 * self.tier_idx), 3) if (is_gear and base_spd > 0) else base_spd
+
+        self.hp_regen = 0.0
+        self.mp_regen = 0.0
+        base_hrb = float(data.get("heal_received_bonus", 0.0))
+        self.heal_received_bonus = round(base_hrb * (1.0 + 0.35 * self.tier_idx), 2) if (is_gear and base_hrb > 0) else base_hrb
+
+        base_mrb = float(data.get("mana_received_bonus", 0.0))
+        self.mana_received_bonus = round(base_mrb * (1.0 + 0.35 * self.tier_idx), 2) if (is_gear and base_mrb > 0) else base_mrb
+
+        base_noise = float(data.get("noise_mod", 0.0))
+        self.noise_mod = round(base_noise * (1.0 + 0.15 * self.tier_idx), 2) if (is_gear and base_noise < 0) else base_noise
+
+        base_vis = int(data.get("vision_bonus", 0))
+        self.vision_bonus = int(round(base_vis * (1.0 + 0.18 * self.tier_idx))) if (is_gear and base_vis > 0) else base_vis
+
+        base_glow = float(data.get("glow_radius", 0.0))
+        self.glow_radius = round(base_glow * (1.0 + 0.15 * self.tier_idx), 1) if (is_gear and base_glow > 0) else base_glow
+        self.glow_color = tuple(data.get("glow_color", (0.85, 0.85, 0.95)))
+
+        self.extra_slots = int(data.get("extra_slots_per_tier", 0)) * (self.tier_idx + 1)
         self.armor_class = data.get("armor_class", "none")
 
         self.active_spell = data.get("active_spell", None)
         self.color = tuple(data.get("color", [110, 225, 255]))
         self.slots = data.get("slots", 2)
+        self.bag_filter = data.get("bag_filter", "any")
+        self.locked_bag = bool(data.get("locked_bag", False))
+        self.is_collectible = bool(data.get("is_collectible", False))
+        self.collection_kind = data.get("collection_kind", None)
+
+        self.sell_value, self.buy_value = self._compute_prices(data)
+        if self.copper_value <= 0:
+            self.copper_value = self.sell_value
+
+    def _compute_prices(self, data):
+        if self.type == "currency_coin":
+            val = int(data.get("copper_value", 0))
+            return val, val
+        if self.type in ("gem", "fish", "painting"):
+            sell = max(1, int(data.get("copper_value", 20)))
+            return sell, int(round(sell * 2.0))
+        if self.type == "quest_key":
+            return 0, 0
+        if self.type == "bag":
+            if self.locked_bag:
+                return 0, 0
+            tier_base = (24, 72, 185, 460, 1100)[self.tier_idx]
+            sell = tier_base + self.slots * 4
+            return sell, int(round(sell * 2.5))
+        if self.type == "consumable":
+            if self.id == "potion_hp_weak":
+                sell = 12
+            elif self.id == "herbal_salve":
+                sell = 16
+            elif self.id == "potion_hp_strong":
+                sell = 58
+            else:
+                sell = 24
+            return sell, int(round(sell * 2.5))
+        if self.type == "consumable_spell":
+            sell = 45
+            return sell, int(round(sell * 2.5))
+        if self.type == "consumable_eraser":
+            return 180, 450
+        if self.type == "equipment":
+            if self.id == "pitch_torch":
+                return 5, 15
+            slot_base = {
+                "right_hand": 40 if self.two_handed else 32,
+                "torso": 36,
+                "left_hand": 28,
+                "helmet": 24,
+                "boots": 24,
+                "ring": 30,
+                "trinket": 32,
+            }.get(self.slot, 26)
+            tier_mult = (1.0, 2.2, 4.5, 9.5, 20.0)[self.tier_idx]
+            sell = max(5, int(round(slot_base * tier_mult)))
+            return sell, int(round(sell * 2.5))
+        return 0, 0
