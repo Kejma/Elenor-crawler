@@ -105,7 +105,7 @@ class Player:
         self.attack_cd = 0.0
         self.step_sound_cd = 0.0
 
-        self.pocket_slots = 2
+        self.pocket_slots = 4 if self.quirk == "hoarder" else 2
         self.bag_slots = [None, None]
         self.max_possible_slots = 50
         self.inventory = [None] * self.max_possible_slots
