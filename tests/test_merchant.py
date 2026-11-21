@@ -99,15 +99,17 @@ class MerchantTests(unittest.TestCase):
         for _ in range(400):
             d.generate(3)
             count += d.merchant_room is not None
-        self.assertTrue(25 < count < 95, count)
+        self.assertTrue(140 < count < 290, count)
 
     def test_counter_sells_gems_without_consuming_decoration(self):
+        from elenor.ui.shop import _sell_all_gems_to_run_wallet
         random.seed(1)
         d = Dungeon(merchant_chance=1)
         d.generate(3)
         g = HeadlessGame(d)
         g.profile = {}
         g._last_picked_line = {}
+        g.shop_state = None
         populate_mission_floor(g, 3, Enemy, Interactable)
         counter = next(
             o
@@ -117,11 +119,15 @@ class MerchantTests(unittest.TestCase):
         g.player.x, g.player.y = counter.x + 0.5, counter.y + 1.5
         gem = g.make_item("gem_ruby")
         g.player.inventory[0] = gem
-        with patch("elenor.game.inventory.save_profile"):
-            self.assertTrue(
-                g._try_precise_interaction(counter.x + 0.5, counter.y + 0.5, 1.0)
-            )
+        self.assertTrue(
+            g._try_precise_interaction(counter.x + 0.5, counter.y + 0.5, 1.0)
+        )
+        self.assertIsNotNone(g.shop_state)
+        stock_ids = [itm.id for itm in g.shop_state["npc"].shop_stock]
+        self.assertTrue(any(i.startswith("potion_hp") or i == "herbal_salve" for i in stock_ids))
+        self.assertIn("potion_mp", stock_ids)
+        _sell_all_gems_to_run_wallet(g, g.shop_state)
         self.assertIsNone(g.player.inventory[0])
-        self.assertEqual(g.profile["bank_copper"], gem.copper_value)
+        self.assertEqual(g.player.gold, gem.copper_value)
         self.assertFalse(counter.used)
         self.assertFalse(counter.merchant_owner.used)

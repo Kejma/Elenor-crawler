@@ -251,20 +251,13 @@ class InventoryMixin:
         return True
 
 
+    def open_merchant_shop(self, npc):
+        from elenor.ui.shop import open_merchant_shop
+        open_merchant_shop(self, npc)
+
     def interact_with_merchant(self, obj):
-        """Универсальный диалог и скупка камней у подземельного Скупщика на любом этаже и в любой кампании."""
-        speaker = self.loc.get("events", {}).get("npc_merchant_name", "Скупщик Шнырь")
-        if isinstance(speaker, list):
-            speaker = speaker[0]
-        if self.try_sell_gems_to_npc(obj, speaker_name=speaker):
-            return
-        lines = self.loc.get("events", {}).get("npc_merchant_greeting", ["Тащи сюда любые самоцветы!"])
-        line = lines[obj.talk_index % len(lines)] if isinstance(lines, list) and lines else str(lines)
-        obj.talk_index += 1
-        obj.speech_text = line
-        obj.speech_timer = 5.5
-        self.sfx.play("mob_talk")
-        self.set_thought(line, important=True)
+        """Открывает полноценную лавку Шныря для покупки, продажи и угощения пивом."""
+        self.open_merchant_shop(obj)
 
 
     def report_bag_space(self):

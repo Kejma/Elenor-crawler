@@ -155,6 +155,12 @@ def main():
                 from elenor.ui.run_results import handle_run_results_event
                 handle_run_results_event(game, event, getattr(event, "pos", mouse_pos))
                 continue
+            if getattr(game, "shop_state", None) is not None:
+                if hasattr(event, "pos"):
+                    event.pos = map_window_to_logical(event.pos, game.viewport_rect)
+                from elenor.ui.shop import handle_shop_event
+                handle_shop_event(game, event, getattr(event, "pos", mouse_pos))
+                continue
             key_down = event.type == pygame.KEYDOWN and not getattr(event, "repeat", False)
             if game.rat_campaign_complete and key_down and event.key in (pygame.K_SPACE, pygame.K_ESCAPE):
                 game.open_run_results(victory=True)
@@ -515,7 +521,11 @@ def main():
                 if obj.speech_timer <= 0.0:
                     obj.speech_text = None
 
-        dev_open = getattr(getattr(game, "dev_panel", None), "is_open", False) or (getattr(game, "run_results", None) is not None)
+        dev_open = (
+            getattr(getattr(game, "dev_panel", None), "is_open", False)
+            or (getattr(game, "run_results", None) is not None)
+            or (getattr(game, "shop_state", None) is not None)
+        )
 
         if game.fishing_cast is None and game.player.hp > 0 and not game.inv_open and not game.levelup_choices and not dev_open:
             keys = pygame.key.get_pressed()
@@ -1144,6 +1154,13 @@ def main():
                 window.full_dirty = True
             from elenor.ui.run_results import render_run_results
             render_run_results(screen, game, mouse_pos)
+
+        if getattr(game, "shop_state", None) is not None:
+            if window is not None:
+                window.hud_surface = None
+                window.full_dirty = True
+            from elenor.ui.shop import render_shop
+            render_shop(screen, game, mouse_pos)
 
         if hasattr(game, "fx") and game.fx:
             game.fx.render_panel(screen, mouse_pos)

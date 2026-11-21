@@ -71,6 +71,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
         self.inv_scroll = 0
         self.strongbox_settled = False
         self.run_results = None
+        self.shop_state = None
         self.journal_logs = []
         self.journal_filters = {"combat": True, "event": True, "speech": True}
         self.reset_run()
@@ -204,6 +205,7 @@ class GameController(NarrativeMixin, InventoryMixin, ProgressionMixin, CombatMix
             self.player.bag_slots[0] = strongbox
 
         self._populate_floor(floor_num=1)
+        self.shop_state = None
         self.target_thought = ""
         self.shown_chars = 0.0
         self.last_tick_char = 0

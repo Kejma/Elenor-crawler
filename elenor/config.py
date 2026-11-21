@@ -87,4 +87,4 @@ UI_TEXT_MAIN = (236, 226, 208)
 UI_TEXT_DIM = (152, 142, 132)
 
 # Probability of reserving an ordinary dungeon room for the merchant.
-MERCHANT_ROOM_CHANCE = 0.15
+MERCHANT_ROOM_CHANCE = 0.55
