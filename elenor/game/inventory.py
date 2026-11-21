@@ -180,17 +180,131 @@ class InventoryMixin:
                     break
 
 
+    def inventory_slot_at(self, pos):
+        renderer = self.renderer
+        for kind, rects in (
+            ("ability", enumerate(renderer.ability_rects)),
+            ("hotbar", enumerate(renderer.hotbar_rects)),
+            ("bag", enumerate(renderer.bag_slot_rects)),
+            ("equip", renderer.equip_slot_rects.items()),
+            ("pocket", enumerate(renderer.inv_slot_rects[:self.player.unlocked_slots])),
+        ):
+            for key, rect in rects:
+                if rect.collidepoint(pos):
+                    return kind, key
+        return None
+
+    def _cursor_container(self, kind):
+        player = self.player
+        return {
+            "ability": player.ability_slots,
+            "bag": player.bag_slots,
+            "equip": player.equipment,
+            "pocket": player.inventory,
+            "hotbar": player.hotbar,
+        }[kind]
+
+    def pick_inventory_cursor(self, pos, aim):
+        slot = self.inventory_slot_at(pos)
+        if slot is None:
+            return
+        kind, key = slot
+        player = self.player
+        if kind == "hotbar":
+            self.use_or_equip_item(player.hotbar[key], *aim, from_hotbar=True)
+            return
+        if kind == "equip" and key == "left_hand":
+            weapon = player.equipment["right_hand"]
+            if weapon is not None and weapon.two_handed:
+                key = "right_hand"
+
+        item = self._cursor_container(kind)[key]
+        if getattr(item, "locked_bag", False):
+            self.sfx.play("hurt")
+        elif item is not None:
+            self.drag_item = item
+            self.drag_source = kind, key
+
+    def place_inventory_cursor(self, pos):
+        item, source = self.drag_item, self.drag_source
+        if item is None:
+            return
+        source_kind, source_key = source
+        if self._cursor_container(source_kind)[source_key] is not item:
+            self.drag_item = self.drag_source = None
+            return
+        target = self.inventory_slot_at(pos)
+        if target is None:
+            if source_kind != "ability" and not self.renderer.modal_rect.collidepoint(pos):
+                if self.drop_item_on_floor(item):
+                    self.drag_item = self.drag_source = None
+            return
+        if target == source or self._move_inventory_cursor(item, source, target):
+            self.drag_item = self.drag_source = None
+            self.sfx.play("ui")
+
+    def _move_inventory_cursor(self, item, source, target):
+        source_kind, source_key = source
+        kind, key = target
+        player = self.player
+        if source_kind == "ability":
+            if kind != "ability":
+                return False
+            player.swap_ability_slots(source_key, key)
+            return True
+        if kind == "hotbar":
+            if not player.item_fits_filter(item, "consumable"):
+                return False
+            player.hotbar[key] = item
+            return True
+        if kind == "equip":
+            if not player.equip_item(item, key):
+                return False
+            self._flush_overflow_drops(int(player.x), int(player.y))
+            return True
+        if kind == "bag" and item.type == "bag":
+            if source_kind == "bag":
+                return player.swap_bag_slots()
+            if not player.change_bag(key, item):
+                self.report_bag_space()
+                return False
+            self.trigger_event_thought("bag_upgrade", item=item.name)
+            return True
+        if kind != "pocket":
+            return False
+        if source_kind == "pocket":
+            return player.swap_inventory_slots(source_key, key)
+        if source_kind == "bag":
+            replacement = player.inventory[key]
+            if replacement is not None and replacement.type != "bag":
+                return False
+            if not player.change_bag(source_key, replacement, pocket_index=key):
+                self.report_bag_space()
+                return False
+            return True
+        if not player.move_equipment_to_inventory(source_key, key):
+            return False
+        self._flush_overflow_drops(int(player.x), int(player.y))
+        return True
+
     def drop_item_on_floor(self, item):
         if not item:
-            return
-        if not self.player.remove_item_everywhere(item):
+            return False
+        player = self.player
+        equipped = item in player.equipment.values()
+        old_capacity = player.pocket_capacity if equipped else None
+        if not player.remove_item_everywhere(item):
             self.report_bag_space()
-            return
-        tx, ty = int(self.player.x), int(self.player.y)
+            return False
+        tx, ty = int(player.x), int(player.y)
+        if equipped:
+            player.refresh_equipment_limits(old_capacity)
+            self._flush_overflow_drops(tx, ty)
         self.objects.append(Interactable(tx, ty, "loot", item))
         self.sfx.play("step")
         self.trigger_event_thought("drop_item", item=item.name)
         self.add_popup(self.player.x, self.player.y, f"Выброшено: {item.name}", (185, 175, 165))
+        return True
 
 
     def cash_in_gems(self):

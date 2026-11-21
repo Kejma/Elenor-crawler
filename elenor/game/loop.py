@@ -293,37 +293,22 @@ def main():
                                 game.select_perk_choice(idx)
                                 break
                         continue
+                    if game.inv_open and game.drag_item is not None:
+                        game.drag_item = game.drag_source = None
+                        continue
                     if game.renderer.bag_btn_rect.collidepoint(event.pos):
                         game.inv_open = not game.inv_open
+                        if not game.inv_open:
+                            game.journal_open = False
                         game.player.buffered_combat = None
                         game.drag_item = None
                         game.drag_source = None
                         game.sfx.play("ui")
                     else:
-                        clicked_ui = False
-                        for i, ar in enumerate(game.renderer.ability_rects):
-                            if ar.collidepoint(event.pos):
-                                ability = game.player.ability_slots[i]
-                                if game.inv_open:
-                                    if ability and not game.journal_open:
-                                        game.drag_item = ability
-                                        game.drag_source = ("ability", i)
-                                else:
-                                    game.use_or_equip_item(ability, world_mx, world_my, from_hotbar=True)
-                                clicked_ui = True
-                                break
-                        for i, hr in enumerate(game.renderer.hotbar_rects):
-                            if hr.collidepoint(event.pos):
-                                game.use_or_equip_item(game.player.hotbar[i], world_mx, world_my, from_hotbar=True)
-                                clicked_ui = True
-                                break
                         if game.inv_open:
-                            clicked_ui = True
                             if game.renderer.journal_btn_rect.collidepoint(event.pos):
                                 game.journal_open = not game.journal_open
                                 game.journal_scroll = 0
-                                game.drag_item = None
-                                game.drag_source = None
                                 game.sfx.play("ui")
                             elif game.journal_open:
                                 for f_key, f_rect in game.renderer.journal_filter_rects.items():
@@ -333,143 +318,23 @@ def main():
                                         game.sfx.play("ui")
                                         break
                             else:
-                                for i, rect in enumerate(game.renderer.bag_slot_rects):
-                                    if rect.collidepoint(event.pos) and game.player.bag_slots[i]:
-                                        if getattr(game.player.bag_slots[i], "locked_bag", False):
-                                            game.sfx.play("hurt")
-                                        else:
-                                            game.drag_item = game.player.bag_slots[i]
-                                            game.drag_source = ("bag", i)
-                                        break
-                                for s_key, s_rect in game.renderer.equip_slot_rects.items():
-                                    if s_rect.collidepoint(event.pos):
-                                        itm = game.player.equipment.get(s_key)
-                                        if itm:
-                                            game.drag_item = itm
-                                            game.drag_source = ("equip", s_key)
-                                        break
-                                for i, sr in enumerate(game.renderer.inv_slot_rects):
-                                    if i < game.player.unlocked_slots and sr.collidepoint(event.pos):
-                                        itm = game.player.inventory[i]
-                                        if itm:
-                                            game.drag_item = itm
-                                            game.drag_source = ("pocket", i)
-                                        break
-                        if not clicked_ui and click_world:
-                            game.try_interact_or_melee(*aim, via_mouse=True)
+                                game.pick_inventory_cursor(event.pos, (world_mx, world_my))
+                            continue
+                        for rect, item in zip(game.renderer.ability_rects + game.renderer.hotbar_rects,
+                                              game.player.ability_slots + game.player.hotbar):
+                            if rect.collidepoint(event.pos):
+                                game.use_or_equip_item(item, world_mx, world_my, from_hotbar=True)
+                                break
+                        else:
+                            if click_world:
+                                game.try_interact_or_melee(*aim, via_mouse=True)
 
                 elif event.button == 3:
                     if game.levelup_choices and game.levelup_choices.get("mode") == "erase":
                         game.levelup_choices = None
                         game.sfx.play("ui")
-                    elif game.inv_open and not game.journal_open:
-                        for i, rect in enumerate(game.renderer.bag_slot_rects):
-                            if rect.collidepoint(event.pos) and game.player.bag_slots[i]:
-                                if getattr(game.player.bag_slots[i], "locked_bag", False):
-                                    game.sfx.play("hurt")
-                                elif game.player.change_bag(i):
-                                    game.sfx.play("ui")
-                                else:
-                                    game.report_bag_space()
-                                break
-                        for i, sr in enumerate(game.renderer.inv_slot_rects):
-                            if i < game.player.unlocked_slots and sr.collidepoint(event.pos):
-                                itm = game.player.inventory[i]
-                                if itm:
-                                    game.drop_item_on_floor(itm)
-                                break
-
-            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                if game.drag_source and game.drag_source[0] == "ability":
-                    source = game.drag_source[1]
-                    if game.inv_open and not game.journal_open:
-                        for target, rect in enumerate(game.renderer.ability_rects):
-                            if target != source and rect.collidepoint(event.pos):
-                                game.player.swap_ability_slots(source, target)
-                                game.sfx.play("ui")
-                                break
-                    game.drag_item = None
-                    game.drag_source = None
-                    continue
-                if game.drag_item and game.inv_open and not game.journal_open and game.drag_item.type == "bag":
-                    bag_target = next((i for i, rect in enumerate(game.renderer.bag_slot_rects)
-                                       if rect.collidepoint(event.pos)), None)
-                    from_bag = game.drag_source[0] == "bag"
-                    if bag_target is not None or from_bag:
-                        if from_bag:
-                            source = game.drag_source[1]
-                            if bag_target is not None:
-                                slots = game.player.bag_slots
-                                if getattr(slots[bag_target], "locked_bag", False):
-                                    game.sfx.play("hurt")
-                                else:
-                                    slots[source], slots[bag_target] = slots[bag_target], slots[source]
-                                    if source != bag_target:
-                                        game.sfx.play("ui")
-                            elif not game.renderer.modal_rect.collidepoint(event.pos):
-                                game.drop_item_on_floor(game.drag_item)
-                            else:
-                                pocket = next((i for i, rect in enumerate(game.renderer.inv_slot_rects)
-                                               if i < game.player.unlocked_slots and rect.collidepoint(event.pos)), None)
-                                if pocket is not None and game.player.inventory[pocket] is None:
-                                    if game.player.change_bag(source, pocket_index=pocket):
-                                        game.sfx.play("ui")
-                                    else:
-                                        game.report_bag_space()
-                        else:
-                            game.equip_bag(game.drag_item, bag_target)
-                        game.drag_item = None
-                        game.drag_source = None
-                        continue
-                if game.drag_item:
-                    dropped = False
-                    for i, hr in enumerate(game.renderer.hotbar_rects):
-                        if hr.collidepoint(event.pos) and game.drag_item.type in ("consumable", "consumable_spell", "consumable_eraser"):
-                            game.player.hotbar[i] = game.drag_item
-                            game.sfx.play("ui")
-                            dropped = True
-                            break
-
-                    if not dropped and game.inv_open:
-                        if not game.renderer.modal_rect.collidepoint(event.pos):
-                            game.drop_item_on_floor(game.drag_item)
-                            dropped = True
-                        else:
-                            for s_key, s_rect in game.renderer.equip_slot_rects.items():
-                                if s_rect.collidepoint(event.pos):
-                                    if game.drag_source == ("equip", s_key):
-                                        game.player.unequip_slot(s_key)
-                                        game.sfx.play("ui")
-                                    elif game.drag_item.type == "equipment":
-                                        slot_match = (game.drag_item.slot == s_key) or (game.drag_item.slot == "ring" and s_key in ("ring_1", "ring_2"))
-                                        if slot_match:
-                                            game.use_or_equip_item(game.drag_item)
-                                    dropped = True
-                                    break
-
-                            if not dropped:
-                                for i, sr in enumerate(game.renderer.inv_slot_rects):
-                                    if i < game.player.unlocked_slots and sr.collidepoint(event.pos):
-                                        if game.drag_source == ("pocket", i):
-                                            game.use_or_equip_item(game.drag_item)
-                                        elif game.drag_source and game.drag_source[0] == "pocket":
-                                            src_i = game.drag_source[1]
-                                            game.player.swap_inventory_slots(src_i, i)
-                                            game.sfx.play("ui")
-                                        elif game.drag_source and game.drag_source[0] == "equip":
-                                            eq_slot = game.drag_source[1]
-                                            target_itm = game.player.inventory[i]
-                                            if target_itm is None and game.player.item_fits_slot(game.drag_item, i):
-                                                game.player.inventory[i] = game.drag_item
-                                                game.player.equipment[eq_slot] = None
-                                                game.sfx.play("ui")
-                                            elif target_itm.type == "equipment" and (target_itm.slot == eq_slot or (target_itm.slot == "ring" and eq_slot in ("ring_1", "ring_2"))) and game.player.item_fits_slot(game.drag_item, i):
-                                                game.player.equipment[eq_slot] = target_itm
-                                                game.player.inventory[i] = game.drag_item
-                                                game.sfx.play("ui")
-                                        break
-                    game.drag_item = None
-                    game.drag_source = None
+                    elif game.inv_open and not game.journal_open and not game.levelup_choices:
+                        game.place_inventory_cursor(event.pos)
 
             elif event.type == pygame.MOUSEWHEEL:
                 if game.inv_open and game.journal_open:

@@ -186,13 +186,22 @@ class Player:
         return self.item_fits_filter(item, filt)
 
     def _reconcile_inventory_capacity(self):
-        old_cap = self.unlocked_slots
         # Собираем все предметы и раскладываем их по актуальным отсекам
         kept = [itm for itm in self.inventory if itm is not None]
         self.inventory[:] = [None] * self.max_possible_slots
         for itm in kept:
             if not self.add_item_to_inventory(itm):
                 self.overflow_drops.append(itm)
+
+    def swap_bag_slots(self):
+        if any(getattr(bag, "locked_bag", False) for bag in self.bag_slots):
+            return False
+        start = self.pocket_capacity
+        middle = start + (self.bag_slots[0].slots if self.bag_slots[0] else 0)
+        end = self.unlocked_slots
+        self.inventory[start:end] = self.inventory[middle:end] + self.inventory[start:middle]
+        self.bag_slots.reverse()
+        return True
 
     def change_bag(self, index, bag=None, *, pocket_index=None, keep_old=True):
         """Equip or take off one bag, preserving compartments and checking filter compatibility."""
@@ -204,15 +213,17 @@ class Player:
 
         old_sections = self.inventory_sections()
         sec_items = {}
-        bag_old_rel = None
+        bag_source = None
+        preferred_slot = None
         for sec in old_sections:
             key = "pockets" if sec["kind"] == "pockets" else sec["bag_index"]
             slice_items = list(self.inventory[sec["start"]:sec["start"] + sec["count"]])
+            if pocket_index is not None and sec["start"] <= pocket_index < sec["start"] + sec["count"]:
+                preferred_slot = (key, pocket_index - sec["start"])
             for i, itm in enumerate(slice_items):
-                if itm is bag:
+                if bag is not None and itm is bag:
                     slice_items[i] = None
-                    if key == "pockets":
-                        bag_old_rel = i
+                    bag_source = (key, i)
             sec_items[key] = slice_items
 
         new_bags = list(self.bag_slots)
@@ -238,12 +249,20 @@ class Player:
             to_place.extend(itm for itm in sec_items[index] if itm is not None)
 
         if old and keep_old:
-            placed_old = False
-            pref = pocket_index if pocket_index is not None else bag_old_rel
-            if pref is not None and 0 <= pref < p_cap and new_buckets["pockets"][pref] is None:
-                new_buckets["pockets"][pref] = old
-                placed_old = True
-            if not placed_old:
+            pref = preferred_slot if pocket_index is not None else bag_source
+            if pref is not None:
+                key, relative = pref
+                bucket = new_buckets.get(key, ())
+                filt = "any" if key == "pockets" else getattr(new_bags[key], "bag_filter", "any")
+                if relative < len(bucket) and bucket[relative] is None and self.item_fits_filter(old, filt):
+                    bucket[relative] = old
+                elif pocket_index is not None:
+                    return False
+                else:
+                    to_place.append(old)
+            elif pocket_index is not None:
+                return False
+            else:
                 to_place.append(old)
 
         for itm in to_place:
@@ -685,48 +704,70 @@ class Player:
             return self.equipment["ring_1"] or self.equipment["ring_2"]
         return self.equipment.get(slot)
 
-    def equip_item(self, item):
-        slot = item.slot
-        if slot == "ring":
-            target_slot = "ring_1" if self.equipment["ring_1"] is None else ("ring_2" if self.equipment["ring_2"] is None else "ring_1")
-        else:
-            target_slot = slot
-        self._reconcile_inventory_capacity()
-        self.hp = min(self.hp, float(self.max_hp))
-        self.mp = min(self.mp, float(self.max_mp))
+    @staticmethod
+    def item_fits_equipment_slot(item, slot):
+        return item.type == "equipment" and (
+            item.slot == slot or (item.slot == "ring" and slot in ("ring_1", "ring_2"))
+        )
 
-        src_pocket_idx = None
-        for i in range(self.max_possible_slots):
-            if self.inventory[i] is item:
-                self.inventory[i] = None
-                src_pocket_idx = i
-                break
+    def equip_item(self, item, target_slot=None):
+        if target_slot is None:
+            target_slot = item.slot
+            if target_slot == "ring":
+                target_slot = next((slot for slot in ("ring_1", "ring_2") if self.equipment[slot] is None), "ring_1")
+        if target_slot not in self.equipment or not self.item_fits_equipment_slot(item, target_slot):
+            return False
 
-        old_main = self.equipment.get(target_slot)
+        source_slot = next((slot for slot, equipped in self.equipment.items() if equipped is item), None)
+        if source_slot is not None:
+            self.equipment[source_slot], self.equipment[target_slot] = (
+                self.equipment[target_slot], item
+            )
+            return True
+
+        old_capacity = self.pocket_capacity
+        source_index = next((i for i, stored in enumerate(self.inventory) if stored is item), None)
+        old_main = self.equipment[target_slot]
         old_off = None
-
         if target_slot == "right_hand" and item.two_handed:
             old_off = self.equipment["left_hand"]
             self.equipment["left_hand"] = None
         elif target_slot == "left_hand":
-            main_itm = self.equipment["right_hand"]
-            if main_itm and main_itm.two_handed:
-                old_off = main_itm
+            main = self.equipment["right_hand"]
+            if main and main.two_handed:
+                old_off = main
                 self.equipment["right_hand"] = None
 
+        if source_index is not None:
+            self.inventory[source_index] = old_main
         self.equipment[target_slot] = item
+        self.refresh_equipment_limits(old_capacity)
 
-        if old_main is not None:
-            if src_pocket_idx is not None and self.inventory[src_pocket_idx] is None:
-                self.inventory[src_pocket_idx] = old_main
-            elif not self.add_item_to_inventory(old_main):
-                self.overflow_drops.append(old_main)
-
-        if old_off is not None:
-            if not self.add_item_to_inventory(old_off):
-                self.overflow_drops.append(old_off)
-
+        displaced = (old_main, old_off) if source_index is None else (old_off,)
+        for old_item in displaced:
+            if old_item is not None and not self.add_item_to_inventory(old_item):
+                self.overflow_drops.append(old_item)
         return True
+
+    def move_equipment_to_inventory(self, slot, index):
+        item = self.equipment[slot]
+        if item is None or not self.item_fits_slot(item, index):
+            return False
+        replacement = self.inventory[index]
+        if replacement is not None:
+            return self.equip_item(replacement, slot)
+
+        old_capacity = self.pocket_capacity
+        self.equipment[slot] = None
+        self.inventory[index] = item
+        self.refresh_equipment_limits(old_capacity)
+        return True
+
+    def refresh_equipment_limits(self, old_capacity):
+        if self.pocket_capacity != old_capacity:
+            self._reconcile_inventory_capacity()
+        self.hp = min(self.hp, float(self.max_hp))
+        self.mp = min(self.mp, float(self.max_mp))
 
     def unequip_slot(self, slot_key):
         itm = self.equipment.get(slot_key)

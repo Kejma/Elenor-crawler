@@ -17,8 +17,8 @@ class MainMenuController:
         self.game = game
         self.active_tab = 0
         self.upgrade_subtab = 0
+        self.collection_subtab = 0
         self.inspect_painting_id = None
-        self.viewer_btn_rects = {}
         self.viewer_modal_rect = None
         self.scroll_x = 0.0
         self.preview_3d = LiveLightPreview(280, 320)
@@ -93,16 +93,6 @@ class MainMenuController:
                 return True
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 pos = getattr(event, "pos", mouse_pos)
-                for v_key, v_rect in self.viewer_btn_rects.items():
-                    if v_rect.collidepoint(pos):
-                        if v_key == "prev":
-                            self._step_painting_viewer(-1, prof)
-                        elif v_key == "next":
-                            self._step_painting_viewer(1, prof)
-                        elif v_key == "close":
-                            self.inspect_painting_id = None
-                            self.game.sfx.play("ui")
-                        return True
                 if self.viewer_modal_rect is None or not self.viewer_modal_rect.collidepoint(pos):
                     self.inspect_painting_id = None
                     self.game.sfx.play("ui")
@@ -299,8 +289,11 @@ class MainMenuController:
             self.meltdown_active = False
             self.active_tab = 0
 
-        elif b_key in ("upg_tab_0", "upg_tab_1", "upg_tab_2"):
+        elif b_key in ("upg_tab_0", "upg_tab_1"):
             self.upgrade_subtab = int(b_key[-1])
+
+        elif b_key in ("collection_tab_0", "collection_tab_1"):
+            self.collection_subtab = int(b_key[-1])
 
         elif b_key == "strongbox_upgrade":
             lvl = int(prof.get("strongbox_level", 0))
@@ -360,6 +353,8 @@ class MainMenuController:
         prof = self.game.profile
         screen.fill((12, 10, 16))
         self.btn_rects = {}
+        if self.inspect_painting_id is not None and self._render_painting_viewer(screen):
+            return
 
         # 1. ЛЕВАЯ КОЛОНКА МЕНЮ (Якорь: левый край)
         left_rect = pygame.Rect(32, 32, self.sidebar_w, SCREEN_H - 64)
@@ -371,7 +366,7 @@ class MainMenuController:
         screen.blit(title_2, (left_rect.centerx - title_2.get_width() // 2, 98))
         r.draw_item_icon(screen, "torch", left_rect.centerx - 16, 136, 32)
 
-        labels = ["ИГРАТЬ", "УЛУЧШИТЬ", "НАСТРОЙКИ", "ВЫХОД"]
+        labels = ["ИГРАТЬ", "УЛУЧШЕНИЯ", "НАСТРОЙКИ", "ВЫХОД"]
         for i, nr in enumerate(self.nav_rects):
             is_sel = (self.active_tab == i)
             is_hov = nr.collidepoint(mouse_pos)
@@ -426,9 +421,6 @@ class MainMenuController:
             r.draw_pixel_frame(screen, rect, (46, 92, 52) if hover else (32, 68, 38), UI_BORDER_GOLD, hover, 1.0)
             label = r.font_ui.render(self.game.loc["exploration_map"]["resume"], True, UI_TEXT_MAIN)
             screen.blit(label, label.get_rect(center=rect.center))
-
-        if self.inspect_painting_id is not None:
-            self._render_painting_viewer(screen, mouse_pos, prof)
 
     def _draw_selector_row(self, screen, x, y, w, label, val_text, prev_key, next_key, mouse_pos, locked=False):
         r = self.game.renderer
@@ -612,39 +604,37 @@ class MainMenuController:
         st_lbl = r.font_popup_big.render("В КРЫСИНЫЙ ПОГРЕБ", True, (255, 245, 200))
         screen.blit(st_lbl, (start_btn.centerx - st_lbl.get_width() // 2, start_btn.centery - st_lbl.get_height() // 2))
 
-    def _render_upgrade_tab(self, screen, p_rect, mouse_pos, prof):
-        from elenor.rendering.fishing import FISH_CATALOG_SPECS
-        from elenor.rendering.paintings import PAINTINGS_DB
-
+    def _render_tab_row(self, screen, p_rect, mouse_pos, labels, selected, key, offset_y):
         r = self.game.renderer
-        col_fish = set(prof.get("collected_fish", ()))
-        col_paint = set(prof.get("collected_paintings", ()))
+        tab_w, gap = 260, 16
+        start_x = p_rect.centerx - (tab_w * len(labels) + gap * (len(labels) - 1)) // 2
+        for idx, label in enumerate(labels):
+            rect = pygame.Rect(start_x + idx * (tab_w + gap), p_rect.y + offset_y, tab_w, 42)
+            self.btn_rects[f"{key}_{idx}"] = rect
+            active = selected == idx
+            highlighted = active or rect.collidepoint(mouse_pos)
+            r.draw_pixel_frame(screen, rect, (52, 42, 38) if highlighted else UI_SLOT_BG,
+                               UI_BORDER_GOLD if active else UI_BORDER_WOOD, highlighted, 1.0)
+            text = r.font_ui.render(label, True, UI_BORDER_HIGHLIGHT if active else UI_TEXT_MAIN)
+            screen.blit(text, text.get_rect(center=rect.center))
 
-        # Три подвкладки сверху: Улучшения / Рыбы / Картины
-        sub_labels = [
-            "УЛУЧШЕНИЯ",
-            f"РЫБЫ ({len(col_fish)}/{len(FISH_CATALOG_SPECS)})",
-            f"КАРТИНЫ ({len(col_paint)}/{len(PAINTINGS_DB)})",
-        ]
-        tab_w = 260
-        gap = 16
-        start_x = p_rect.centerx - (tab_w * 3 + gap * 2) // 2
-        for idx, lbl in enumerate(sub_labels):
-            tr = pygame.Rect(start_x + idx * (tab_w + gap), p_rect.y + 24, tab_w, 42)
-            self.btn_rects[f"upg_tab_{idx}"] = tr
-            is_sel = (self.upgrade_subtab == idx)
-            hov = tr.collidepoint(mouse_pos)
-            bg = (52, 42, 38) if (is_sel or hov) else UI_SLOT_BG
-            bd = UI_BORDER_GOLD if is_sel else UI_BORDER_WOOD
-            r.draw_pixel_frame(screen, tr, bg, bd, is_sel or hov, 1.0)
-            ts = r.font_ui.render(lbl, True, UI_BORDER_HIGHLIGHT if is_sel else UI_TEXT_MAIN)
-            screen.blit(ts, ts.get_rect(center=tr.center))
-
+    def _render_upgrade_tab(self, screen, p_rect, mouse_pos, prof):
+        r = self.game.renderer
+        self._render_tab_row(screen, p_rect, mouse_pos, ("УЛУЧШЕНИЯ", "КОЛЛЕКЦИИ"),
+                             self.upgrade_subtab, "upg_tab", 24)
         if self.upgrade_subtab == 1:
-            self._render_fish_collection(screen, p_rect, col_fish, FISH_CATALOG_SPECS)
-            return
-        if self.upgrade_subtab == 2:
-            self._render_paintings_collection(screen, p_rect, col_paint, PAINTINGS_DB)
+            from elenor.rendering.fishing import FISH_CATALOG_SPECS
+            from elenor.rendering.paintings import PAINTINGS_DB
+
+            collected_fish = set(prof.get("collected_fish", ()))
+            collected_paintings = set(prof.get("collected_paintings", ()))
+            labels = (f"РЫБЫ ({len(collected_fish)}/{len(FISH_CATALOG_SPECS)})",
+                      f"КАРТИНЫ ({len(collected_paintings)}/{len(PAINTINGS_DB)})")
+            self._render_tab_row(screen, p_rect, mouse_pos, labels, self.collection_subtab, "collection_tab", 76)
+            if self.collection_subtab == 0:
+                self._render_fish_collection(screen, p_rect, collected_fish, FISH_CATALOG_SPECS)
+            else:
+                self._render_paintings_collection(screen, p_rect, collected_paintings, PAINTINGS_DB)
             return
 
         lvl = int(prof.get("strongbox_level", 0))
@@ -723,7 +713,7 @@ class MainMenuController:
         gap = 10
         cell_w = (p_rect.width - margin * 2 - gap * (cols - 1)) // cols
         cell_h = 112
-        top_y = p_rect.y + 88
+        top_y = p_rect.y + 136
 
         for idx, (fish_id, spec) in enumerate(items):
             row, col = divmod(idx, cols)
@@ -748,7 +738,8 @@ class MainMenuController:
 
     def _step_painting_viewer(self, delta, prof):
         from elenor.rendering.paintings import PAINTINGS_DB
-        owned = [pid for pid in PAINTINGS_DB if pid in set(prof.get("collected_paintings", ()))]
+        collected = set(prof.get("collected_paintings", ()))
+        owned = [pid for pid in PAINTINGS_DB if pid in collected]
         if not owned:
             self.inspect_painting_id = None
             return
@@ -768,7 +759,7 @@ class MainMenuController:
         gap = 12
         cell_w = (p_rect.width - margin * 2 - gap * (cols - 1)) // cols
         cell_h = 186
-        top_y = p_rect.y + 84
+        top_y = p_rect.y + 136
 
         for idx, (pid, data) in enumerate(items):
             row, col = divmod(idx, cols)
@@ -807,80 +798,38 @@ class MainMenuController:
         dt_s = r.font_small.render("[Открыть все картины (Тест)]", True, (255, 220, 95))
         screen.blit(dt_s, dt_s.get_rect(center=dev_r.center))
 
-    def _render_painting_viewer(self, screen, mouse_pos, prof):
-        from elenor.config import RARITY_COLORS
+    def _render_painting_viewer(self, screen):
         from elenor.rendering.paintings import PAINTINGS_DB, get_painting_surface
 
         pid = self.inspect_painting_id
         data = PAINTINGS_DB.get(pid)
         if data is None:
             self.inspect_painting_id = None
-            return
+            return False
 
         r = self.game.renderer
-        self.viewer_btn_rects = {}
+        scale = 10 if data["orientation"] == "v" else 11
+        image = get_painting_surface(pid, scale=scale)
+        cw, ch = image.get_size()
+        width = max(680, cw + 64)
+        quote = r.wrap_text(data["desc"], r.font_ui, width - 64)
+        line_h = r.font_ui.get_linesize()
+        modal = pygame.Rect(0, 0, width, ch + 116 + len(quote) * line_h)
+        modal.center = (SCREEN_W // 2, SCREEN_H // 2)
+        self.viewer_modal_rect = modal
 
-        dim = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-        dim.fill((6, 5, 12, 224))
-        screen.blit(dim, (0, 0))
+        screen.fill((6, 5, 12))
+        r.draw_pixel_frame(screen, modal, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
+        title = r.font_popup_big.render(data["name"], True, UI_BORDER_HIGHLIGHT)
+        screen.blit(title, title.get_rect(midtop=(modal.centerx, modal.top + 20)))
 
-        orient = data.get("orientation", "v")
-        scale = 10 if orient == "v" else 11
-        card_surf = get_painting_surface(pid, scale=scale)
-        cw, ch = card_surf.get_size()
-
-        modal_w = max(680, cw + 190)
-        modal_h = ch + 210
-        mx = (SCREEN_W - modal_w) // 2
-        my = (SCREEN_H - modal_h) // 2
-        modal_r = pygame.Rect(mx, my, modal_w, modal_h)
-        self.viewer_modal_rect = modal_r
-
-        r_col = RARITY_COLORS.get(data["rarity"], UI_BORDER_GOLD)
-        r.draw_pixel_frame(screen, modal_r, UI_PANEL_BG, r_col, False, 1.0)
-
-        title_s = r.font_popup_big.render(data["name"], True, r_col)
-        screen.blit(title_s, title_s.get_rect(midtop=(modal_r.centerx, my + 18)))
-
-        owned = [k for k in PAINTINGS_DB if k in set(prof.get("collected_paintings", ()))]
-        pos_tag = f"{owned.index(pid) + 1}/{len(owned)}" if pid in owned else ""
-        rar_name = self.game.loc["ui"]["rarities"].get(data["rarity"], data["rarity"])
-        dim_tag = "42×62 · Вертикальная" if orient == "v" else "62×42 · Горизонтальная"
-        price_str = format_copper_Trigger(data["copper_value"], compact=True)
-        meta_s = r.font_small.render(f"{rar_name}  ·  {dim_tag}  ·  Оценка: {price_str}  ·  {pos_tag}", True, UI_TEXT_DIM)
-        screen.blit(meta_s, meta_s.get_rect(midtop=(modal_r.centerx, my + 52)))
-
-        img_x = modal_r.centerx - cw // 2
-        img_y = my + 80
-        pygame.draw.rect(screen, (10, 8, 16), (img_x - 6, img_y - 6, cw + 12, ch + 12))
-        pygame.draw.rect(screen, r_col, (img_x - 4, img_y - 4, cw + 8, ch + 8), 2)
-        screen.blit(card_surf, (img_x, img_y))
-
-        if len(owned) > 1:
-            b_prev = pygame.Rect(mx + 22, img_y + ch // 2 - 30, 56, 60)
-            b_next = pygame.Rect(modal_r.right - 78, img_y + ch // 2 - 30, 56, 60)
-            self.viewer_btn_rects["prev"] = b_prev
-            self.viewer_btn_rects["next"] = b_next
-            for br, sym in ((b_prev, "<"), (b_next, ">")):
-                hov = br.collidepoint(mouse_pos)
-                r.draw_pixel_frame(screen, br, (58, 48, 44) if hov else UI_SLOT_BG, UI_BORDER_GOLD if hov else UI_BORDER_WOOD, hov, 1.0)
-                ss = r.font_popup_big.render(sym, True, UI_TEXT_MAIN)
-                screen.blit(ss, ss.get_rect(center=br.center))
-
-        desc_y = img_y + ch + 16
-        for li, ln in enumerate(r.wrap_text(data["desc"], r.font_ui, modal_w - 64)[:3]):
-            ds = r.font_ui.render(ln, True, UI_TEXT_MAIN)
-            screen.blit(ds, ds.get_rect(midtop=(modal_r.centerx, desc_y + li * 22)))
-
-        hint_s = r.font_small.render("← / → или колесо мыши — листать  ·  ESC или клик вне окна — закрыть", True, UI_TEXT_DIM)
-        screen.blit(hint_s, hint_s.get_rect(midbottom=(modal_r.centerx, modal_r.bottom - 12)))
-
-        b_close = pygame.Rect(modal_r.right - 48, my + 14, 34, 34)
-        self.viewer_btn_rects["close"] = b_close
-        hov_c = b_close.collidepoint(mouse_pos)
-        r.draw_pixel_frame(screen, b_close, (108, 34, 40) if hov_c else (56, 24, 30), UI_BORDER_HIGHLIGHT if hov_c else UI_BORDER_WOOD, hov_c, 1.0)
-        xs = r.font_ui.render("X", True, UI_TEXT_MAIN)
-        screen.blit(xs, xs.get_rect(center=b_close.center))
+        art = image.get_rect(midtop=(modal.centerx, modal.top + 65))
+        pygame.draw.rect(screen, UI_BORDER_GOLD, art.inflate(8, 8), 2)
+        screen.blit(image, art)
+        for idx, line in enumerate(quote):
+            text = r.font_ui.render(line, True, UI_TEXT_MAIN)
+            screen.blit(text, text.get_rect(midtop=(modal.centerx, art.bottom + 23 + idx * line_h)))
+        return True
 
     def _draw_dropdown_box(self, screen, x, y, w, label, current_text, btn_key, is_open, mouse_pos, disabled=False):
         r = self.game.renderer

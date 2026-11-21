@@ -371,7 +371,7 @@ class UIRendererMixin:
             self.draw_pixel_frame(screen, rect, UI_PANEL_BG, item.rarity_color if item else UI_BORDER_WOOD, is_hovered, 1.0)
             label = ui_texts["slots"][slot]
             self._draw_inventory_label(screen, label, rect.centerx, rect.bottom - 13, UI_TEXT_DIM, align="center")
-            if item:
+            if item and item is not drag_item:
                 self.draw_item_icon(screen, item.icon, rect.centerx - 16, rect.y + 8, 32)
                 if is_hovered:
                     hovered_item = item
@@ -392,7 +392,7 @@ class UIRendererMixin:
             is_locked_box = bool(item and getattr(item, "locked_bag", False))
             bd_col = UI_BORDER_GOLD if is_locked_box else (item.rarity_color if item else UI_BORDER_WOOD)
             self.draw_pixel_frame(screen, rect, UI_PANEL_BG, bd_col, is_hovered, 1.0)
-            if item:
+            if item and item is not drag_item:
                 self.draw_item_icon(screen, item.icon, rect.x + 8, rect.y + 11, 32)
                 self._draw_inventory_label(screen, item.name, rect.x + 44, rect.y + 10, UI_BORDER_HIGHLIGHT if is_locked_box else UI_TEXT_MAIN)
                 flt = getattr(item, "bag_filter", "any")
@@ -467,7 +467,7 @@ class UIRendererMixin:
                     border = accent if (is_strongbox or flt != "any") else UI_BORDER_WOOD
                 bg = (20, 17, 24) if (drag_item is not None and not compatible_drag) else ((30, 25, 20) if is_strongbox else UI_PANEL_BG)
                 self.draw_pixel_frame(screen, rect, bg, border, is_hovered and compatible_drag, 1.0)
-                if item:
+                if item and item is not drag_item:
                     self.draw_item_icon(screen, item.icon, rect.centerx - 16, rect.centery - 16, 32)
                     if is_hovered:
                         hovered_item, compares = item, item.type == "equipment"
@@ -491,7 +491,7 @@ class UIRendererMixin:
         if (key_item := self._render_keyring(screen, player, ui_texts, storage.x + 80, key_y + 11, hover_pos)) is not None:
             hovered_item, compares = key_item, False
 
-        hint = "Перетащи вещь, чтобы надеть · Правая кнопка снимает сумку или выбрасывает вещь из поклажи"
+        hint = "ЛКМ — взять или отменить · ПКМ — положить в слот или выбросить за пределами окна"
         self._draw_inventory_label(screen, hint, self.modal_rect.centerx, wy + 544, UI_TEXT_DIM, align="midtop")
         if drag_item:
             self.draw_item_icon(screen, drag_item.icon, hover_pos[0] - 16, hover_pos[1] - 16, 32)
