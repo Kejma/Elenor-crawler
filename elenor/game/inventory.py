@@ -227,21 +227,20 @@ class InventoryMixin:
 
     def place_inventory_cursor(self, pos):
         item, source = self.drag_item, self.drag_source
+        self.drag_item = self.drag_source = None
         if item is None:
             return
         source_kind, source_key = source
         if self._cursor_container(source_kind)[source_key] is not item:
-            self.drag_item = self.drag_source = None
             return
         target = self.inventory_slot_at(pos)
-        if target is None:
-            if source_kind != "ability" and not self.renderer.modal_rect.collidepoint(pos):
-                if self.drop_item_on_floor(item):
-                    self.drag_item = self.drag_source = None
-            return
-        if target == source or self._move_inventory_cursor(item, source, target):
-            self.drag_item = self.drag_source = None
+        if target is not None and target != source and self._move_inventory_cursor(item, source, target):
             self.sfx.play("ui")
+
+    def discard_inventory_item(self, pos):
+        slot = self.inventory_slot_at(pos)
+        if slot is not None and slot[0] == "pocket":
+            self.drop_item_on_floor(self.player.inventory[slot[1]])
 
     def _move_inventory_cursor(self, item, source, target):
         source_kind, source_key = source

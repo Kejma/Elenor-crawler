@@ -148,6 +148,7 @@ def main():
                 continue
             if event.type == pygame.WINDOWFOCUSLOST:
                 game.player.buffered_combat = None
+                game.drag_item = game.drag_source = None
 
             if getattr(game, "run_results", None) is not None:
                 if hasattr(event, "pos"):
@@ -293,9 +294,6 @@ def main():
                                 game.select_perk_choice(idx)
                                 break
                         continue
-                    if game.inv_open and game.drag_item is not None:
-                        game.drag_item = game.drag_source = None
-                        continue
                     if game.renderer.bag_btn_rect.collidepoint(event.pos):
                         game.inv_open = not game.inv_open
                         if not game.inv_open:
@@ -333,8 +331,15 @@ def main():
                     if game.levelup_choices and game.levelup_choices.get("mode") == "erase":
                         game.levelup_choices = None
                         game.sfx.play("ui")
-                    elif game.inv_open and not game.journal_open and not game.levelup_choices:
-                        game.place_inventory_cursor(event.pos)
+                    elif (game.inv_open and not game.journal_open and not game.levelup_choices
+                          and game.drag_item is None):
+                        game.discard_inventory_item(event.pos)
+
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if game.inv_open and not game.journal_open and not game.levelup_choices:
+                    game.place_inventory_cursor(event.pos)
+                else:
+                    game.drag_item = game.drag_source = None
 
             elif event.type == pygame.MOUSEWHEEL:
                 if game.inv_open and game.journal_open:

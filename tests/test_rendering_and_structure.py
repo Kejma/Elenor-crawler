@@ -253,29 +253,37 @@ class RenderingTests(unittest.TestCase):
                 if len(frames) == 1:
                     game.inv_open = True
                 elif len(frames) == 2:
-                    source = game.renderer.inv_slot_rects[0]
-                    target = game.renderer.equip_slot_rects["ring_2"]
-                    click(source, 1)
-                    click(target, 1, pygame.MOUSEBUTTONUP)
+                    click(game.renderer.inv_slot_rects[0], 1)
                 elif len(frames) == 3:
                     self.assertIs(game.drag_item, game.pocket_ring)
-                    self.assertIs(game.player.equipment["ring_2"], game.second_ring)
-                    click(game.renderer.equip_slot_rects["ring_2"], 1)
+                    click(pygame.Rect(20, 20, 10, 10), 1, pygame.MOUSEBUTTONUP)
                 elif len(frames) == 4:
                     self.assertIsNone(game.drag_item)
                     self.assertIs(game.player.inventory[0], game.pocket_ring)
-                    click(game.renderer.inv_slot_rects[0], 1)
-                    click(game.renderer.equip_slot_rects["ring_2"], 3)
+                    self.assertIs(game.player.equipment["ring_2"], game.second_ring)
+                    source = game.renderer.inv_slot_rects[0]
+                    click(source, 1)
+                    click(source, 1, pygame.MOUSEBUTTONUP)
                 elif len(frames) == 5:
+                    self.assertIsNone(game.drag_item)
+                    self.assertIs(game.player.inventory[0], game.pocket_ring)
+                    click(game.renderer.inv_slot_rects[0], 1)
+                    click(game.renderer.equip_slot_rects["helmet"], 1, pygame.MOUSEBUTTONUP)
+                elif len(frames) == 6:
+                    self.assertIsNone(game.drag_item)
+                    self.assertIs(game.player.inventory[0], game.pocket_ring)
+                    click(game.renderer.inv_slot_rects[0], 1)
+                    click(game.renderer.equip_slot_rects["ring_2"], 1, pygame.MOUSEBUTTONUP)
+                elif len(frames) == 7:
                     self.assertIsNone(game.drag_item)
                     self.assertIs(game.player.equipment["ring_1"], game.first_ring)
                     self.assertIs(game.player.equipment["ring_2"], game.pocket_ring)
                     self.assertIs(game.player.inventory[0], game.second_ring)
                     game.journal_open = True
-                elif len(frames) == 6:
+                elif len(frames) == 8:
                     game.inv_open = False
                     game.in_main_menu = True
-                elif len(frames) == 7:
+                elif len(frames) == 9:
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
 
             with (
@@ -283,7 +291,7 @@ class RenderingTests(unittest.TestCase):
                 patch.object(loop, "present_logical_canvas", render_frame),
             ):
                 loop.main()
-            self.assertEqual(len(frames), 7)
+            self.assertEqual(len(frames), 9)
 
     def test_text_cache_is_bounded_and_keys_include_font_and_width(self):
         from elenor.ui.text import wrap_lines

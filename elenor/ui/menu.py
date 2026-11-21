@@ -1,6 +1,6 @@
 import random
 import pygame
-from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, COIN_TEXT_COLOR
+from elenor.config import SCREEN_W, SCREEN_H, UI_PANEL_BG, UI_SLOT_BG, UI_BORDER_WOOD, UI_BORDER_GOLD, UI_BORDER_HIGHLIGHT, UI_TEXT_MAIN, UI_TEXT_DIM, COIN_TEXT_COLOR, RARITY_COLORS
 from elenor.rendering.normals import LiveLightPreview
 
 
@@ -19,7 +19,8 @@ class MainMenuController:
         self.upgrade_subtab = 0
         self.collection_subtab = 0
         self.inspect_painting_id = None
-        self.viewer_modal_rect = None
+        self.viewer_modal_rect = pygame.Rect(0, 0, 0, 0)
+        self.viewer_close_rect = pygame.Rect(0, 0, 0, 0)
         self.scroll_x = 0.0
         self.preview_3d = LiveLightPreview(280, 320)
         self.preview_walk = False
@@ -93,7 +94,7 @@ class MainMenuController:
                 return True
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 pos = getattr(event, "pos", mouse_pos)
-                if self.viewer_modal_rect is None or not self.viewer_modal_rect.collidepoint(pos):
+                if self.viewer_close_rect.collidepoint(pos) or not self.viewer_modal_rect.collidepoint(pos):
                     self.inspect_painting_id = None
                     self.game.sfx.play("ui")
                 return True
@@ -351,10 +352,10 @@ class MainMenuController:
     def render(self, screen, dt, mouse_pos):
         r = self.game.renderer
         prof = self.game.profile
-        screen.fill((12, 10, 16))
         self.btn_rects = {}
-        if self.inspect_painting_id is not None and self._render_painting_viewer(screen):
+        if self.inspect_painting_id is not None and self._render_painting_viewer(screen, mouse_pos):
             return
+        screen.fill((12, 10, 16))
 
         # 1. ЛЕВАЯ КОЛОНКА МЕНЮ (Якорь: левый край)
         left_rect = pygame.Rect(32, 32, self.sidebar_w, SCREEN_H - 64)
@@ -751,7 +752,6 @@ class MainMenuController:
         self.game.sfx.play("ui")
 
     def _render_paintings_collection(self, screen, p_rect, collected, db):
-        from elenor.config import RARITY_COLORS
         r = self.game.renderer
         items = list(db.items())
         cols = 6
@@ -798,7 +798,7 @@ class MainMenuController:
         dt_s = r.font_small.render("[Открыть все картины (Тест)]", True, (255, 220, 95))
         screen.blit(dt_s, dt_s.get_rect(center=dev_r.center))
 
-    def _render_painting_viewer(self, screen):
+    def _render_painting_viewer(self, screen, mouse_pos):
         from elenor.rendering.paintings import PAINTINGS_DB, get_painting_surface
 
         pid = self.inspect_painting_id
@@ -811,7 +811,8 @@ class MainMenuController:
         scale = 10 if data["orientation"] == "v" else 11
         image = get_painting_surface(pid, scale=scale)
         cw, ch = image.get_size()
-        width = max(680, cw + 64)
+        title = r.font_popup_big.render(data["name"], True, RARITY_COLORS.get(data["rarity"], UI_TEXT_MAIN))
+        width = max(680, cw + 64, title.get_width() + 120)
         quote = r.wrap_text(data["desc"], r.font_ui, width - 64)
         line_h = r.font_ui.get_linesize()
         modal = pygame.Rect(0, 0, width, ch + 116 + len(quote) * line_h)
@@ -820,8 +821,16 @@ class MainMenuController:
 
         screen.fill((6, 5, 12))
         r.draw_pixel_frame(screen, modal, UI_PANEL_BG, UI_BORDER_GOLD, False, 1.0)
-        title = r.font_popup_big.render(data["name"], True, UI_BORDER_HIGHLIGHT)
         screen.blit(title, title.get_rect(midtop=(modal.centerx, modal.top + 20)))
+
+        close = pygame.Rect(modal.right - 49, modal.top + 14, 34, 34)
+        self.viewer_close_rect = close
+        hovered = close.collidepoint(mouse_pos)
+        r.draw_pixel_frame(screen, close, (56, 38, 44) if hovered else UI_SLOT_BG,
+                           UI_BORDER_GOLD if hovered else UI_BORDER_WOOD, hovered, 1.0)
+        x, y = close.center
+        pygame.draw.line(screen, UI_TEXT_MAIN, (x - 5, y - 5), (x + 5, y + 5), 2)
+        pygame.draw.line(screen, UI_TEXT_MAIN, (x - 5, y + 5), (x + 5, y - 5), 2)
 
         art = image.get_rect(midtop=(modal.centerx, modal.top + 65))
         pygame.draw.rect(screen, UI_BORDER_GOLD, art.inflate(8, 8), 2)
